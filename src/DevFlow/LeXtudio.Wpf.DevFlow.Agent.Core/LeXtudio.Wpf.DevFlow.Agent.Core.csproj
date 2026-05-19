@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>LeXtudio.Wpf.DevFlow.Agent.Core</AssemblyName>
+    <RootNamespace>LeXtudio.Wpf.DevFlow.Agent.Core</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Core\AgentHttpServer.cs">
+      <Link>AgentHttpServer.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Core\AgentOptions.cs">
+      <Link>AgentOptions.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Core\DevFlowActionAttribute.cs">
+      <Link>DevFlowActionAttribute.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Core\ElementInfo.cs">
+      <Link>ElementInfo.cs</Link>
+    </Compile>
+  </ItemGroup>
+
+</Project>

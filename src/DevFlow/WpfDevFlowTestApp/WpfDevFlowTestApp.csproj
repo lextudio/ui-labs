@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>WpfDevFlowTestApp</AssemblyName>
+    <RootNamespace>WpfDevFlowTestApp</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\LeXtudio.Wpf.DevFlow.Agent.WPF\LeXtudio.Wpf.DevFlow.Agent.WPF.csproj" />
+  </ItemGroup>
+</Project>

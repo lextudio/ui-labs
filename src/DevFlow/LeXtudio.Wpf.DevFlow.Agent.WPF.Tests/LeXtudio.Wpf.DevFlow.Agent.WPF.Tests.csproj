@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
+    <UseMSBuildTestInfrastructure>true</UseMSBuildTestInfrastructure>
+    <IsPackable>false</IsPackable>
+    <AssemblyName>LeXtudio.Wpf.DevFlow.Agent.WPF.Tests</AssemblyName>
+    <RootNamespace>LeXtudio.Wpf.DevFlow.Agent.WPF.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit.v3.mtp-v2" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <ProjectReference Include="..\LeXtudio.Wpf.DevFlow.Agent.WPF\LeXtudio.Wpf.DevFlow.Agent.WPF.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/Cli/">
+    <Project Path="Cli/src/LeXtudio.Wpf.Cli/LeXtudio.Wpf.Cli.csproj" />
+    <Project Path="Cli/src/LeXtudio.Wpf.Cli.UnitTests/LeXtudio.Wpf.Cli.UnitTests.csproj" />
+  </Folder>
+  <Folder Name="/DevFlow/">
+    <Project Path="DevFlow/LeXtudio.Wpf.DevFlow.Driver/LeXtudio.Wpf.DevFlow.Driver.csproj" />
+    <Project Path="DevFlow/LeXtudio.Wpf.DevFlow.Agent.Core/LeXtudio.Wpf.DevFlow.Agent.Core.csproj" />
+    <Project Path="DevFlow/LeXtudio.Wpf.DevFlow.Agent.WPF/LeXtudio.Wpf.DevFlow.Agent.WPF.csproj" />
+    <Project Path="DevFlow/LeXtudio.Wpf.DevFlow.Agent.WPF.Tests/LeXtudio.Wpf.DevFlow.Agent.WPF.Tests.csproj" />
+    <Project Path="DevFlow/WpfDevFlowTestApp/WpfDevFlowTestApp.csproj" />
+  </Folder>
+</Solution>

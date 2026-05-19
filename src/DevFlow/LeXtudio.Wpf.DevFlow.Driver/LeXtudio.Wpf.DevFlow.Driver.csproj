@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <PackageId>LeXtudio.Wpf.DevFlow.Driver</PackageId>
+    <Version>1.0.0</Version>
+    <IsPackable>true</IsPackable>
+    <Description>Driver library for connecting to WPF DevFlow agents and automating WPF application inspection.</Description>
+    <PackageTags>wpf;devflow;driver;automation</PackageTags>
+  </PropertyGroup>
+</Project>

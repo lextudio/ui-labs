@@ -1,0 +1,3 @@
+[submodule "external/maui-labs"]
+	path = external/maui-labs
+	url = https://github.com/dotnet/maui-labs.git
