@@ -10,10 +10,12 @@ namespace LeXtudio.Uno.DevFlow.Agent.Uno;
 public sealed class UnoAgentService : DevFlowAgentServiceBase
 {
     private readonly UnoVisualTreeWalker _treeWalker = new();
+    private readonly object? _dispatcherQueue;
 
     public UnoAgentService(AgentOptions? options = null)
         : base(options)
     {
+        _dispatcherQueue = GetDispatcherQueue();
     }
 
     protected override string AgentId => "LeXtudio.Uno.DevFlow.Agent";
@@ -54,12 +56,12 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
 
     protected override Task<List<ElementInfo>> BuildTreeAsync()
     {
-        return Task.FromResult(_treeWalker.WalkTree());
+        return InvokeOnUiThreadAsync(() => _treeWalker.WalkTree());
     }
 
     protected override Task<ElementInfo?> FindElementAsync(string id)
     {
-        return Task.FromResult(_treeWalker.FindElementById(id));
+        return InvokeOnUiThreadAsync(() => _treeWalker.FindElementById(id));
     }
 
     protected override Task<byte[]?> CaptureScreenshotAsync()
@@ -69,33 +71,105 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
 
     protected override Task<bool> TryTapAsync(string elementId)
     {
-        var target = _treeWalker.FindElementObjectById(elementId);
-        if (target == null)
-            return Task.FromResult(false);
+        return InvokeOnUiThreadAsync(() =>
+        {
+            var target = _treeWalker.FindElementObjectById(elementId);
+            if (target == null)
+                return false;
 
-        if (TryExecuteCommand(target))
-            return Task.FromResult(true);
+            if (TryExecuteCommand(target))
+                return true;
 
-        if (TryInvokeOnClick(target))
-            return Task.FromResult(true);
+            if (TryInvokeAutomationPattern(target))
+                return true;
 
-        return Task.FromResult(false);
+            if (TryInvokeOnClick(target))
+                return true;
+
+            return false;
+        });
     }
 
     protected override Task<bool> TryScrollAsync(string elementId, double deltaX, double deltaY)
     {
-        var target = _treeWalker.FindElementObjectById(elementId);
-        if (target == null)
-            return Task.FromResult(false);
+        return InvokeOnUiThreadAsync(() =>
+        {
+            var target = _treeWalker.FindElementObjectById(elementId);
+            if (target == null)
+                return false;
 
-        var scrollViewer = FindScrollViewer(target);
-        if (scrollViewer == null)
-            return Task.FromResult(false);
+            var scrollViewer = FindScrollViewer(target);
+            if (scrollViewer == null)
+                return false;
 
-        if (TryScroll(scrollViewer, deltaX, deltaY))
-            return Task.FromResult(true);
+            if (TryScroll(scrollViewer, deltaX, deltaY))
+                return true;
 
-        return Task.FromResult(false);
+            return false;
+        });
+    }
+
+    private Task<T> InvokeOnUiThreadAsync<T>(Func<T> callback)
+    {
+        var dispatcherQueue = _dispatcherQueue;
+        if (dispatcherQueue == null)
+            return Task.FromResult(callback());
+
+        var hasThreadAccess = GetPropertyValue(dispatcherQueue, "HasThreadAccess");
+        if (hasThreadAccess is bool hasAccess && hasAccess)
+            return Task.FromResult(callback());
+
+        var tryEnqueue = dispatcherQueue.GetType().GetMethods(BindingFlags.Public | BindingFlags.Instance)
+            .FirstOrDefault(method => method.Name == "TryEnqueue" && method.GetParameters().Length == 1);
+        if (tryEnqueue == null)
+            return Task.FromResult(callback());
+
+        var handlerType = tryEnqueue.GetParameters()[0].ParameterType;
+        var completion = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+        void InvokeCallback()
+        {
+            try
+            {
+                completion.SetResult(callback());
+            }
+            catch (Exception ex)
+            {
+                completion.SetException(ex);
+            }
+        }
+
+        var handler = Delegate.CreateDelegate(handlerType, (Action)InvokeCallback, nameof(Action.Invoke));
+        var queued = tryEnqueue.Invoke(dispatcherQueue, new object[] { handler });
+        if (queued is bool wasQueued && !wasQueued)
+            completion.SetException(new InvalidOperationException("Unable to enqueue work on the Uno UI dispatcher."));
+
+        return completion.Task;
+    }
+
+    private static object? GetDispatcherQueue()
+    {
+        var dispatcherQueueType = FindType(
+            "Microsoft.UI.Dispatching.DispatcherQueue",
+            "Windows.System.DispatcherQueue");
+
+        var currentDispatcherQueue = dispatcherQueueType?
+            .GetMethod("GetForCurrentThread", BindingFlags.Public | BindingFlags.Static)?
+            .Invoke(null, null);
+        if (currentDispatcherQueue != null)
+            return currentDispatcherQueue;
+
+        var appType = FindType(
+            "Microsoft.UI.Xaml.Application",
+            "Windows.UI.Xaml.Application");
+
+        var app = appType?.GetProperty("Current", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
+        var appDispatcher = GetPropertyValue(app, "DispatcherQueue");
+        if (appDispatcher != null)
+            return appDispatcher;
+
+        var mainWindow = GetPropertyValue(app, "MainWindow")
+            ?? GetPropertyValue(app, "CurrentWindow");
+        return GetPropertyValue(mainWindow, "DispatcherQueue");
     }
 
     private static object? FindScrollViewer(object element)
@@ -249,17 +323,64 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
 
     private static bool TryInvokeOnClick(object element)
     {
-        var onClick = element.GetType().GetMethod("OnClick", BindingFlags.Instance | BindingFlags.NonPublic);
+        var onClick = element.GetType()
+            .GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy)
+            .FirstOrDefault(method => method.Name == "OnClick");
         if (onClick != null)
         {
-            onClick.Invoke(element, Array.Empty<object>());
+            var args = onClick.GetParameters()
+                .Select(parameter => parameter.ParameterType.IsValueType ? Activator.CreateInstance(parameter.ParameterType) : null)
+                .ToArray();
+            onClick.Invoke(element, args);
             return true;
         }
 
         return false;
     }
 
-    private static object? GetPropertyValue(object target, string propertyName)
+    private static bool TryInvokeAutomationPattern(object element)
+    {
+        var peerType = FindType(
+            "Microsoft.UI.Xaml.Automation.Peers.ButtonAutomationPeer",
+            "Windows.UI.Xaml.Automation.Peers.ButtonAutomationPeer");
+        if (peerType == null)
+            return false;
+
+        var constructor = peerType.GetConstructors()
+            .FirstOrDefault(ctor =>
+            {
+                var parameters = ctor.GetParameters();
+                return parameters.Length == 1 && parameters[0].ParameterType.IsInstanceOfType(element);
+            });
+        if (constructor == null)
+            return false;
+
+        try
+        {
+            var peer = constructor.Invoke(new[] { element });
+            var patternInterfaceType = FindType(
+                "Microsoft.UI.Xaml.Automation.Peers.PatternInterface",
+                "Windows.UI.Xaml.Automation.Peers.PatternInterface");
+            if (patternInterfaceType == null)
+                return false;
+
+            var invokeValue = Enum.Parse(patternInterfaceType, "Invoke");
+            var getPattern = peerType.GetMethod("GetPattern", BindingFlags.Public | BindingFlags.Instance);
+            var provider = getPattern?.Invoke(peer, new[] { invokeValue });
+            var invoke = provider?.GetType().GetMethod("Invoke", BindingFlags.Public | BindingFlags.Instance);
+            if (invoke == null)
+                return false;
+
+            invoke.Invoke(provider, Array.Empty<object>());
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static object? GetPropertyValue(object? target, string propertyName)
     {
         if (target == null)
             return null;

@@ -19,6 +19,7 @@ public partial class App : Application
     /// </summary>
     public App()
     {
+        InitializeLogging();
         this.InitializeComponent();
     }
 
@@ -55,7 +56,6 @@ public partial class App : Application
 
         MainWindow.SetWindowIcon();
 
-#if UNO || HAS_UNO
         var agentPort = AgentOptions.DefaultPort;
         var portValue = Environment.GetEnvironmentVariable("DEVFLOW_AGENT_PORT");
         if (int.TryParse(portValue, out var parsedPort))
@@ -71,7 +71,6 @@ public partial class App : Application
 
         _agent = new UnoAgentService(new AgentOptions { Port = agentPort });
         _agent.Start();
-#endif
 
         // Ensure the current window is active
         var hideWindow = string.Equals(Environment.GetEnvironmentVariable("DEVFLOW_HIDE_WINDOW"), "true", StringComparison.OrdinalIgnoreCase);

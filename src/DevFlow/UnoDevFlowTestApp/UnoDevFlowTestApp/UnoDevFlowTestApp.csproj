@@ -1,9 +1,13 @@
 <Project Sdk="Uno.Sdk">
   <PropertyGroup>
     <TargetFrameworks>net10.0-desktop</TargetFrameworks>
+    <TargetFrameworks Condition="'$(OS)' == 'Windows_NT'">$(TargetFrameworks);net10.0-windows10.0.19041.0</TargetFrameworks>
+    <RuntimeIdentifiers>win-x64;win-arm64;linux-x64;linux-arm64;osx-arm64;osx-x64</RuntimeIdentifiers>
 
     <OutputType>Exe</OutputType>
     <UnoSingleProject>true</UnoSingleProject>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
 
     <!-- Display name -->
     <ApplicationTitle>UnoDevFlowTestApp</ApplicationTitle>
@@ -29,5 +33,24 @@
   <ItemGroup>
     <ProjectReference Include="..\..\LeXtudio.Uno.DevFlow.Agent.Uno\LeXtudio.Uno.DevFlow.Agent.Uno.csproj" />
     <ProjectReference Include="..\..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Logging\Microsoft.Maui.DevFlow.Logging.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-windows10.0.19041.0'">
+    <UseWinUI>true</UseWinUI>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <DefineConstants>$(DefineConstants);WINDOWS_APP_SDK</DefineConstants>
+    <WindowsSdkPackageVersion>10.0.19041.57</WindowsSdkPackageVersion>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Condition="'$(TargetFramework)' == 'net10.0-windows10.0.19041.0'" />
+    <PackageVersion Include="Microsoft.WindowsAppSDK" Version="1.7.250909003" Condition="'$(TargetFramework)' == 'net10.0-windows10.0.19041.0'" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="Program.cs" />
   </ItemGroup>
 </Project>

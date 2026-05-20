@@ -1,0 +1,2 @@
+mode: ContinuousDeployment
+tag-prefix: 'v'

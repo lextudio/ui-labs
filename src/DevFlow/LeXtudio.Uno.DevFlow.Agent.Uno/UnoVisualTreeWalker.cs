@@ -131,7 +131,7 @@ public sealed class UnoVisualTreeWalker : IVisualTreeWalker
 
     private IEnumerable<object> GetWindows(object app)
     {
-        var windowsProperty = app.GetType().GetProperty("Windows", BindingFlags.Public | BindingFlags.Instance);
+        var windowsProperty = app.GetType().GetProperty("Windows", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
         if (windowsProperty != null)
         {
             var windowsValue = windowsProperty.GetValue(app);
@@ -353,7 +353,7 @@ public sealed class UnoVisualTreeWalker : IVisualTreeWalker
         if (target == null)
             return null;
 
-        var property = target.GetType().GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance);
+        var property = target.GetType().GetProperty(propertyName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
         return property?.GetValue(target);
     }
 

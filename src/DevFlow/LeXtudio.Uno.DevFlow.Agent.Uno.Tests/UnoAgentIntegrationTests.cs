@@ -12,8 +12,10 @@ namespace LeXtudio.Uno.DevFlow.Agent.Uno.Tests;
 
 public class UnoAgentIntegrationTests
 {
-    [Fact]
-    public async Task UnoDevFlowTestApp_AgentStatus_ReturnsRunning()
+    [Theory]
+    [InlineData("net10.0-desktop")]
+    [InlineData("net10.0-windows10.0.19041.0")]
+    public async Task UnoDevFlowTestApp_AgentStatus_ReturnsRunning(string targetFramework)
     {
         var repoRoot = FindRepositoryRoot(Directory.GetCurrentDirectory());
         var hostProjectPath = Path.GetFullPath(Path.Combine(repoRoot, "src", "DevFlow", "UnoDevFlowTestApp", "UnoDevFlowTestApp", "UnoDevFlowTestApp.csproj"));
@@ -21,10 +23,9 @@ public class UnoAgentIntegrationTests
             throw new InvalidOperationException($"Unable to locate Uno host project at {hostProjectPath}");
 
         var hostProjectDirectory = Path.GetDirectoryName(hostProjectPath)!;
-        if (!RunCommand("dotnet", $"build \"{hostProjectPath}\" -c Debug", hostProjectDirectory, out var buildOutput, out var buildError))
-            throw new InvalidOperationException($"Failed to build Uno host project:\n{buildError}\n{buildOutput}");
+        BuildHostProject(hostProjectPath, targetFramework, hostProjectDirectory);
 
-        var exePath = GetHostExecutablePath(hostProjectDirectory);
+        var exePath = GetHostExecutablePath(hostProjectDirectory, targetFramework);
         if (!File.Exists(exePath))
             throw new InvalidOperationException($"Unable to locate Uno host executable at {exePath}");
 
@@ -52,8 +53,10 @@ public class UnoAgentIntegrationTests
         }
     }
 
-    [Fact]
-    public async Task TapButton_UpdatesResponseText()
+    [Theory]
+    [InlineData("net10.0-desktop")]
+    [InlineData("net10.0-windows10.0.19041.0")]
+    public async Task TapButton_UpdatesResponseText(string targetFramework)
     {
         var repoRoot = FindRepositoryRoot(Directory.GetCurrentDirectory());
         var hostProjectPath = Path.GetFullPath(Path.Combine(repoRoot, "src", "DevFlow", "UnoDevFlowTestApp", "UnoDevFlowTestApp", "UnoDevFlowTestApp.csproj"));
@@ -61,10 +64,9 @@ public class UnoAgentIntegrationTests
             throw new InvalidOperationException($"Unable to locate Uno host project at {hostProjectPath}");
 
         var hostProjectDirectory = Path.GetDirectoryName(hostProjectPath)!;
-        if (!RunCommand("dotnet", $"build \"{hostProjectPath}\" -c Debug", hostProjectDirectory, out var buildOutput, out var buildError))
-            throw new InvalidOperationException($"Failed to build Uno host project:\n{buildError}\n{buildOutput}");
+        BuildHostProject(hostProjectPath, targetFramework, hostProjectDirectory);
 
-        var exePath = GetHostExecutablePath(hostProjectDirectory);
+        var exePath = GetHostExecutablePath(hostProjectDirectory, targetFramework);
         if (!File.Exists(exePath))
             throw new InvalidOperationException($"Unable to locate Uno host executable at {exePath}");
 
@@ -99,8 +101,10 @@ public class UnoAgentIntegrationTests
         }
     }
 
-    [Fact]
-    public async Task ScrollViewer_UpdatesVerticalOffset()
+    [Theory]
+    [InlineData("net10.0-desktop")]
+    [InlineData("net10.0-windows10.0.19041.0")]
+    public async Task ScrollViewer_UpdatesVerticalOffset(string targetFramework)
     {
         var repoRoot = FindRepositoryRoot(Directory.GetCurrentDirectory());
         var hostProjectPath = Path.GetFullPath(Path.Combine(repoRoot, "src", "DevFlow", "UnoDevFlowTestApp", "UnoDevFlowTestApp", "UnoDevFlowTestApp.csproj"));
@@ -108,10 +112,9 @@ public class UnoAgentIntegrationTests
             throw new InvalidOperationException($"Unable to locate Uno host project at {hostProjectPath}");
 
         var hostProjectDirectory = Path.GetDirectoryName(hostProjectPath)!;
-        if (!RunCommand("dotnet", $"build \"{hostProjectPath}\" -c Debug", hostProjectDirectory, out var buildOutput, out var buildError))
-            throw new InvalidOperationException($"Failed to build Uno host project:\n{buildError}\n{buildOutput}");
+        BuildHostProject(hostProjectPath, targetFramework, hostProjectDirectory);
 
-        var exePath = GetHostExecutablePath(hostProjectDirectory);
+        var exePath = GetHostExecutablePath(hostProjectDirectory, targetFramework);
         if (!File.Exists(exePath))
             throw new InvalidOperationException($"Unable to locate Uno host executable at {exePath}");
 
@@ -214,9 +217,18 @@ public class UnoAgentIntegrationTests
         return Process.Start(startInfo);
     }
 
-    private static string GetHostExecutablePath(string hostProjectDirectory)
+    private static void BuildHostProject(string hostProjectPath, string targetFramework, string workingDirectory)
     {
-        var outputDir = Path.Combine(hostProjectDirectory, "bin", "Debug", "net10.0-desktop");
+        var buildArguments = $"build \"{hostProjectPath}\" -c Debug -f {targetFramework}";
+        if (!RunCommand("dotnet", buildArguments, workingDirectory, out var buildOutput, out var buildError))
+        {
+            throw new InvalidOperationException($"Failed to build Uno host project for {targetFramework}:\n{buildError}\n{buildOutput}");
+        }
+    }
+
+    private static string GetHostExecutablePath(string hostProjectDirectory, string targetFramework)
+    {
+        var outputDir = Path.Combine(hostProjectDirectory, "bin", "Debug", targetFramework);
         var appName = "UnoDevFlowTestApp";
         var hostExecutable = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
             ? Path.Combine(outputDir, appName + ".exe")

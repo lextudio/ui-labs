@@ -1,11 +1,26 @@
 <Project>
-  <PropertyGroup>
-    <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
-    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
-  </PropertyGroup>
   <ItemGroup>
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.5.0" />
-    <PackageVersion Include="xunit.v3.mtp-v2" Version="3.2.2" />
-    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
+    <!-- Pin patched Tmds.DBus.Protocol to avoid GHSA-xrw6-gwf8-vvr9 (CVE-2026-39959) -->
+    <PackageVersion Include="Tmds.DBus.Protocol" Version="0.92.0" />
+    <PackageVersion Include="UnoEdit" Version="0.1.1-master.1+5" />
+    <PackageVersion Include="UnoEdit.TextMate" Version="0.1.1-master.1+5" />
+    <!-- Uno RuntimeTests engine (source package — embeds headless MSTest runner) -->
+    <PackageVersion Include="DevToolsUno" Version="0.1.0" />
+    <PackageVersion Include="Uno.UI.RuntimeTests.Engine" Version="2.0.0-dev.79" />
+    <!-- Align MSTest version with Uno.UI.RuntimeTests.Engine to ensure test attributes
+          have the same runtime identity for discovery. -->
+    <PackageVersion Include="MSTest.TestFramework" Version="3.11.1" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.4.0" />
+    <PackageVersion Include="NUnit" Version="4.5.1" />
+    <PackageVersion Include="NUnitLite" Version="4.5.1" />
+    <PackageVersion Include="NUnit3TestAdapter" Version="6.2.0" />
+    <PackageVersion Include="GitVersion.MsBuild" Version="5.12.0" />
+    <PackageVersion Include="LeXtudio.TextBox" Version="0.2.11" />
+    <PackageVersion Include="TextMateSharp" Version="2.0.3" />
+    <PackageVersion Include="TextMateSharp.Grammars" Version="2.0.3" />
+    <PackageVersion Include="Microsoft.WindowsAppSDK" Version="1.8.260317003" />
+    <PackageVersion Include="CommunityToolkit.WinUI.Controls.Sizers" Version="8.2.251219" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.5" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.5" />
   </ItemGroup>
 </Project>

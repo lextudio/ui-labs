@@ -91,7 +91,7 @@ namespace LeXtudio.Wpf.Cli
         private static int UnknownCommand(string command)
         {
             Console.Error.WriteLine($"Unknown command: {command}");
-            Console.Error.WriteLine("Run 'wpf --help' for available commands.");
+            Console.Error.WriteLine("Run 'wpflex --help' for available commands.");
             return 1;
         }
 
@@ -99,7 +99,7 @@ namespace LeXtudio.Wpf.Cli
         {
             Console.WriteLine("LeXtudio.Wpf.Cli - WPF command line utility");
             Console.WriteLine();
-            Console.WriteLine("Usage: wpf [options] <command> [command-options]");
+            Console.WriteLine("Usage: wpflex [options] <command> [command-options]");
             Console.WriteLine();
             Console.WriteLine("Options:");
             Console.WriteLine("  --json      Emit structured JSON output");
