@@ -80,6 +80,18 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nuget-
 
+      - name: Install Linux GUI dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxkbcommon0 libinput10 xvfb
+
+      - name: Start Xvfb
+        if: runner.os == 'Linux'
+        run: |
+          Xvfb :99 -screen 0 1024x768x24 &
+          echo "DISPLAY=:99" >> $GITHUB_ENV
+
       - name: Restore Uno agent tests
         run: dotnet restore src/DevFlow/LeXtudio.DevFlow.Agent.Uno.Tests/LeXtudio.DevFlow.Agent.Uno.Tests.csproj
 
