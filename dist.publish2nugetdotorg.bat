@@ -45,14 +45,21 @@ if not exist "%PKGDIR%\*.nupkg" (
   exit /b 1
 )
 
+set "PUSH_FAILED=0"
 for %%F in ("%PKGDIR%\*.nupkg") do (
   echo Pushing %%~fF
   "%NUGETEXE%" push "%%~fF" -Source "https://api.nuget.org/v3/index.json" -NonInteractive -Verbosity detailed
   if errorlevel 1 (
     echo Failed to push %%~fF
-    popd
-    exit /b 1
+    set "PUSH_FAILED=1"
   )
+)
+
+if "%PUSH_FAILED%" == "1" (
+  echo One or more packages failed to push.
+  popd
+  endlocal
+  exit /b 1
 )
 
 echo All packages pushed to nuget.org.
