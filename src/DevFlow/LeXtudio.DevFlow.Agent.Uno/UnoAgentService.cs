@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using System.Runtime.Versioning;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using LeXtudio.DevFlow.Agent.Core;
 using Microsoft.Maui.DevFlow.Agent.Core;
@@ -217,53 +219,189 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
         {
             var root = GetRootVisual();
             if (root == null)
+            {
+                LogScreenshotFailure("root visual is null.");
                 return null;
+            }
+
+            var actualWidth = GetDoubleProperty(root, "ActualWidth");
+            var actualHeight = GetDoubleProperty(root, "ActualHeight");
 
             var renderTargetBitmapType = FindType(
                 "Microsoft.UI.Xaml.Media.Imaging.RenderTargetBitmap",
                 "Windows.UI.Xaml.Media.Imaging.RenderTargetBitmap");
             if (renderTargetBitmapType == null)
+            {
+                LogScreenshotFailure("RenderTargetBitmap type not found.");
                 return null;
+            }
 
             var renderTargetBitmap = Activator.CreateInstance(renderTargetBitmapType);
             if (renderTargetBitmap == null)
+            {
+                LogScreenshotFailure("could not create RenderTargetBitmap instance.");
                 return null;
+            }
 
-            var renderAsync = renderTargetBitmapType.GetMethod("RenderAsync", new[] { root.GetType() })
+            var renderAsync = FindRenderAsyncMethod(renderTargetBitmapType, root, actualWidth, actualHeight)
+                ?? renderTargetBitmapType.GetMethod("RenderAsync", new[] { root.GetType() })
                 ?? renderTargetBitmapType.GetMethod("RenderAsync", [typeof(object)])
                 ?? renderTargetBitmapType.GetMethods(BindingFlags.Public | BindingFlags.Instance)
                     .FirstOrDefault(method => method.Name == "RenderAsync" && method.GetParameters().Length == 1);
             if (renderAsync == null)
+            {
+                LogScreenshotFailure("RenderAsync method not found.");
                 return null;
+            }
 
-            await AwaitAsync(renderAsync.Invoke(renderTargetBitmap, new[] { root })).ConfigureAwait(false);
+            var renderArgs = CreateRenderAsyncArguments(renderAsync, root, actualWidth, actualHeight);
+            await AwaitAsync(renderAsync.Invoke(renderTargetBitmap, renderArgs)).ConfigureAwait(false);
 
             var pixelWidth = GetIntProperty(renderTargetBitmap, "PixelWidth");
             var pixelHeight = GetIntProperty(renderTargetBitmap, "PixelHeight");
             if (pixelWidth <= 0 || pixelHeight <= 0)
+            {
+                if (OperatingSystem.IsWindows())
+                {
+                    var windowCapture = CaptureWindowsWindowScreenshot();
+                    if (windowCapture != null)
+                        return windowCapture;
+                }
+
+                LogScreenshotFailure($"invalid size {pixelWidth}x{pixelHeight}.");
                 return null;
+            }
 
             var getPixelsAsync = renderTargetBitmapType.GetMethod("GetPixelsAsync", Type.EmptyTypes);
             if (getPixelsAsync == null)
+            {
+                LogScreenshotFailure("GetPixelsAsync method not found.");
                 return null;
+            }
 
             var buffer = await AwaitAsync(getPixelsAsync.Invoke(renderTargetBitmap, null)).ConfigureAwait(false);
             var pixels = BufferToByteArray(buffer);
             if (pixels == null || pixels.Length == 0)
+            {
+                LogScreenshotFailure("pixel buffer conversion returned no data.");
                 return null;
+            }
 
-            return await EncodePngAsync(pixelWidth.Value, pixelHeight.Value, pixels).ConfigureAwait(false);
+            var result = await EncodePngAsync(pixelWidth.GetValueOrDefault(), pixelHeight.GetValueOrDefault(), pixels).ConfigureAwait(false);
+            if (result == null)
+                LogScreenshotFailure("EncodePngAsync returned null.");
+
+            return result;
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[UnoAgentService] Screenshot capture failed: {ex}");
+            LogScreenshotFailure(ex.ToString());
             return null;
         }
+    }
+
+    private static void LogScreenshotFailure(string message)
+    {
+        Console.Error.WriteLine($"[UnoAgentService] Screenshot capture failed: {message}");
     }
 
     private object? GetRootVisual()
     {
         return _treeWalker.FindRootElementObject();
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static byte[]? CaptureWindowsWindowScreenshot()
+    {
+        var appType = FindType(
+            "Microsoft.UI.Xaml.Application",
+            "Windows.UI.Xaml.Application");
+        var app = appType?.GetProperty("Current", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
+        var window = GetPropertyValueAny(app, "MainWindow")
+            ?? GetPropertyValueAny(app, "CurrentWindow");
+        if (window == null)
+            return null;
+
+        var windowNativeType = FindType("WinRT.Interop.WindowNative");
+        var getWindowHandle = windowNativeType?.GetMethod("GetWindowHandle", BindingFlags.Public | BindingFlags.Static);
+        var handleValue = getWindowHandle?.Invoke(null, new[] { window });
+        var hwnd = handleValue switch
+        {
+            IntPtr value => value,
+            long value => new IntPtr(value),
+            int value => new IntPtr(value),
+            _ => IntPtr.Zero
+        };
+
+        return hwnd == IntPtr.Zero ? null : CaptureWindow(hwnd);
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static byte[]? CaptureWindow(nint hwnd)
+    {
+        if (!GetWindowRect(hwnd, out var rect))
+            return null;
+
+        var width = rect.Right - rect.Left;
+        var height = rect.Bottom - rect.Top;
+        if (width <= 0 || height <= 0)
+            return null;
+
+        using var bitmap = new System.Drawing.Bitmap(width, height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        using var graphics = System.Drawing.Graphics.FromImage(bitmap);
+        var hdc = graphics.GetHdc();
+
+        try
+        {
+            if (!PrintWindow(hwnd, hdc, 0))
+            {
+                var windowDc = GetWindowDC(hwnd);
+                if (windowDc == IntPtr.Zero)
+                    return null;
+
+                try
+                {
+                    BitBlt(hdc, 0, 0, width, height, windowDc, 0, 0, TernaryRasterOperations.SRCCOPY);
+                }
+                finally
+                {
+                    ReleaseDC(hwnd, windowDc);
+                }
+            }
+        }
+        finally
+        {
+            graphics.ReleaseHdc(hdc);
+        }
+
+        using var ms = new MemoryStream();
+        bitmap.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+        return ms.ToArray();
+    }
+
+    private static MethodInfo? FindRenderAsyncMethod(Type renderTargetBitmapType, object root, double? actualWidth, double? actualHeight)
+    {
+        if (actualWidth is null or <= 0 || actualHeight is null or <= 0)
+            return null;
+
+        return renderTargetBitmapType.GetMethods(BindingFlags.Public | BindingFlags.Instance)
+            .FirstOrDefault(method => method.Name == "RenderAsync" && method.GetParameters().Length == 3);
+    }
+
+    private static object?[] CreateRenderAsyncArguments(MethodInfo renderAsync, object root, double? actualWidth, double? actualHeight)
+    {
+        var parameters = renderAsync.GetParameters();
+        if (parameters.Length == 3 && actualWidth is > 0 && actualHeight is > 0)
+        {
+            return
+            [
+                root,
+                ConvertToParameterType((int)Math.Ceiling(actualWidth.Value), parameters[1].ParameterType),
+                ConvertToParameterType((int)Math.Ceiling(actualHeight.Value), parameters[2].ParameterType)
+            ];
+        }
+
+        return [root];
     }
 
     private static async Task<object?> AwaitAsync(object? operation)
@@ -346,15 +484,24 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
         var pixelFormatType = FindType("Windows.Graphics.Imaging.BitmapPixelFormat");
         var alphaModeType = FindType("Windows.Graphics.Imaging.BitmapAlphaMode");
         if (streamType == null || encoderType == null || pixelFormatType == null || alphaModeType == null)
+        {
+            Console.Error.WriteLine("[UnoAgentService] EncodePngAsync failed: required WinRT encoder types not found.");
             return null;
+        }
 
         var stream = Activator.CreateInstance(streamType);
         if (stream == null)
+        {
+            Console.Error.WriteLine("[UnoAgentService] EncodePngAsync failed: could not create InMemoryRandomAccessStream.");
             return null;
+        }
 
         var pngEncoderId = encoderType.GetProperty("PngEncoderId", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
         if (pngEncoderId == null)
+        {
+            Console.Error.WriteLine("[UnoAgentService] EncodePngAsync failed: PngEncoderId property not found.");
             return null;
+        }
 
         var createAsync = encoderType.GetMethods(BindingFlags.Public | BindingFlags.Static)
             .FirstOrDefault(method => method.Name == "CreateAsync" && method.GetParameters().Length == 2);
@@ -655,6 +802,17 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
         return property?.GetValue(target);
     }
 
+    private static object? GetPropertyValueAny(object? target, string propertyName)
+    {
+        if (target == null)
+            return null;
+
+        var property = target.GetType().GetProperty(
+            propertyName,
+            BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.FlattenHierarchy);
+        return property?.GetValue(target);
+    }
+
     private static double? GetDoubleProperty(object target, string propertyName)
     {
         var value = GetPropertyValue(target, propertyName);
@@ -674,5 +832,34 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
             return parsed;
 
         return null;
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool GetWindowRect(nint hWnd, out RECT lpRect);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr GetWindowDC(nint hWnd);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern int ReleaseDC(nint hWnd, IntPtr hDC);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool PrintWindow(nint hwnd, IntPtr hdcBlt, uint nFlags);
+
+    [DllImport("gdi32.dll", SetLastError = true)]
+    private static extern bool BitBlt(IntPtr hdcDest, int nXDest, int nYDest, int nWidth, int nHeight, IntPtr hdcSrc, int nXSrc, int nYSrc, TernaryRasterOperations dwRop);
+
+    private enum TernaryRasterOperations : uint
+    {
+        SRCCOPY = 0x00CC0020u,
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct RECT
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
     }
 }

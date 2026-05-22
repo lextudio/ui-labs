@@ -63,21 +63,23 @@ public partial class App : Application
             agentPort = parsedPort;
         }
 
-        var logDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "UnoDevFlowLogs");
+        var configuredLogDirectory = Environment.GetEnvironmentVariable("DEVFLOW_LOG_DIR");
+        var logDirectory = string.IsNullOrWhiteSpace(configuredLogDirectory)
+            ? Path.Combine(Path.GetTempPath(), "UnoDevFlowLogs")
+            : configuredLogDirectory;
         Directory.CreateDirectory(logDirectory);
         var logProvider = new FileLogProvider(logDirectory, 1_048_576, 5);
         _logCapture = new ConsoleLogCapture(logProvider.Writer);
         _logCapture.Install(captureConsole: true, captureTrace: true);
+        Console.Error.WriteLine($"[UnoDevFlowTestApp] DevFlow logs: {logDirectory}");
 
         _agent = new UnoAgentService(new AgentOptions { Port = agentPort });
         _agent.Start();
 
-        // Ensure the current window is active
-        var hideWindow = string.Equals(Environment.GetEnvironmentVariable("DEVFLOW_HIDE_WINDOW"), "true", StringComparison.OrdinalIgnoreCase);
-        if (!hideWindow)
-        {
-            MainWindow.Activate();
-        }
+        // WinUI does not complete layout/rendering until the window is activated.
+        // The integration tests can still run with a hidden process window, but the
+        // XAML window itself needs activation for screenshots to have a real size.
+        MainWindow.Activate();
     }
 
     /// <summary>
