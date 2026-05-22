@@ -28,6 +28,7 @@ dotnet add package LeXtudio.DevFlow.Driver
 - `LeXtudio.DevFlow.Agent.Core` — WPF-agnostic DevFlow HTTP server, DTOs, and shared agent plumbing
 - `LeXtudio.DevFlow.Agent.WPF` — WPF-specific visual tree walker, screenshot capture, and UI interaction support
 - `LeXtudio.DevFlow.Agent.Uno` — Uno Platform and WinUI 3 registration and visual tree support
+- `LeXtudio.DevFlow.Agent.MewUI` — MewUI runtime support via NuGet-deployed Aprillz.MewUI packages
 - `LeXtudio.DevFlow.Driver` — HTTP client for querying a running DevFlow agent
 
 ## Build
@@ -82,6 +83,12 @@ By default, the sample apps start the agent on port `5500`.
 - `LeXtudio.DevFlow.Agent.Uno` is the Uno DevFlow platform package.
 - `UnoDevFlow.sln` contains the shared agent core plus the Uno project.
 - The Uno package supports registration, tree walking, screenshots, tap, and scroll through the shared Web API.
+
+## MewUI support preview
+
+- `LeXtudio.DevFlow.Agent.MewUI` is a new MewUI runtime package that uses `Aprillz.MewUI.Core` and `Aprillz.MewUI.Platform.Win32`.
+- `MewUIDevFlowTestApp` is a reference sample project demonstrating how to start a MewUI app and host the DevFlow HTTP agent.
+- Register DevFlow during your app startup with `Application.Current.AddMewUIDevFlowAgent()`.
 
 ## Reuse strategy
 

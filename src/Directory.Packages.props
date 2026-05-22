@@ -27,5 +27,13 @@
     <PackageVersion Include="CommunityToolkit.WinUI.Controls.Sizers" Version="8.2.251219" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.5" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.5" />
+    <PackageVersion Include="Aprillz.MewUI.Core" Version="0.15.2" />
+    <PackageVersion Include="Aprillz.MewUI.Platform.Win32" Version="0.15.2" />
+    <PackageVersion Include="Aprillz.MewUI.Platform.MacOS" Version="0.15.2" />
+    <PackageVersion Include="Aprillz.MewUI.Platform.X11" Version="0.15.2" />
+    <PackageVersion Include="Aprillz.MewUI.Backend.Direct2D" Version="0.15.2" />
+    <PackageVersion Include="Aprillz.MewUI.Backend.MewVG.MacOS" Version="0.15.2" />
+    <PackageVersion Include="Aprillz.MewUI.Backend.MewVG.X11" Version="0.15.2" />
+    <PackageVersion Include="System.Drawing.Common" Version="8.0.0" />
   </ItemGroup>
 </Project>

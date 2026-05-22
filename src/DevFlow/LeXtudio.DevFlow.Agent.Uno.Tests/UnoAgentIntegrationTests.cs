@@ -114,6 +114,49 @@ public class UnoAgentIntegrationTests
 
     [Theory]
     [MemberData(nameof(UnoTestTargets))]
+    public async Task Screenshot_ReturnsValidPng(string targetFramework)
+    {
+        var repoRoot = FindRepositoryRoot(Directory.GetCurrentDirectory());
+        var hostProjectPath = Path.GetFullPath(Path.Combine(repoRoot, "src", "DevFlow", "UnoDevFlowTestApp", "UnoDevFlowTestApp", "UnoDevFlowTestApp.csproj"));
+        if (!File.Exists(hostProjectPath))
+            throw new InvalidOperationException($"Unable to locate Uno host project at {hostProjectPath}");
+
+        var hostProjectDirectory = Path.GetDirectoryName(hostProjectPath)!;
+        BuildHostProject(hostProjectPath, targetFramework, hostProjectDirectory);
+
+        var exePath = GetHostExecutablePath(hostProjectDirectory, targetFramework);
+        if (!File.Exists(exePath))
+            throw new InvalidOperationException($"Unable to locate Uno host executable at {exePath}");
+
+        var port = GetFreePort();
+        using var process = StartHiddenProcess(exePath, hostProjectDirectory, port);
+        if (process == null || process.HasExited)
+            throw new InvalidOperationException("Failed to start the Uno host process.");
+
+        try
+        {
+            using var client = new HttpClient { BaseAddress = new Uri($"http://localhost:{port}") };
+            await PollAgentStatusAsync(client, TimeSpan.FromSeconds(20));
+
+            using var screenshotResponse = await client.GetAsync("/api/v1/ui/screenshot");
+            screenshotResponse.EnsureSuccessStatusCode();
+            var screenshotBytes = await screenshotResponse.Content.ReadAsByteArrayAsync();
+
+            Assert.NotEmpty(screenshotBytes);
+            Assert.True(IsPng(screenshotBytes));
+        }
+        finally
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(true);
+                process.WaitForExit(5000);
+            }
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(UnoTestTargets))]
     public async Task ScrollViewer_UpdatesVerticalOffset(string targetFramework)
     {
         var repoRoot = FindRepositoryRoot(Directory.GetCurrentDirectory());
@@ -240,6 +283,21 @@ public class UnoAgentIntegrationTests
         using var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
         listener.Start();
         return ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+    }
+
+    private static bool IsPng(byte[] bytes)
+    {
+        var pngHeader = new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 };
+        if (bytes.Length < pngHeader.Length)
+            return false;
+
+        for (var i = 0; i < pngHeader.Length; i++)
+        {
+            if (bytes[i] != pngHeader[i])
+                return false;
+        }
+
+        return true;
     }
 
     private static Process? StartHiddenProcess(string exePath, string workingDirectory, int port)

@@ -10,6 +10,9 @@
       "src/DevFlow/Microsoft.Maui.DevFlow.Blazor.Gtk/Microsoft.Maui.DevFlow.Blazor.Gtk.csproj",
       "src/DevFlow/Microsoft.Maui.DevFlow.Driver/Microsoft.Maui.DevFlow.Driver.csproj",
       "src/DevFlow/Microsoft.Maui.DevFlow.Logging/Microsoft.Maui.DevFlow.Logging.csproj",
+      "src/DevFlow/LeXtudio.DevFlow.Agent.MewUI/LeXtudio.DevFlow.Agent.MewUI.csproj",
+      "src/DevFlow/LeXtudio.DevFlow.Agent.MewUI.Tests/LeXtudio.DevFlow.Agent.MewUI.Tests.csproj",
+      "src/DevFlow/MewUIDevFlowTestApp/MewUIDevFlowTestApp.csproj",
       "src/DevFlow/Microsoft.Maui.DevFlow.Tests/Microsoft.Maui.DevFlow.Tests.csproj"
     ]
   }

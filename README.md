@@ -67,6 +67,8 @@ This launches the sample app on Uno Platform and it starts DevFlow on port `5500
 - `POST http://localhost:5500/api/v1/ui/tap`
 - `POST http://localhost:5500/api/v1/ui/actions/scroll`
 
+> Note: WinUI apps can also use the WinApp CLI UI commands to achieve a similar runtime UI inspection and interaction workflow. DevFlow is therefore optional for WinUI scenarios when comparable WinApp CLI support already exists.
+
 To launch the sample app on WinUI 3,
 
 ```powershell

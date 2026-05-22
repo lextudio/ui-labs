@@ -41,6 +41,23 @@ public class WpfAgentIntegrationTests
     }
 
     [Fact]
+    public async Task Screenshot_ReturnsValidPng()
+    {
+        var port = GetFreePort();
+        await using var host = await StartWpfAgentHostAsync(port);
+
+        using var client = new HttpClient { BaseAddress = new Uri($"http://localhost:{port}") };
+        await PollAgentStatusAsync(client, TimeSpan.FromSeconds(15));
+
+        using var screenshotResponse = await client.GetAsync("/api/v1/ui/screenshot");
+        screenshotResponse.EnsureSuccessStatusCode();
+
+        var screenshotBytes = await screenshotResponse.Content.ReadAsByteArrayAsync();
+        Assert.NotEmpty(screenshotBytes);
+        Assert.True(IsPng(screenshotBytes));
+    }
+
+    [Fact]
     public async Task TapButton_UpdatesResponseText()
     {
         var port = GetFreePort();
