@@ -99,13 +99,13 @@ dotnet wpflex diagnostics
 
 ## 7. Use WPF CLI with DevFlow
 
-Assumes your app is running with DevFlow agent enabled (default `localhost:5500`).
+Assumes your app is running with DevFlow agent enabled (default `localhost:9223`).
 
 Check agent status:
 
 ```powershell
 dotnet wpflex devflow status
-dotnet wpflex devflow status --host localhost --port 5500
+dotnet wpflex devflow status --host localhost --port 9223
 ```
 
 Capture screenshot:

@@ -11,4 +11,5 @@ This folder contains quick-start documentation for DevFlow integration and CLI u
 ## CLI Guides
 
 - [WPF CLI (`dotnet wpflex`)](./cli/wpf-cli.md)
+- [Uno CLI (`dotnet unolex`)](./cli/uno-cli.md)
 - [MewUI CLI (`dotnet mewlex`)](./cli/mewui-cli.md)

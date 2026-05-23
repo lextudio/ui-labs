@@ -1,23 +1,23 @@
-# MewUI CLI Guide (`dotnet mewlex`)
+# Uno CLI Guide (`dotnet unolex`)
 
-This guide explains how to use the MewUI CLI for app workflows and DevFlow agent operations.
+This guide explains how to use the Uno CLI for app workflows and DevFlow agent operations.
 
 ## 1. Install
 
 ```powershell
-dotnet tool install -g LeXtudio.MewUI.Cli
+dotnet tool install -g LeXtudio.Uno.Cli
 ```
 
 If already installed:
 
 ```powershell
-dotnet tool update -g LeXtudio.MewUI.Cli
+dotnet tool update -g LeXtudio.Uno.Cli
 ```
 
 ## 2. Check available commands
 
 ```powershell
-dotnet mewlex --help
+dotnet unolex --help
 ```
 
 Core commands:
@@ -33,33 +33,32 @@ Core commands:
 - `env`
 - `devflow` (`status`, `screenshot`, `tap`)
 
-## 3. Scaffold a new MewUI app
+## 3. Scaffold a new Uno app
 
 ```powershell
-dotnet mewlex new MyMewApp
+dotnet unolex new MyUnoApp
 ```
 
 What happens:
 
-- Creates folder `MyMewApp`
-- Generates `MyMewApp.csproj`
+- Creates folder `MyUnoApp`
+- Generates `MyUnoApp.csproj`
 - Generates `Program.cs`
-- If run inside this repo layout, it also wires a local project reference to `LeXtudio.DevFlow.Agent.MewUI`
 
 ## 4. Build and run projects
 
 From your project folder:
 
 ```powershell
-dotnet mewlex build
-dotnet mewlex run
+dotnet unolex build
+dotnet unolex run
 ```
 
 Target a specific project:
 
 ```powershell
-dotnet mewlex build .\src\MyMewApp\MyMewApp.csproj
-dotnet mewlex run .\src\MyMewApp\MyMewApp.csproj
+dotnet unolex build .\src\MyUnoApp\MyUnoApp.csproj
+dotnet unolex run .\src\MyUnoApp\MyUnoApp.csproj
 ```
 
 Common options:
@@ -74,44 +73,49 @@ Common options:
 Publish:
 
 ```powershell
-dotnet mewlex publish .\src\MyMewApp\MyMewApp.csproj -c Release
+dotnet unolex publish .\src\MyUnoApp\MyUnoApp.csproj -c Release
 ```
 
 Package (publishes first, then zips output as `publish.zip` in current directory):
 
 ```powershell
-dotnet mewlex package .\src\MyMewApp\MyMewApp.csproj -c Release
+dotnet unolex package .\src\MyUnoApp\MyUnoApp.csproj -c Release
 ```
 
 ## 6. Environment and diagnostics
 
 ```powershell
-dotnet mewlex doctor
-dotnet mewlex env
-dotnet mewlex diagnostics
+dotnet unolex doctor
 ```
 
-## 7. Use MewUI CLI with DevFlow
+Show runtime + SDK environment:
+
+```powershell
+dotnet unolex env
+dotnet unolex diagnostics
+```
+
+## 7. Use Uno CLI with DevFlow
 
 Assumes your app is running with DevFlow enabled on `localhost:9223`.
 
 Check agent status:
 
 ```powershell
-dotnet mewlex devflow status
-dotnet mewlex devflow status --host localhost --port 9223
+dotnet unolex devflow status
+dotnet unolex devflow status --host localhost --port 9223
 ```
 
 Capture screenshot:
 
 ```powershell
-dotnet mewlex devflow screenshot --output mewui-shot.png
+dotnet unolex devflow screenshot --output uno-shot.png
 ```
 
-Tap an element:
+Tap an element by DevFlow element id:
 
 ```powershell
-dotnet mewlex devflow tap --id <element-id>
+dotnet unolex devflow tap --id <element-id>
 ```
 
 ## 8. Output modes for automation
@@ -126,8 +130,8 @@ Global options:
 Examples:
 
 ```powershell
-dotnet mewlex --json devflow status
-dotnet mewlex --dry-run package .\src\MyMewApp\MyMewApp.csproj
+dotnet unolex --json devflow status
+dotnet unolex --dry-run package .\src\MyUnoApp\MyUnoApp.csproj
 ```
 
 ## 9. Expected behavior and exit codes
