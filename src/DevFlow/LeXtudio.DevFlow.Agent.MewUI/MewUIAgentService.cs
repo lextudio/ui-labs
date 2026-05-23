@@ -29,9 +29,12 @@ public sealed class MewUIAgentService : DevFlowAgentServiceBase
     {
         screenshots = true,
         elementScreenshots = true,
+        selectorScreenshots = false,
         tap = true,
         scroll = true,
+        structuredErrors = true,
         webview = false,
+        webviewCdp = false,
         multiWindow = true
     };
 
@@ -71,7 +74,7 @@ public sealed class MewUIAgentService : DevFlowAgentServiceBase
         return Task.FromResult(result);
     }
 
-    protected override Task<byte[]?> CaptureScreenshotAsync(string? elementId = null)
+    protected override Task<byte[]?> CaptureScreenshotAsync(string? elementId = null, string? selector = null)
     {
         if (!Application.IsRunning)
             return Task.FromResult<byte[]?>(null);

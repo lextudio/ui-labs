@@ -29,9 +29,12 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
     {
         screenshots = true,
         elementScreenshots = true,
+        selectorScreenshots = true,
         tap = true,
         scroll = true,
+        structuredErrors = true,
         webview = true,
+        webviewCdp = true,
         multiWindow = true
     };
 
@@ -56,9 +59,9 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
                ?? Task.FromResult<Microsoft.Maui.DevFlow.Agent.Core.ElementInfo?>(null);
     }
 
-    protected override Task<byte[]?> CaptureScreenshotAsync(string? elementId = null)
+    protected override Task<byte[]?> CaptureScreenshotAsync(string? elementId = null, string? selector = null)
     {
-        return Application.Current?.Dispatcher.InvokeAsync(() => CaptureScreenshotOnUiThread(elementId)).Task
+        return Application.Current?.Dispatcher.InvokeAsync(() => CaptureScreenshotOnUiThread(elementId, selector)).Task
                ?? Task.FromResult<byte[]?>(null);
     }
 
@@ -185,8 +188,13 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
         return ms.ToArray();
     }
 
-    private byte[]? CaptureScreenshotOnUiThread(string? elementId)
+    private byte[]? CaptureScreenshotOnUiThread(string? elementId, string? selector)
     {
+        if (string.IsNullOrWhiteSpace(elementId) && !string.IsNullOrWhiteSpace(selector))
+        {
+            elementId = ResolveElementIdBySelector(selector);
+        }
+
         if (!string.IsNullOrWhiteSpace(elementId))
         {
             var element = _treeWalker.FindElementById(elementId);
@@ -204,6 +212,69 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
         }
 
         return CapturePrimaryWindowScreenshot();
+    }
+
+    private string? ResolveElementIdBySelector(string selector)
+    {
+        var normalized = selector.Trim();
+        if (normalized.StartsWith("#", StringComparison.Ordinal))
+            return normalized[1..];
+
+        var roots = _treeWalker.WalkTree();
+        foreach (var root in roots)
+        {
+            var match = FindBySelector(root, normalized);
+            if (!string.IsNullOrWhiteSpace(match))
+                return match;
+        }
+
+        return null;
+    }
+
+    private static string? FindBySelector(ElementInfo element, string selector)
+    {
+        if (MatchesSelector(element, selector))
+            return element.Id;
+
+        if (element.Children == null)
+            return null;
+
+        foreach (var child in element.Children)
+        {
+            var found = FindBySelector(child, selector);
+            if (!string.IsNullOrWhiteSpace(found))
+                return found;
+        }
+
+        return null;
+    }
+
+    private static bool MatchesSelector(ElementInfo element, string selector)
+    {
+        if (string.IsNullOrWhiteSpace(selector))
+            return false;
+
+        if (selector.StartsWith("#", StringComparison.Ordinal))
+            return string.Equals(element.Id, selector[1..], StringComparison.OrdinalIgnoreCase);
+
+        if (selector.StartsWith("[name='", StringComparison.OrdinalIgnoreCase) && selector.EndsWith("']", StringComparison.Ordinal))
+        {
+            var value = selector[7..^2];
+            if (element.NativeProperties != null
+                && element.NativeProperties.TryGetValue("name", out var name)
+                && !string.IsNullOrWhiteSpace(name))
+                return string.Equals(name, value, StringComparison.OrdinalIgnoreCase);
+        }
+
+        if ((selector.StartsWith("[automationid='", StringComparison.OrdinalIgnoreCase)
+             || selector.StartsWith("[automationId='", StringComparison.OrdinalIgnoreCase))
+            && selector.EndsWith("']", StringComparison.Ordinal))
+        {
+            var value = selector[15..^2];
+            return string.Equals(element.AutomationId, value, StringComparison.OrdinalIgnoreCase);
+        }
+
+        return false;
     }
 
     private static byte[]? TryCaptureWebView2Screenshot(DependencyObject? target)

@@ -4,6 +4,7 @@ using System.IO;
 using System.Reflection;
 using System.Runtime.Versioning;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using System.Threading.Tasks;
 using LeXtudio.DevFlow.Agent.Core;
 using Microsoft.Maui.DevFlow.Agent.Core;
@@ -28,9 +29,12 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
     {
         screenshots = true,
         elementScreenshots = true,
+        selectorScreenshots = false,
         tap = true,
         scroll = true,
+        structuredErrors = true,
         webview = true,
+        webviewCdp = true,
         multiWindow = true
     };
 
@@ -76,7 +80,7 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
         return InvokeOnUiThreadAsync(() => _treeWalker.FindElementById(id));
     }
 
-    protected override Task<byte[]?> CaptureScreenshotAsync(string? elementId = null)
+    protected override Task<byte[]?> CaptureScreenshotAsync(string? elementId = null, string? selector = null)
     {
         return InvokeOnUiThreadAsync(() => CaptureScreenshotOnUiThreadAsync(elementId));
     }
@@ -119,6 +123,11 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
 
             return false;
         });
+    }
+
+    protected override Task<object?> SendWebViewCdpCommandAsync(string? contextId, string method, JsonElement? @params)
+    {
+        return InvokeOnUiThreadAsync(() => SendWebViewCdpCommandOnUiThread(contextId, method, @params));
     }
 
     private Task<T> InvokeOnUiThreadAsync<T>(Func<T> callback)
@@ -431,6 +440,68 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
         }
 
         return null;
+    }
+
+    private object? SendWebViewCdpCommandOnUiThread(string? contextId, string method, JsonElement? @params)
+    {
+        var webView2Type = FindType("Microsoft.UI.Xaml.Controls.WebView2");
+        if (webView2Type == null)
+            return new { error = "WebView2 type not found on this Uno target." };
+
+        var root = GetRootVisual();
+        var webViews = new List<object>();
+        var queue = new Queue<object>();
+        if (root != null) queue.Enqueue(root);
+        while (queue.Count > 0)
+        {
+            var current = queue.Dequeue();
+            if (webView2Type.IsInstanceOfType(current))
+                webViews.Add(current);
+
+            var visualTreeHelperType = FindType("Microsoft.UI.Xaml.Media.VisualTreeHelper", "Windows.UI.Xaml.Media.VisualTreeHelper");
+            var getChildrenCount = visualTreeHelperType?.GetMethod("GetChildrenCount", BindingFlags.Public | BindingFlags.Static);
+            var getChild = visualTreeHelperType?.GetMethod("GetChild", BindingFlags.Public | BindingFlags.Static);
+            if (getChildrenCount == null || getChild == null)
+                continue;
+            var count = (int?)getChildrenCount.Invoke(null, new[] { current }) ?? 0;
+            for (var i = 0; i < count; i++)
+            {
+                var child = getChild.Invoke(null, new object[] { current, i });
+                if (child != null) queue.Enqueue(child);
+            }
+        }
+
+        object? target = webViews.FirstOrDefault();
+        if (!string.IsNullOrWhiteSpace(contextId))
+        {
+            target = webViews.FirstOrDefault(w =>
+                string.Equals(GetPropertyValue(w, "Name")?.ToString(), contextId, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(GetPropertyValue(w, "AutomationId")?.ToString(), contextId, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (target == null)
+            return new { error = "No matching WebView2 context found." };
+
+        var core = GetPropertyValue(target, "CoreWebView2");
+        if (core == null)
+            return new { error = "CoreWebView2 is not initialized." };
+
+        if (string.Equals(method, "Runtime.evaluate", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!@params.HasValue || !@params.Value.TryGetProperty("expression", out var exprProp))
+                return new { error = "Missing params.expression for Runtime.evaluate" };
+
+            var expression = exprProp.GetString() ?? string.Empty;
+            var executeScript = core.GetType().GetMethod("ExecuteScriptAsync", new[] { typeof(string) });
+            if (executeScript == null)
+                return new { error = "ExecuteScriptAsync not found on CoreWebView2." };
+
+            var task = executeScript.Invoke(core, new object[] { expression }) as Task<string>;
+            var scriptResult = task?.GetAwaiter().GetResult();
+            return new { result = new { value = scriptResult } };
+        }
+
+        return new { error = $"Unsupported CDP method: {method}" };
     }
 
     private static void LogScreenshotFailure(string message)

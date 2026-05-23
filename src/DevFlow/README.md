@@ -84,6 +84,9 @@ You can override the port at build time with `dotnet build -p:MauiDevFlowPort=95
 | `GET /api/v1/ui/tree` | Read the live UI tree. |
 | `GET /api/v1/ui/element?id=<id>` | Read one UI element by id. |
 | `GET /api/v1/ui/screenshot` | Capture a screenshot. |
+| `GET /api/v1/webview/contexts` | List discoverable WebView contexts. |
+| `GET /api/v1/webview/screenshot?context=<id>` | Capture a WebView screenshot. |
+| `POST /api/v1/webview/cdp` | Execute a WebView CDP command. |
 | `POST /api/v1/ui/tap` | Tap an element with body `{ "id": "<element-id>" }`. |
 | `POST /api/v1/ui/actions/scroll` | Scroll an element with body `{ "id": "<element-id>", "deltaX": 0, "deltaY": 600 }`. |
 
@@ -92,6 +95,8 @@ You can override the port at build time with `dotnet build -p:MauiDevFlowPort=95
 - `LeXtudio.DevFlow.Agent.Uno` is the Uno DevFlow platform package.
 - `UnoDevFlow.sln` contains the shared agent core plus the Uno project.
 - The Uno package supports registration, tree walking, screenshots, tap, and scroll through the shared Web API.
+- Uno WebView/CDP support is currently best-effort and target-dependent.
+- WebView integration tests currently run on `net10.0-desktop` only; `net10.0-windows10.0.19041.0` (WinUI) WebView tests are temporarily excluded due to unstable build/runtime behavior in CI/dev environments.
 
 ## MewUI support preview
 

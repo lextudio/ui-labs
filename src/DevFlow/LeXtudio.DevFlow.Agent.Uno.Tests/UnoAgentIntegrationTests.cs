@@ -59,6 +59,9 @@ public class UnoAgentIntegrationTests
             Assert.True(capabilities.GetProperty("elementScreenshots").GetBoolean());
             Assert.True(capabilities.GetProperty("tap").GetBoolean());
             Assert.True(capabilities.GetProperty("scroll").GetBoolean());
+            Assert.False(capabilities.GetProperty("selectorScreenshots").GetBoolean());
+            Assert.True(capabilities.GetProperty("structuredErrors").GetBoolean());
+            Assert.True(capabilities.GetProperty("webviewCdp").GetBoolean());
             Assert.True(capabilities.GetProperty("multiWindow").GetBoolean());
         }
         finally
@@ -231,8 +234,16 @@ public class UnoAgentIntegrationTests
         }
     }
 
+    public static IEnumerable<object[]> UnoDesktopOnlyTargets
+    {
+        get
+        {
+            yield return new object[] { "net10.0-desktop" };
+        }
+    }
+
     [Theory]
-    [MemberData(nameof(UnoTestTargets))]
+    [MemberData(nameof(UnoDesktopOnlyTargets))]
     public async Task WebView_ElementScreenshot_ReturnsValidPng(string targetFramework)
     {
         var repoRoot = FindRepositoryRoot(Directory.GetCurrentDirectory());

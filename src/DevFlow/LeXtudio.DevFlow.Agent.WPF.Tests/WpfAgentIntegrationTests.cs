@@ -31,7 +31,10 @@ public class WpfAgentIntegrationTests
         Assert.True(capabilities.GetProperty("elementScreenshots").GetBoolean());
         Assert.True(capabilities.GetProperty("tap").GetBoolean());
         Assert.True(capabilities.GetProperty("scroll").GetBoolean());
+        Assert.True(capabilities.GetProperty("selectorScreenshots").GetBoolean());
+        Assert.True(capabilities.GetProperty("structuredErrors").GetBoolean());
         Assert.True(capabilities.GetProperty("webview").GetBoolean());
+        Assert.True(capabilities.GetProperty("webviewCdp").GetBoolean());
         Assert.True(capabilities.GetProperty("multiWindow").GetBoolean());
 
         using var treeResponse = await client.GetAsync("/api/v1/ui/tree");
@@ -160,6 +163,36 @@ public class WpfAgentIntegrationTests
         var screenshotBytes = await PollScreenshotAsync(client, "/api/v1/ui/screenshot?id=ActionButton", TimeSpan.FromSeconds(20));
         Assert.NotEmpty(screenshotBytes);
         Assert.True(IsPng(screenshotBytes));
+    }
+
+    [Fact]
+    public async Task SelectorScreenshot_ReturnsValidPng()
+    {
+        var port = GetFreePort();
+        await using var host = await StartWpfAgentHostAsync(port);
+
+        using var client = new HttpClient { BaseAddress = new Uri($"http://localhost:{port}") };
+        await PollAgentStatusAsync(client, TimeSpan.FromSeconds(15));
+
+        var screenshotBytes = await PollScreenshotAsync(client, "/api/v1/ui/screenshot?selector=%23ActionButton", TimeSpan.FromSeconds(20));
+        Assert.NotEmpty(screenshotBytes);
+        Assert.True(IsPng(screenshotBytes));
+    }
+
+    [Fact]
+    public async Task MissingElementId_ReturnsStructuredError()
+    {
+        var port = GetFreePort();
+        await using var host = await StartWpfAgentHostAsync(port);
+
+        using var client = new HttpClient { BaseAddress = new Uri($"http://localhost:{port}") };
+        await PollAgentStatusAsync(client, TimeSpan.FromSeconds(15));
+
+        using var response = await client.GetAsync("/api/v1/ui/element");
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStreamAsync());
+        Assert.False(doc.RootElement.GetProperty("success").GetBoolean());
+        Assert.Equal("missing_query_parameter", doc.RootElement.GetProperty("error").GetProperty("code").GetString());
     }
 
     private static async Task<JsonElement> PollAgentStatusAsync(HttpClient client, TimeSpan timeout)
