@@ -33,6 +33,7 @@ public class WpfAgentIntegrationTests
         Assert.True(capabilities.GetProperty("scroll").GetBoolean());
         Assert.True(capabilities.GetProperty("selectorScreenshots").GetBoolean());
         Assert.True(capabilities.GetProperty("structuredErrors").GetBoolean());
+        Assert.True(capabilities.GetProperty("appTheme").GetBoolean());
         Assert.True(capabilities.GetProperty("webview").GetBoolean());
         Assert.True(capabilities.GetProperty("webviewCdp").GetBoolean());
         Assert.True(capabilities.GetProperty("multiWindow").GetBoolean());
@@ -243,6 +244,29 @@ public class WpfAgentIntegrationTests
         using var batchDoc = JsonDocument.Parse(await batchResponse.Content.ReadAsStreamAsync());
         Assert.True(batchDoc.RootElement.GetProperty("success").GetBoolean());
         Assert.Equal(2, batchDoc.RootElement.GetProperty("results").GetArrayLength());
+    }
+
+    [Fact]
+    public async Task Theme_GetAndSet_ReturnsThemePayload()
+    {
+        var port = GetFreePort();
+        await using var host = await StartWpfAgentHostAsync(port);
+
+        using var client = new HttpClient { BaseAddress = new Uri($"http://localhost:{port}") };
+        await PollAgentStatusAsync(client, TimeSpan.FromSeconds(15));
+
+        using var getResponse = await client.GetAsync("/api/v1/device/app/theme");
+        getResponse.EnsureSuccessStatusCode();
+        using var getDoc = JsonDocument.Parse(await getResponse.Content.ReadAsStreamAsync());
+        Assert.True(getDoc.RootElement.TryGetProperty("supportedThemes", out _));
+
+        using var setResponse = await client.PutAsync(
+            "/api/v1/device/app/theme",
+            new StringContent("{\"theme\":\"light\"}", Encoding.UTF8, "application/json"));
+        setResponse.EnsureSuccessStatusCode();
+        using var setDoc = JsonDocument.Parse(await setResponse.Content.ReadAsStreamAsync());
+        Assert.Equal("light", setDoc.RootElement.GetProperty("userAppTheme").GetString());
+        Assert.Equal("light", setDoc.RootElement.GetProperty("theme").GetString());
     }
 
     private static async Task<JsonElement> PollAgentStatusAsync(HttpClient client, TimeSpan timeout)

@@ -61,6 +61,7 @@ public class UnoAgentIntegrationTests
             Assert.True(capabilities.GetProperty("scroll").GetBoolean());
             Assert.False(capabilities.GetProperty("selectorScreenshots").GetBoolean());
             Assert.True(capabilities.GetProperty("structuredErrors").GetBoolean());
+            Assert.True(capabilities.GetProperty("appTheme").GetBoolean());
             Assert.True(capabilities.GetProperty("webviewCdp").GetBoolean());
             Assert.True(capabilities.GetProperty("multiWindow").GetBoolean());
         }
@@ -469,6 +470,46 @@ public class UnoAgentIntegrationTests
             using var batchDoc = JsonDocument.Parse(await batchResponse.Content.ReadAsStreamAsync());
             Assert.True(batchDoc.RootElement.GetProperty("success").GetBoolean());
             Assert.Equal(2, batchDoc.RootElement.GetProperty("results").GetArrayLength());
+        }
+        finally
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(true);
+                process.WaitForExit(5000);
+            }
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(UnoTestTargets))]
+    public async Task Theme_GetAndSet_ReturnsThemePayload(string targetFramework)
+    {
+        var repoRoot = FindRepositoryRoot(Directory.GetCurrentDirectory());
+        var hostProjectPath = Path.GetFullPath(Path.Combine(repoRoot, "src", "DevFlow", "UnoDevFlowTestApp", "UnoDevFlowTestApp", "UnoDevFlowTestApp.csproj"));
+        var hostProjectDirectory = Path.GetDirectoryName(hostProjectPath)!;
+        BuildHostProject(hostProjectPath, targetFramework, hostProjectDirectory);
+        var exePath = GetHostExecutablePath(hostProjectDirectory, targetFramework);
+
+        var port = GetFreePort();
+        using var process = StartHiddenProcess(exePath, hostProjectDirectory, port);
+        try
+        {
+            using var client = new HttpClient { BaseAddress = new Uri($"http://localhost:{port}") };
+            await PollAgentStatusAsync(client, TimeSpan.FromSeconds(20));
+
+            using var getResponse = await client.GetAsync("/api/v1/device/app/theme");
+            getResponse.EnsureSuccessStatusCode();
+            using var getDoc = JsonDocument.Parse(await getResponse.Content.ReadAsStreamAsync());
+            Assert.True(getDoc.RootElement.TryGetProperty("supportedThemes", out _));
+
+            using var setResponse = await client.PutAsync(
+                "/api/v1/device/app/theme",
+                new StringContent("{\"theme\":\"light\"}", Encoding.UTF8, "application/json"));
+            setResponse.EnsureSuccessStatusCode();
+            using var setDoc = JsonDocument.Parse(await setResponse.Content.ReadAsStreamAsync());
+            Assert.Equal("light", setDoc.RootElement.GetProperty("userAppTheme").GetString());
+            Assert.Equal("light", setDoc.RootElement.GetProperty("theme").GetString());
         }
         finally
         {

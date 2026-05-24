@@ -16,6 +16,7 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
 {
     private readonly UnoVisualTreeWalker _treeWalker = new();
     private readonly object? _dispatcherQueue;
+    private string _themeOverride = "system";
 
     public UnoAgentService(AgentOptions? options = null)
         : base(options)
@@ -34,6 +35,7 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
         tap = true,
         scroll = true,
         structuredErrors = true,
+        appTheme = true,
         webview = true,
         webviewCdp = true,
         multiWindow = true
@@ -262,6 +264,66 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
         });
     }
 
+    protected override Task<object?> GetThemeAsync()
+    {
+        return InvokeOnUiThreadAsync(() =>
+        {
+            var app = GetCurrentApplicationObject();
+            if (app == null)
+                return (object?)null;
+
+            var requestedTheme = ReadThemeProperty(app, "RequestedTheme");
+            var userAppTheme = ReadThemeProperty(app, "UserAppTheme");
+            if (_themeOverride != "system")
+                userAppTheme = _themeOverride;
+            var effectiveTheme = string.Equals(userAppTheme, "system", StringComparison.OrdinalIgnoreCase)
+                ? requestedTheme
+                : userAppTheme;
+
+            return (object?)new
+            {
+                theme = effectiveTheme,
+                requestedTheme,
+                userAppTheme,
+                effectiveTheme,
+                supportedThemes = new[] { "light", "dark", "system" }
+            };
+        });
+    }
+
+    protected override Task<object?> SetThemeAsync(string theme)
+    {
+        return InvokeOnUiThreadAsync(() =>
+        {
+            if (!TryParseTheme(theme, out var normalized))
+                return (object?)null;
+
+            var app = GetCurrentApplicationObject();
+            if (app == null)
+                return (object?)null;
+
+            TryWriteThemeProperty(app, "UserAppTheme", normalized);
+            _themeOverride = normalized;
+
+            var requestedTheme = ReadThemeProperty(app, "RequestedTheme");
+            var userAppTheme = ReadThemeProperty(app, "UserAppTheme");
+            if (_themeOverride != "system")
+                userAppTheme = _themeOverride;
+            var effectiveTheme = string.Equals(userAppTheme, "system", StringComparison.OrdinalIgnoreCase)
+                ? requestedTheme
+                : userAppTheme;
+
+            return (object?)new
+            {
+                theme = effectiveTheme,
+                requestedTheme,
+                userAppTheme,
+                effectiveTheme,
+                supportedThemes = new[] { "light", "dark", "system" }
+            };
+        });
+    }
+
     private static bool TrySetTextValue(object target, string text)
     {
         var type = target.GetType();
@@ -300,6 +362,59 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
         }
 
         return null;
+    }
+
+    private static object? GetCurrentApplicationObject()
+    {
+        var appType = FindType("Microsoft.UI.Xaml.Application", "Windows.UI.Xaml.Application");
+        return appType?.GetProperty("Current", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
+    }
+
+    private static bool TryParseTheme(string input, out string normalized)
+    {
+        normalized = input.Trim().ToLowerInvariant();
+        return normalized is "light" or "dark" or "system";
+    }
+
+    private static string ReadThemeProperty(object app, string propertyName)
+    {
+        var prop = app.GetType().GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance);
+        var value = prop?.GetValue(app);
+        var token = value?.ToString();
+        if (string.IsNullOrWhiteSpace(token))
+            return "system";
+
+        return token.ToLowerInvariant() switch
+        {
+            "light" => "light",
+            "dark" => "dark",
+            _ => "system"
+        };
+    }
+
+    private static bool TryWriteThemeProperty(object app, string propertyName, string theme)
+    {
+        var prop = app.GetType().GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance);
+        if (prop?.CanWrite != true)
+            return false;
+
+        var enumType = prop.PropertyType;
+        if (!enumType.IsEnum)
+            return false;
+
+        string enumName = theme switch
+        {
+            "light" => "Light",
+            "dark" => "Dark",
+            _ => "Default"
+        };
+
+        var resolved = Enum.GetNames(enumType).FirstOrDefault(n => string.Equals(n, enumName, StringComparison.OrdinalIgnoreCase));
+        if (resolved == null)
+            return false;
+
+        prop.SetValue(app, Enum.Parse(enumType, resolved));
+        return true;
     }
 
     private static void Flatten(ElementInfo element, List<ElementInfo> list)

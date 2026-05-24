@@ -33,9 +33,82 @@ public sealed class MewUIAgentService : DevFlowAgentServiceBase
         tap = true,
         scroll = true,
         structuredErrors = true,
+        appTheme = true,
         webview = false,
         webviewCdp = false,
         multiWindow = true
+    };
+
+    protected override Task<object?> GetThemeAsync()
+    {
+        if (!Application.IsRunning)
+            return Task.FromResult<object?>(null);
+
+        var app = Application.Current;
+        object? result = null;
+        app.Dispatcher.Invoke(() => result = BuildThemePayload(app));
+        return Task.FromResult(result);
+    }
+
+    protected override Task<object?> SetThemeAsync(string theme)
+    {
+        if (!Application.IsRunning)
+            return Task.FromResult<object?>(null);
+
+        if (!TryParseTheme(theme, out var variant))
+            return Task.FromResult<object?>(null);
+
+        var app = Application.Current;
+        object? result = null;
+        app.Dispatcher.Invoke(() =>
+        {
+            app.SetThemeMode(variant);
+            result = BuildThemePayload(app);
+        });
+
+        return Task.FromResult(result);
+    }
+
+    private static object BuildThemePayload(Application app)
+    {
+        var userAppTheme = NormalizeTheme(app.ThemeMode);
+        var requestedTheme = app.Theme.IsDark ? "dark" : "light";
+        var effectiveTheme = userAppTheme == "system" ? requestedTheme : userAppTheme;
+
+        return new
+        {
+            theme = effectiveTheme,
+            requestedTheme,
+            userAppTheme,
+            effectiveTheme,
+            supportedThemes = new[] { "light", "dark", "system" }
+        };
+    }
+
+    private static bool TryParseTheme(string input, out ThemeVariant theme)
+    {
+        switch (input.Trim().ToLowerInvariant())
+        {
+            case "light":
+                theme = ThemeVariant.Light;
+                return true;
+            case "dark":
+                theme = ThemeVariant.Dark;
+                return true;
+            case "system":
+                theme = ThemeVariant.System;
+                return true;
+            default:
+                theme = ThemeVariant.System;
+                return false;
+        }
+    }
+
+    private static string NormalizeTheme(ThemeVariant theme) => theme switch
+    {
+        ThemeVariant.Light => "light",
+        ThemeVariant.Dark => "dark",
+        _ => "system"
     };
 
     protected override Task<string?> GetApplicationNameAsync()

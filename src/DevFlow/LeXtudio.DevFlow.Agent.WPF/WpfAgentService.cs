@@ -2,6 +2,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text.Json;
+using System.ComponentModel;
 using System.Windows;
 using Automation = System.Windows.Automation;
 using System.Windows.Controls;
@@ -17,6 +18,7 @@ namespace LeXtudio.DevFlow.Agent.WPF;
 public sealed class WpfAgentService : DevFlowAgentServiceBase
 {
     private readonly WpfVisualTreeWalker _treeWalker = new();
+    private string _themeOverride = "system";
 
     public WpfAgentService(AgentOptions? options = null)
         : base(options)
@@ -34,10 +36,112 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
         tap = true,
         scroll = true,
         structuredErrors = true,
+        appTheme = true,
         webview = true,
         webviewCdp = true,
         multiWindow = true
     };
+
+    protected override Task<object?> GetThemeAsync()
+        => Application.Current?.Dispatcher.InvokeAsync<object?>(BuildThemePayload).Task ?? Task.FromResult<object?>(null);
+
+    protected override Task<object?> SetThemeAsync(string theme)
+    {
+        return Application.Current?.Dispatcher.InvokeAsync<object?>(() =>
+        {
+            var app = Application.Current;
+            if (app == null)
+                return null;
+
+            var normalized = theme.Trim().ToLowerInvariant();
+            if (normalized is not ("light" or "dark" or "system"))
+                return null;
+
+            TryWriteThemeProperty(app, "ThemeMode", normalized);
+            _themeOverride = normalized;
+
+            return BuildThemePayload();
+        }).Task ?? Task.FromResult<object?>(null);
+    }
+
+    private object? BuildThemePayload()
+    {
+        var app = Application.Current;
+        if (app == null)
+            return null;
+
+        var hasThemeMode = app.GetType().GetProperty("ThemeMode", BindingFlags.Public | BindingFlags.Instance) != null;
+        var reportedTheme = hasThemeMode ? ReadThemeProperty(app, "ThemeMode") : "system";
+        var requestedTheme = _themeOverride == "system" ? reportedTheme : _themeOverride;
+        var userAppTheme = _themeOverride;
+        var effectiveTheme = userAppTheme == "system" ? requestedTheme : userAppTheme;
+
+        return new
+        {
+            theme = effectiveTheme,
+            requestedTheme,
+            userAppTheme,
+            effectiveTheme,
+            supportedThemes = new[] { "light", "dark", "system" }
+        };
+    }
+
+    private static string ReadThemeProperty(Application app, string propertyName)
+    {
+        var prop = app.GetType().GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance);
+        var value = prop?.GetValue(app)?.ToString();
+        return value?.ToLowerInvariant() switch
+        {
+            "light" => "light",
+            "dark" => "dark",
+            "system" => "system",
+            "none" => "system",
+            _ => "system"
+        };
+    }
+
+    private static bool TryWriteThemeProperty(Application app, string propertyName, string theme)
+    {
+        var prop = app.GetType().GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance);
+        if (prop?.CanWrite != true)
+            return false;
+
+        var targetName = theme switch
+        {
+            "light" => "Light",
+            "dark" => "Dark",
+            _ => "System"
+        };
+
+        if (prop.PropertyType.IsEnum)
+        {
+            var resolved = Enum.GetNames(prop.PropertyType).FirstOrDefault(n => string.Equals(n, targetName, StringComparison.OrdinalIgnoreCase));
+            if (resolved == null)
+                return false;
+            prop.SetValue(app, Enum.Parse(prop.PropertyType, resolved));
+            return true;
+        }
+
+        var staticTheme = prop.PropertyType.GetProperty(targetName, BindingFlags.Public | BindingFlags.Static);
+        if (staticTheme != null && staticTheme.PropertyType == prop.PropertyType)
+        {
+            prop.SetValue(app, staticTheme.GetValue(null));
+            return true;
+        }
+
+        var converter = TypeDescriptor.GetConverter(prop.PropertyType);
+        if (converter != null && converter.CanConvertFrom(typeof(string)))
+        {
+            var converted = converter.ConvertFromInvariantString(targetName);
+            if (converted != null)
+            {
+                prop.SetValue(app, converted);
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     protected override Task<string?> GetApplicationNameAsync()
     {

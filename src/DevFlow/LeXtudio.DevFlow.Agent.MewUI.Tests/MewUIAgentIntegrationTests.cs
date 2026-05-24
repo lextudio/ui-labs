@@ -26,6 +26,7 @@ public class MewUIAgentIntegrationTests
         Assert.True(status.GetProperty("running").GetBoolean());
         Assert.Equal("LeXtudio.DevFlow.Agent", status.GetProperty("name").GetString());
         Assert.Equal("mewui", status.GetProperty("framework").GetString());
+        Assert.True(status.GetProperty("capabilities").GetProperty("appTheme").GetBoolean());
     }
 
     [Fact]
@@ -159,6 +160,30 @@ public class MewUIAgentIntegrationTests
         using var batchDoc = JsonDocument.Parse(await batchResponse.Content.ReadAsStreamAsync());
         Assert.True(batchDoc.RootElement.GetProperty("success").GetBoolean());
         Assert.Equal(2, batchDoc.RootElement.GetProperty("results").GetArrayLength());
+    }
+
+    [Fact]
+    public async Task Theme_GetAndSet_ReturnsThemePayload()
+    {
+        var runtimeIdentifier = GetRuntimeIdentifier();
+        var port = GetFreePort();
+        await using var host = await StartMewUIAgentHostAsync(port, runtimeIdentifier);
+
+        using var client = new HttpClient { BaseAddress = new Uri($"http://localhost:{port}") };
+        await PollAgentStatusAsync(client, TimeSpan.FromSeconds(20));
+
+        using var getResponse = await client.GetAsync("/api/v1/device/app/theme");
+        getResponse.EnsureSuccessStatusCode();
+        using var getDoc = JsonDocument.Parse(await getResponse.Content.ReadAsStreamAsync());
+        Assert.True(getDoc.RootElement.TryGetProperty("supportedThemes", out _));
+
+        using var setResponse = await client.PutAsync(
+            "/api/v1/device/app/theme",
+            new StringContent("{\"theme\":\"light\"}", Encoding.UTF8, "application/json"));
+        setResponse.EnsureSuccessStatusCode();
+        using var setDoc = JsonDocument.Parse(await setResponse.Content.ReadAsStreamAsync());
+        Assert.Equal("light", setDoc.RootElement.GetProperty("userAppTheme").GetString());
+        Assert.Equal("light", setDoc.RootElement.GetProperty("theme").GetString());
     }
 
     private static async Task<JsonElement> PollAgentStatusAsync(HttpClient client, TimeSpan timeout)

@@ -47,6 +47,8 @@ public abstract class DevFlowAgentServiceBase : IDisposable
     protected abstract Task<bool> TryFocusAsync(string elementId);
     protected abstract Task<object?> TryKeyAsync(string? elementId, string? key, string? text);
     protected abstract Task<bool> TryBackAsync();
+    protected abstract Task<object?> GetThemeAsync();
+    protected abstract Task<object?> SetThemeAsync(string theme);
     protected abstract Task<string?> GetApplicationNameAsync();
     protected virtual object GetCapabilities() => new
     {
@@ -79,6 +81,8 @@ public abstract class DevFlowAgentServiceBase : IDisposable
         _server.MapPost("/api/v1/ui/actions/back", HandleBackAsync);
         _server.MapPost("/api/v1/ui/actions/batch", HandleBatchAsync);
         _server.MapPost("/api/v1/ui/actions/scroll", HandleScrollAsync);
+        _server.MapGet("/api/v1/device/app/theme", HandleThemeGetAsync);
+        _server.MapPut("/api/v1/device/app/theme", HandleThemeSetAsync);
         _server.MapGet("/api/v1/invoke/actions", HandleListInvokeActionsAsync);
         _server.MapPost("/api/v1/invoke/actions/{name}", HandleInvokeActionAsync);
     }
@@ -278,6 +282,22 @@ public abstract class DevFlowAgentServiceBase : IDisposable
         return HttpResponse.Json(new { success = allSucceeded, results });
     }
 
+    private async Task<HttpResponse> HandleThemeGetAsync(HttpRequest request)
+    {
+        var theme = await GetThemeAsync().ConfigureAwait(false);
+        return theme != null ? HttpResponse.Json(theme) : HttpResponse.Error("Theme information unavailable", 500);
+    }
+
+    private async Task<HttpResponse> HandleThemeSetAsync(HttpRequest request)
+    {
+        var payload = request.BodyAs<ThemeSetRequest>();
+        if (payload == null || string.IsNullOrWhiteSpace(payload.Theme))
+            return HttpResponse.Error("theme is required", 400);
+
+        var result = await SetThemeAsync(payload.Theme).ConfigureAwait(false);
+        return result != null ? HttpResponse.Json(result) : HttpResponse.Error("Theme could not be changed", 400);
+    }
+
     private sealed class TapRequest
     {
         public string? Id { get; set; }
@@ -330,6 +350,11 @@ public abstract class DevFlowAgentServiceBase : IDisposable
         public string? Key { get; set; }
         public double DeltaX { get; set; }
         public double DeltaY { get; set; }
+    }
+
+    private sealed class ThemeSetRequest
+    {
+        public string? Theme { get; set; }
     }
 
     private sealed class InvokeActionEntry
