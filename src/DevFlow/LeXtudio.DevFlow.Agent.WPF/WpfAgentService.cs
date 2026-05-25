@@ -219,14 +219,25 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
         }).Task ?? Task.FromResult(false);
     }
 
+    protected override Task<object?> TryTapResponseAsync(string elementId)
+    {
+        return Application.Current?.Dispatcher.InvokeAsync<object?>(() =>
+        {
+            var target = ResolveElementObject(elementId);
+            if (target is null)
+                return null;
+
+            return ActionSimulationExecutor.Execute(
+                () => target is FrameworkElement fe && TryNativeTap(fe) ? CreateSuccessResult(SimulationModes.Native, elementId) : null,
+                () => TryInvokeOnElement(target) ? CreateSuccessResult(SimulationModes.Semantic, elementId) : null);
+        }).Task ?? Task.FromResult<object?>(null);
+    }
+
     protected override Task<bool> TryScrollAsync(string elementId, double deltaX, double deltaY)
     {
         return Application.Current?.Dispatcher.InvokeAsync(() =>
         {
-            var element = _treeWalker.FindElementById(elementId);
-            if (element == null) return false;
-
-            var target = _treeWalker.ResolveElementByStableId(element.Id);
+            var target = ResolveElementObject(elementId);
             if (target is null) return false;
 
             var scrollViewer = FindScrollViewer(target);
@@ -260,8 +271,35 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
         }).Task ?? Task.FromResult(false);
     }
 
+    protected override Task<object?> TryFillResponseAsync(string elementId, string text)
+    {
+        return Application.Current?.Dispatcher.InvokeAsync<object?>(() =>
+        {
+            var target = ResolveElementObject(elementId);
+            if (target is null)
+                return null;
+
+            return ActionSimulationExecutor.Execute(
+                () => TryNativeTextInput(target, text, replace: true) ? CreateSuccessResult(SimulationModes.Native, elementId, text: text) : null,
+                () =>
+                {
+                    var success = target switch
+                    {
+                        TextBox textBox => SetText(textBox, text),
+                        PasswordBox passwordBox => SetPassword(passwordBox, text),
+                        _ => false
+                    };
+
+                    return success ? CreateSuccessResult(SimulationModes.PropertyMutation, elementId, text: text) : null;
+                });
+        }).Task ?? Task.FromResult<object?>(null);
+    }
+
     protected override Task<bool> TryClearAsync(string elementId)
         => TryFillAsync(elementId, string.Empty);
+
+    protected override Task<object?> TryClearResponseAsync(string elementId)
+        => TryFillResponseAsync(elementId, string.Empty);
 
     protected override Task<bool> TryFocusAsync(string elementId)
     {
@@ -279,6 +317,30 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
         }).Task ?? Task.FromResult(false);
     }
 
+    protected override Task<object?> TryFocusResponseAsync(string elementId)
+    {
+        return Application.Current?.Dispatcher.InvokeAsync<object?>(() =>
+        {
+            var target = ResolveElementObject(elementId);
+            if (target is null)
+                return null;
+
+            return ActionSimulationExecutor.Execute(
+                () => target is FrameworkElement fe && TryNativeTap(fe) ? CreateSuccessResult(SimulationModes.Native, elementId) : null,
+                () =>
+                {
+                    var success = target switch
+                    {
+                        UIElement ui => ui.Focus(),
+                        ContentElement ce => ce.Focus(),
+                        _ => false
+                    };
+
+                    return success ? CreateSuccessResult(SimulationModes.Semantic, elementId) : null;
+                });
+        }).Task ?? Task.FromResult<object?>(null);
+    }
+
     protected override Task<object?> TryKeyAsync(string? elementId, string? key, string? text)
     {
         return Application.Current?.Dispatcher.InvokeAsync<object?>(() =>
@@ -288,12 +350,14 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
             var insertText = text ?? (keyValue.Length == 1 ? keyValue : null);
 
             if (string.IsNullOrWhiteSpace(elementId))
-                return new { success = true, key = keyValue, text, elementId };
+                return CreateSuccessResult(SimulationModes.Semantic, elementId, key: keyValue, text: text);
 
-            var element = _treeWalker.FindElementById(elementId);
-            var target = element == null ? null : _treeWalker.ResolveElementByStableId(element.Id);
+            var target = ResolveElementObject(elementId);
             if (target == null)
                 return null;
+
+            if (TryNativeKeyInput(target, normalized, insertText))
+                return CreateSuccessResult(SimulationModes.Native, elementId, key: keyValue, text: text);
 
             var ok = target switch
             {
@@ -302,7 +366,7 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
                 _ => false
             };
 
-            return ok ? new { success = true, key = keyValue, text, elementId } : null;
+            return ok ? CreateSuccessResult(SimulationModes.PropertyMutation, elementId, key: keyValue, text: text) : null;
         }).Task ?? Task.FromResult<object?>(null);
     }
 
@@ -323,6 +387,15 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
 
             return false;
         }).Task ?? Task.FromResult(false);
+    }
+
+    protected override async Task<object?> TryBackResponseAsync()
+        => await TryBackAsync().ConfigureAwait(false) ? CreateSuccessResult(SimulationModes.Semantic) : null;
+
+    private DependencyObject? ResolveElementObject(string elementId)
+    {
+        var element = _treeWalker.FindElementById(elementId);
+        return element == null ? null : _treeWalker.ResolveElementByStableId(element.Id);
     }
 
     private static bool SetText(TextBox textBox, string text)
@@ -390,6 +463,50 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
         }
 
         return false;
+    }
+
+    private static bool TryNativeTap(FrameworkElement element)
+    {
+        return WindowsNativeActions.TryTap(() => TryGetScreenPoint(element));
+    }
+
+    private static bool TryNativeTextInput(DependencyObject target, string text, bool replace)
+    {
+        if (!OperatingSystem.IsWindows() || target is not FrameworkElement fe)
+            return false;
+
+        return WindowsNativeActions.TryTextInput(() => TryGetScreenPoint(fe), text, replace);
+    }
+
+    private static bool TryNativeKeyInput(DependencyObject target, string normalizedKey, string? insertText)
+    {
+        if (!OperatingSystem.IsWindows() || target is not FrameworkElement fe)
+            return false;
+
+        if (normalizedKey is "enter" or "return")
+            return WindowsNativeActions.TrySpecialKey(() => TryGetScreenPoint(fe), WindowsNativeInput.VirtualKeyReturn);
+
+        if (normalizedKey is "backspace" or "delete")
+            return WindowsNativeActions.TrySpecialKey(() => TryGetScreenPoint(fe), WindowsNativeInput.VirtualKeyBackspace);
+
+        return !string.IsNullOrEmpty(insertText) && WindowsNativeActions.TryTextInput(() => TryGetScreenPoint(fe), insertText, replace: false);
+    }
+
+    private static WindowsScreenPoint? TryGetScreenPoint(FrameworkElement element)
+    {
+        if (!element.IsVisible || element.ActualWidth <= 0 || element.ActualHeight <= 0)
+            return null;
+
+        try
+        {
+            var center = new Point(element.ActualWidth / 2d, element.ActualHeight / 2d);
+            var screen = element.PointToScreen(center);
+            return new WindowsScreenPoint((int)Math.Round(screen.X), (int)Math.Round(screen.Y));
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static ScrollViewer? FindScrollViewer(DependencyObject element)

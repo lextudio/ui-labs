@@ -94,6 +94,30 @@ public sealed class WinFormsAgentService(AgentOptions? options = null) : DevFlow
         });
     }
 
+    protected override Task<object?> TryTapResponseAsync(string elementId)
+    {
+        return InvokeOnUiThread<object?>(() =>
+        {
+            var control = _walker.ResolveControlById(elementId);
+            if (control == null || !control.Enabled)
+                return null;
+
+            return ActionSimulationExecutor.Execute(
+                () => TryNativeTap(control) ? CreateSuccessResult(SimulationModes.Native, elementId) : null,
+                () =>
+                {
+                    if (control is Button button)
+                    {
+                        button.PerformClick();
+                        return CreateSuccessResult(SimulationModes.Semantic, elementId);
+                    }
+
+                    _ = control.Focus();
+                    return CreateSuccessResult(SimulationModes.Semantic, elementId);
+                });
+        });
+    }
+
     protected override Task<bool> TryScrollAsync(string elementId, double deltaX, double deltaY)
     {
         return InvokeOnUiThread(() =>
@@ -131,7 +155,32 @@ public sealed class WinFormsAgentService(AgentOptions? options = null) : DevFlow
         });
     }
 
+    protected override Task<object?> TryFillResponseAsync(string elementId, string text)
+    {
+        return InvokeOnUiThread<object?>(() =>
+        {
+            var control = _walker.ResolveControlById(elementId);
+            if (control == null || !control.Enabled)
+                return null;
+
+            return ActionSimulationExecutor.Execute(
+                () => TryNativeTextInput(control, text, replace: true) ? CreateSuccessResult(SimulationModes.Native, elementId, text: text) : null,
+                () =>
+                {
+                    var success = control switch
+                    {
+                        TextBoxBase tb => SetText(tb, text),
+                        ComboBox cb => SetText(cb, text),
+                        _ => false
+                    };
+
+                    return success ? CreateSuccessResult(SimulationModes.PropertyMutation, elementId, text: text) : null;
+                });
+        });
+    }
+
     protected override Task<bool> TryClearAsync(string elementId) => TryFillAsync(elementId, string.Empty);
+    protected override Task<object?> TryClearResponseAsync(string elementId) => TryFillResponseAsync(elementId, string.Empty);
     protected override Task<bool> TryFocusAsync(string elementId)
     {
         return InvokeOnUiThread(() =>
@@ -145,6 +194,24 @@ public sealed class WinFormsAgentService(AgentOptions? options = null) : DevFlow
         });
     }
 
+    protected override Task<object?> TryFocusResponseAsync(string elementId)
+    {
+        return InvokeOnUiThread<object?>(() =>
+        {
+            var control = _walker.ResolveControlById(elementId);
+            if (control == null || !control.Enabled)
+                return null;
+
+            return ActionSimulationExecutor.Execute(
+                () => TryNativeTap(control) ? CreateSuccessResult(SimulationModes.Native, elementId) : null,
+                () =>
+                {
+                    _ = control.Focus();
+                    return CreateSuccessResult(SimulationModes.Semantic, elementId);
+                });
+        });
+    }
+
     protected override Task<object?> TryKeyAsync(string? elementId, string? key, string? text)
     {
         if (string.IsNullOrWhiteSpace(elementId))
@@ -153,29 +220,38 @@ public sealed class WinFormsAgentService(AgentOptions? options = null) : DevFlow
         return InvokeOnUiThread<object?>(() =>
         {
             var control = _walker.ResolveControlById(elementId);
-            if (control is not TextBoxBase tb)
-                return new { success = false, reason = "Unsupported control" };
+            if (control is not TextBoxBase tb || !tb.Enabled)
+                return null;
 
             var normalized = (key ?? text ?? string.Empty).Trim().ToLowerInvariant();
+            var keyValue = key ?? text ?? string.Empty;
+            var insert = text ?? (string.IsNullOrWhiteSpace(key) ? null : key);
+
+            if (TryNativeKeyInput(tb, normalized, insert))
+                return CreateSuccessResult(SimulationModes.Native, elementId, key: keyValue, text: text);
+
             if (normalized is "backspace" or "delete")
             {
                 if (!string.IsNullOrEmpty(tb.Text))
                     tb.Text = tb.Text[..^1];
-                return new { success = true, elementId };
+                return CreateSuccessResult(SimulationModes.PropertyMutation, elementId, key: keyValue, text: text);
             }
 
-            var insert = text ?? (string.IsNullOrWhiteSpace(key) ? null : key);
             if (!string.IsNullOrEmpty(insert) && insert!.Length == 1)
             {
                 tb.Text += insert;
-                return new { success = true, elementId };
+                return CreateSuccessResult(SimulationModes.PropertyMutation, elementId, key: keyValue, text: text);
             }
 
-            return new { success = false, reason = "Unsupported key" };
+            if (normalized is "enter" or "return")
+                return CreateSuccessResult(SimulationModes.Semantic, elementId, key: keyValue, text: text);
+
+            return null;
         });
     }
 
     protected override Task<bool> TryBackAsync() => Task.FromResult(false);
+    protected override Task<object?> TryBackResponseAsync() => Task.FromResult<object?>(null);
     protected override Task<object?> GetThemeAsync() => Task.FromResult<object?>(new { theme = "system", supportedThemes = new[] { "system" } });
     protected override Task<object?> SetThemeAsync(string theme) => Task.FromResult<object?>(null);
 
@@ -302,6 +378,48 @@ public sealed class WinFormsAgentService(AgentOptions? options = null) : DevFlow
         }
     }
 
+    private static bool SetText(TextBoxBase textBox, string text)
+    {
+        textBox.Text = text;
+        return true;
+    }
+
+    private static bool SetText(ComboBox comboBox, string text)
+    {
+        comboBox.Text = text;
+        return true;
+    }
+
+    private static bool TryNativeTap(Control control)
+    {
+        return WindowsNativeActions.TryTap(() => TryGetScreenPoint(control));
+    }
+
+    private static bool TryNativeTextInput(Control control, string text, bool replace)
+    {
+        return WindowsNativeActions.TryTextInput(() => TryGetScreenPoint(control), text, replace);
+    }
+
+    private static bool TryNativeKeyInput(Control control, string normalizedKey, string? insertText)
+    {
+        if (normalizedKey is "enter" or "return")
+            return WindowsNativeActions.TrySpecialKey(() => TryGetScreenPoint(control), WindowsNativeInput.VirtualKeyReturn);
+
+        if (normalizedKey is "backspace" or "delete")
+            return WindowsNativeActions.TrySpecialKey(() => TryGetScreenPoint(control), WindowsNativeInput.VirtualKeyBackspace);
+
+        return !string.IsNullOrEmpty(insertText) && WindowsNativeActions.TryTextInput(() => TryGetScreenPoint(control), insertText, replace: false);
+    }
+
+    private static WindowsScreenPoint? TryGetScreenPoint(Control control)
+    {
+        if (!OperatingSystem.IsWindows() || !control.Visible || control.Width <= 0 || control.Height <= 0)
+            return null;
+
+        var center = control.PointToScreen(new Point(control.Width / 2, control.Height / 2));
+        return new WindowsScreenPoint(center.X, center.Y);
+    }
+
     private static byte[]? CaptureControl(Control control)
     {
         if (control.Width <= 0 || control.Height <= 0)
@@ -386,4 +504,5 @@ public sealed class WinFormsAgentService(AgentOptions? options = null) : DevFlow
         if (node.Children == null) return;
         foreach (var c in node.Children) Flatten(c, acc);
     }
+
 }

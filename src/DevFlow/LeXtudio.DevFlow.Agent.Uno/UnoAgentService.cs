@@ -126,6 +126,25 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
         });
     }
 
+    protected override Task<object?> TryTapResponseAsync(string elementId)
+    {
+        return InvokeOnUiThreadAsync<object?>(() =>
+        {
+            var target = _treeWalker.FindElementObjectById(elementId);
+            if (target == null)
+                return null;
+
+            if (!IsElementEnabled(target))
+                return null;
+
+            return ActionSimulationExecutor.Execute(
+                () => TryNativeTap(target) ? CreateSuccessResult(SimulationModes.Native, elementId) : null,
+                () => TryExecuteCommand(target) ? CreateSuccessResult(SimulationModes.Semantic, elementId) : null,
+                () => TryInvokeAutomationPattern(target) ? CreateSuccessResult(SimulationModes.Reflection, elementId) : null,
+                () => TryInvokeOnClick(target) ? CreateSuccessResult(SimulationModes.Reflection, elementId) : null);
+        });
+    }
+
     protected override Task<bool> TryScrollAsync(string elementId, double deltaX, double deltaY)
     {
         return InvokeOnUiThreadAsync(() =>
@@ -145,6 +164,27 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
         });
     }
 
+    protected override Task<object?> TryScrollResponseAsync(string elementId, double deltaX, double deltaY)
+    {
+        return InvokeOnUiThreadAsync<object?>(() =>
+        {
+            var target = _treeWalker.FindElementObjectById(elementId);
+            if (target == null)
+                return null;
+
+            if (!IsElementEnabled(target))
+                return null;
+
+            var scrollViewer = FindScrollViewer(target);
+            if (scrollViewer == null)
+                return null;
+
+            return TryScroll(scrollViewer, deltaX, deltaY)
+                ? CreateSuccessResult(SimulationModes.Semantic, elementId, deltaX: deltaX, deltaY: deltaY)
+                : null;
+        });
+    }
+
     protected override Task<bool> TryFillAsync(string elementId, string text)
     {
         return InvokeOnUiThreadAsync(() =>
@@ -157,9 +197,37 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
         });
     }
 
+    protected override Task<object?> TryFillResponseAsync(string elementId, string text)
+    {
+        return InvokeOnUiThreadAsync<object?>(() =>
+        {
+            var target = _treeWalker.FindElementObjectById(elementId);
+            if (target == null)
+                return null;
+
+            if (!IsElementEnabled(target))
+                return null;
+
+            return ActionSimulationExecutor.Execute(
+                () => TryNativeTextInput(target, text, replace: true) ? CreateSuccessResult(SimulationModes.Native, elementId, text: text) : null,
+                () =>
+                {
+                    TryFocusElement(target);
+                    return TrySetTextValue(target, text)
+                        ? CreateSuccessResult(SimulationModes.PropertyMutation, elementId, text: text)
+                        : null;
+                });
+        });
+    }
+
     protected override Task<bool> TryClearAsync(string elementId)
     {
         return TryFillAsync(elementId, string.Empty);
+    }
+
+    protected override Task<object?> TryClearResponseAsync(string elementId)
+    {
+        return TryFillResponseAsync(elementId, string.Empty);
     }
 
     protected override Task<bool> TryFocusAsync(string elementId)
@@ -206,36 +274,92 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
         });
     }
 
+    protected override Task<object?> TryFocusResponseAsync(string elementId)
+    {
+        return InvokeOnUiThreadAsync<object?>(() =>
+        {
+            var target = _treeWalker.FindElementObjectById(elementId);
+            if (target == null)
+                return null;
+
+            if (!IsElementEnabled(target))
+                return null;
+
+            var targetType = target.GetType();
+            var focusNoArgs = targetType.GetMethod("Focus", BindingFlags.Public | BindingFlags.Instance, null, Type.EmptyTypes, null);
+            if (focusNoArgs != null)
+            {
+                var result = focusNoArgs.Invoke(target, null);
+                var hasFocusFromNoArgCall = result is bool noArgFocusResult ? noArgFocusResult : true;
+                return hasFocusFromNoArgCall ? CreateSuccessResult(SimulationModes.Semantic, elementId) : null;
+            }
+
+            var focusWithState = targetType.GetMethods(BindingFlags.Public | BindingFlags.Instance)
+                .FirstOrDefault(m =>
+                {
+                    if (!string.Equals(m.Name, "Focus", StringComparison.Ordinal))
+                        return false;
+
+                    var parameters = m.GetParameters();
+                    return parameters.Length == 1 && parameters[0].ParameterType.IsEnum;
+                });
+
+            if (focusWithState == null)
+                return null;
+
+            var enumType = focusWithState.GetParameters()[0].ParameterType;
+            var programmatic = Enum.GetNames(enumType).FirstOrDefault(n => string.Equals(n, "Programmatic", StringComparison.OrdinalIgnoreCase));
+            var state = programmatic != null ? Enum.Parse(enumType, programmatic) : Enum.ToObject(enumType, 0);
+            var focusedResult = focusWithState.Invoke(target, new[] { state });
+            var hasFocusFromStateCall = focusedResult is bool stateFocusResult ? stateFocusResult : true;
+            return hasFocusFromStateCall ? CreateSuccessResult(SimulationModes.Semantic, elementId) : null;
+        });
+    }
+
     protected override Task<object?> TryKeyAsync(string? elementId, string? key, string? text)
     {
-        return InvokeOnUiThreadAsync(() =>
+        return InvokeOnUiThreadAsync<object?>(() =>
         {
             var keyValue = key ?? text ?? string.Empty;
             var normalized = keyValue.Trim().ToLowerInvariant();
             var insertText = text ?? (keyValue.Length == 1 ? keyValue : null);
 
             if (string.IsNullOrWhiteSpace(elementId))
-                return (object?)new { success = true, key = keyValue, text, elementId };
+                return CreateSuccessResult(SimulationModes.Semantic, elementId, key: keyValue, text: text);
 
             var target = _treeWalker.FindElementObjectById(elementId);
             if (target == null)
                 return null;
+
+            if (!IsElementEnabled(target))
+                return null;
+
+            if (normalized is "enter" or "return")
+            {
+                if (TryNativeSpecialKey(target, VirtualKeyReturn))
+                    return CreateSuccessResult(SimulationModes.Native, elementId, key: keyValue, text: text);
+            }
+
+            if (!string.IsNullOrEmpty(insertText) && TryNativeTextInput(target, insertText, replace: false))
+                return CreateSuccessResult(SimulationModes.Native, elementId, key: keyValue, text: text);
+
+            TryFocusElement(target);
 
             var current = ReadStringProperty(target, "Text") ?? ReadStringProperty(target, "Value") ?? string.Empty;
 
             if (normalized is "backspace" or "delete")
             {
                 var next = current.Length > 0 ? current[..^1] : string.Empty;
-                return TrySetTextValue(target, next) ? new { success = true, key = keyValue, text, elementId } : null;
+                return TrySetTextValue(target, next) ? CreateSuccessResult(SimulationModes.PropertyMutation, elementId, key: keyValue, text: text) : null;
             }
 
             if (normalized is "enter" or "return")
-                return new { success = true, key = keyValue, text, elementId };
+                return CreateSuccessResult(SimulationModes.Semantic, elementId, key: keyValue, text: text);
 
             if (!string.IsNullOrEmpty(insertText))
             {
                 var next = current + insertText;
-                return TrySetTextValue(target, next) ? new { success = true, key = keyValue, text, elementId } : null;
+                return TrySetTextValue(target, next) ? CreateSuccessResult(SimulationModes.PropertyMutation, elementId, key: keyValue, text: text) : null;
             }
 
             return null;
@@ -261,6 +385,28 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
             var goBack = frame.GetType().GetMethod("GoBack", BindingFlags.Public | BindingFlags.Instance, null, Type.EmptyTypes, null);
             goBack?.Invoke(frame, null);
             return true;
+        });
+    }
+
+    protected override Task<object?> TryBackResponseAsync()
+    {
+        return InvokeOnUiThreadAsync<object?>(() =>
+        {
+            var root = GetRootVisual();
+            if (root == null)
+                return null;
+
+            var frame = FindAncestorOrSelfByTypeName(root, "Frame");
+            if (frame == null)
+                return null;
+
+            var canGoBack = frame.GetType().GetProperty("CanGoBack", BindingFlags.Public | BindingFlags.Instance)?.GetValue(frame) as bool?;
+            if (canGoBack != true)
+                return null;
+
+            var goBack = frame.GetType().GetMethod("GoBack", BindingFlags.Public | BindingFlags.Instance, null, Type.EmptyTypes, null);
+            goBack?.Invoke(frame, null);
+            return CreateSuccessResult(SimulationModes.Semantic);
         });
     }
 
@@ -1239,6 +1385,205 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
         return false;
     }
 
+    private static bool TryNativeTap(object element)
+    {
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            return false;
+
+        try
+        {
+            var appType = FindType(
+                "Microsoft.UI.Xaml.Application",
+                "Windows.UI.Xaml.Application");
+            var app = appType?.GetProperty("Current", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
+            var window = GetPropertyValueAny(app, "MainWindow")
+                ?? GetPropertyValueAny(app, "CurrentWindow");
+            if (window == null)
+                return false;
+
+            var hwnd = GetWindowHandle(window);
+            if (hwnd == IntPtr.Zero)
+                return false;
+
+            var clickPoint = TryGetElementClickPoint(element, hwnd);
+            if (clickPoint == null)
+                return false;
+
+            return WindowsNativeActions.TryTap(() => clickPoint);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static IntPtr GetWindowHandle(object window)
+    {
+        var windowNativeType = FindType("WinRT.Interop.WindowNative");
+        var getWindowHandle = windowNativeType?.GetMethod("GetWindowHandle", BindingFlags.Public | BindingFlags.Static);
+        var handleValue = getWindowHandle?.Invoke(null, new[] { window });
+        return handleValue switch
+        {
+            IntPtr value => value,
+            long value => new IntPtr(value),
+            int value => new IntPtr(value),
+            _ => IntPtr.Zero
+        };
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static WindowsScreenPoint? TryGetElementClickPoint(object element, IntPtr hwnd)
+    {
+        var transformToVisual = element.GetType().GetMethods(BindingFlags.Public | BindingFlags.Instance)
+            .FirstOrDefault(m => string.Equals(m.Name, "TransformToVisual", StringComparison.Ordinal) && m.GetParameters().Length == 1);
+        var root = GetRootForTransform(element);
+        if (transformToVisual == null || root == null)
+            return null;
+
+        var transform = transformToVisual.Invoke(element, new[] { root });
+        if (transform == null)
+            return null;
+
+        var actualWidth = GetDoubleProperty(element, "ActualWidth");
+        var actualHeight = GetDoubleProperty(element, "ActualHeight");
+        if (actualWidth is null or <= 0 || actualHeight is null or <= 0)
+            return null;
+
+        var pointType = FindType("Windows.Foundation.Point");
+        if (pointType == null)
+            return null;
+
+        var center = Activator.CreateInstance(pointType, actualWidth.Value / 2d, actualHeight.Value / 2d);
+        var transformPoint = transform.GetType().GetMethod("TransformPoint", BindingFlags.Public | BindingFlags.Instance);
+        var transformed = transformPoint?.Invoke(transform, new[] { center });
+        if (transformed == null)
+            return null;
+
+        var x = GetDoubleProperty(transformed, "X");
+        var y = GetDoubleProperty(transformed, "Y");
+        if (x is null || y is null)
+            return null;
+
+        var screenPoint = new POINT
+        {
+            X = (int)Math.Round(x.Value),
+            Y = (int)Math.Round(y.Value)
+        };
+
+        if (!ClientToScreen(hwnd, ref screenPoint))
+            return null;
+
+        return new WindowsScreenPoint(screenPoint.X, screenPoint.Y);
+    }
+
+    private static object? GetRootForTransform(object element)
+    {
+        var current = element;
+        object? parent = current;
+        while (parent != null)
+        {
+            current = parent;
+            parent = GetParent(parent);
+        }
+
+        return current;
+    }
+
+    private static bool TryNativeTextInput(object element, string text, bool replace)
+    {
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            return false;
+
+        return TryNativeAction(element, point => WindowsNativeActions.TryTextInput(() => point, text, replace));
+    }
+
+    private static bool TryNativeSpecialKey(object element, ushort virtualKey)
+    {
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            return false;
+
+        return TryNativeAction(element, point => WindowsNativeActions.TrySpecialKey(() => point, virtualKey));
+    }
+
+    private static bool TryNativeAction(object element, Func<WindowsScreenPoint, bool> action)
+    {
+        try
+        {
+            var appType = FindType(
+                "Microsoft.UI.Xaml.Application",
+                "Windows.UI.Xaml.Application");
+            var app = appType?.GetProperty("Current", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
+            var window = GetPropertyValueAny(app, "MainWindow")
+                ?? GetPropertyValueAny(app, "CurrentWindow");
+            if (window == null)
+                return false;
+
+            var hwnd = GetWindowHandle(window);
+            if (hwnd == IntPtr.Zero)
+                return false;
+
+            var point = TryGetElementClickPoint(element, hwnd);
+            return point is WindowsScreenPoint screenPoint && action(screenPoint);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static bool TrySendChord(params ushort[] keys)
+    {
+        return WindowsNativeInput.TrySendChord(keys);
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static bool TrySendVirtualKey(ushort key)
+    {
+        return WindowsNativeInput.TrySendVirtualKey(key);
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static bool TrySendUnicodeText(string text)
+    {
+        return WindowsNativeInput.TrySendUnicodeText(text);
+    }
+
+    private static bool IsElementEnabled(object element)
+    {
+        var isEnabled = GetPropertyValue(element, "IsEnabled");
+        return isEnabled is not bool enabled || enabled;
+    }
+
+    private static void TryFocusElement(object element)
+    {
+        var targetType = element.GetType();
+        var focusNoArgs = targetType.GetMethod("Focus", BindingFlags.Public | BindingFlags.Instance, null, Type.EmptyTypes, null);
+        if (focusNoArgs != null)
+        {
+            focusNoArgs.Invoke(element, null);
+            return;
+        }
+
+        var focusWithState = targetType.GetMethods(BindingFlags.Public | BindingFlags.Instance)
+            .FirstOrDefault(m =>
+            {
+                if (!string.Equals(m.Name, "Focus", StringComparison.Ordinal))
+                    return false;
+
+                var parameters = m.GetParameters();
+                return parameters.Length == 1 && parameters[0].ParameterType.IsEnum;
+            });
+        if (focusWithState == null)
+            return;
+
+        var enumType = focusWithState.GetParameters()[0].ParameterType;
+        var programmatic = Enum.GetNames(enumType).FirstOrDefault(n => string.Equals(n, "Programmatic", StringComparison.OrdinalIgnoreCase));
+        var state = programmatic != null ? Enum.Parse(enumType, programmatic) : Enum.ToObject(enumType, 0);
+        focusWithState.Invoke(element, new[] { state });
+    }
+
     private static bool TryInvokeOnClick(object element)
     {
         var onClick = element.GetType()
@@ -1359,6 +1704,11 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
         SRCCOPY = 0x00CC0020u,
     }
 
+    private const ushort VirtualKeyBackspace = WindowsNativeInput.VirtualKeyBackspace;
+    private const ushort VirtualKeyReturn = WindowsNativeInput.VirtualKeyReturn;
+    private const ushort VirtualKeyControl = WindowsNativeInput.VirtualKeyControl;
+    private const ushort VirtualKeyA = WindowsNativeInput.VirtualKeyA;
+
     [StructLayout(LayoutKind.Sequential)]
     private struct RECT
     {
@@ -1367,4 +1717,14 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
         public int Right;
         public int Bottom;
     }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT
+    {
+        public int X;
+        public int Y;
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool ClientToScreen(nint hWnd, ref POINT lpPoint);
 }

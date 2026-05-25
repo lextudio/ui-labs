@@ -34,6 +34,49 @@
                    TextWrapping="Wrap"
                    Width="320" />
 
+        <TextBox x:Name="EventProbeInput"
+                 AutomationProperties.AutomationId="EventProbeInput"
+                 Width="320"
+                 Header="Event probe input"
+                 GotFocus="EventProbeInput_GotFocus"
+                 KeyDown="EventProbeInput_KeyDown"
+                 TextChanging="EventProbeInput_TextChanging"
+                 TextChanged="EventProbeInput_TextChanged" />
+
+        <Button x:Name="EventProbeButton"
+                AutomationProperties.AutomationId="EventProbeButton"
+                Content="Probe Tap"
+                Width="180"
+                Height="40"
+                Click="EventProbeButton_Click" />
+
+        <TextBlock x:Name="EventLogText"
+                   AutomationProperties.AutomationId="EventLogText"
+                   Text="events:"
+                   TextWrapping="Wrap"
+                   Width="320" />
+
+        <Button x:Name="DisabledActionButton"
+                AutomationProperties.AutomationId="DisabledActionButton"
+                Content="Disabled Tap"
+                Width="180"
+                Height="40"
+                IsEnabled="False"
+                Click="DisabledActionButton_Click" />
+
+        <TextBlock x:Name="DisabledButtonResultText"
+                   AutomationProperties.AutomationId="DisabledButtonResultText"
+                   Text="disabled button untouched"
+                   TextWrapping="Wrap"
+                   Width="320" />
+
+        <TextBox x:Name="DisabledInput"
+                 AutomationProperties.AutomationId="DisabledInput"
+                 Width="320"
+                 IsEnabled="False"
+                 Text="disabled input untouched"
+                 Header="Disabled input" />
+
         <!-- Extra content to make scrolling meaningful -->
         <StackPanel Spacing="8" Width="320">
           <TextBlock Text="Scroll to see the hidden footer content" FontWeight="SemiBold" />

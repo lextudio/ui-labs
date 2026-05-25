@@ -103,6 +103,10 @@ public class UnoAgentIntegrationTests
 
             using var tapResponse = await client.PostAsync("/api/v1/ui/tap", new StringContent("{\"id\":\"ActionButton\"}", Encoding.UTF8, "application/json"));
             tapResponse.EnsureSuccessStatusCode();
+            using var tapDoc = JsonDocument.Parse(await tapResponse.Content.ReadAsStreamAsync());
+            Assert.True(tapDoc.RootElement.GetProperty("success").GetBoolean());
+            var simulationMode = tapDoc.RootElement.GetProperty("simulationMode").GetString();
+            Assert.Contains(simulationMode, new[] { "native", "reflection", "semantic" });
 
             using var elementResponse = await client.GetAsync("/api/v1/ui/element?id=ResponseText");
             elementResponse.EnsureSuccessStatusCode();
@@ -345,6 +349,8 @@ public class UnoAgentIntegrationTests
                 "/api/v1/ui/actions/fill",
                 new StringContent("{\"elementId\":\"ResponseText\",\"text\":\"Filled by test\"}", Encoding.UTF8, "application/json"));
             fillResponse.EnsureSuccessStatusCode();
+            using var fillResultDoc = JsonDocument.Parse(await fillResponse.Content.ReadAsStreamAsync());
+            Assert.Equal("property-mutation", fillResultDoc.RootElement.GetProperty("simulationMode").GetString());
 
             using var afterFill = await client.GetAsync("/api/v1/ui/element?id=ResponseText");
             afterFill.EnsureSuccessStatusCode();
@@ -355,6 +361,8 @@ public class UnoAgentIntegrationTests
                 "/api/v1/ui/actions/clear",
                 new StringContent("{\"elementId\":\"ResponseText\"}", Encoding.UTF8, "application/json"));
             clearResponse.EnsureSuccessStatusCode();
+            using var clearResultDoc = JsonDocument.Parse(await clearResponse.Content.ReadAsStreamAsync());
+            Assert.Equal("property-mutation", clearResultDoc.RootElement.GetProperty("simulationMode").GetString());
 
             using var afterClear = await client.GetAsync("/api/v1/ui/element?id=ResponseText");
             afterClear.EnsureSuccessStatusCode();
@@ -395,6 +403,7 @@ public class UnoAgentIntegrationTests
             keyResponse.EnsureSuccessStatusCode();
             using var keyDoc = JsonDocument.Parse(await keyResponse.Content.ReadAsStreamAsync());
             Assert.True(keyDoc.RootElement.GetProperty("success").GetBoolean());
+            Assert.Equal("semantic", keyDoc.RootElement.GetProperty("simulationMode").GetString());
         }
         finally
         {
@@ -426,6 +435,9 @@ public class UnoAgentIntegrationTests
                 "/api/v1/ui/actions/focus",
                 new StringContent("{\"elementId\":\"ActionButton\"}", Encoding.UTF8, "application/json"));
             focusResponse.EnsureSuccessStatusCode();
+            using var focusDoc = JsonDocument.Parse(await focusResponse.Content.ReadAsStreamAsync());
+            Assert.True(focusDoc.RootElement.GetProperty("success").GetBoolean());
+            Assert.Equal("semantic", focusDoc.RootElement.GetProperty("simulationMode").GetString());
         }
         finally
         {
@@ -470,6 +482,295 @@ public class UnoAgentIntegrationTests
             using var batchDoc = JsonDocument.Parse(await batchResponse.Content.ReadAsStreamAsync());
             Assert.True(batchDoc.RootElement.GetProperty("success").GetBoolean());
             Assert.Equal(2, batchDoc.RootElement.GetProperty("results").GetArrayLength());
+        }
+        finally
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(true);
+                process.WaitForExit(5000);
+            }
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(UnoTestTargets))]
+    public async Task FillEventProbe_ReportsPropertyMutationAndStillMissesTextChangingPipeline(string targetFramework)
+    {
+        var repoRoot = FindRepositoryRoot(Directory.GetCurrentDirectory());
+        var hostProjectPath = Path.GetFullPath(Path.Combine(repoRoot, "src", "DevFlow", "UnoDevFlowTestApp", "UnoDevFlowTestApp", "UnoDevFlowTestApp.csproj"));
+        var hostProjectDirectory = Path.GetDirectoryName(hostProjectPath)!;
+        BuildHostProject(hostProjectPath, targetFramework, hostProjectDirectory);
+        var exePath = GetHostExecutablePath(hostProjectDirectory, targetFramework);
+
+        var port = GetFreePort();
+        using var process = StartHiddenProcess(exePath, hostProjectDirectory, port);
+        try
+        {
+            using var client = new HttpClient { BaseAddress = new Uri($"http://localhost:{port}") };
+            await PollAgentStatusAsync(client, TimeSpan.FromSeconds(20));
+
+            using var fillResponse = await client.PostAsync(
+                "/api/v1/ui/actions/fill",
+                new StringContent("{\"elementId\":\"EventProbeInput\",\"text\":\"abc\"}", Encoding.UTF8, "application/json"));
+            fillResponse.EnsureSuccessStatusCode();
+            using var fillDoc = JsonDocument.Parse(await fillResponse.Content.ReadAsStreamAsync());
+            Assert.Equal("property-mutation", fillDoc.RootElement.GetProperty("simulationMode").GetString());
+
+            var eventLog = await GetElementTextAsync(client, "EventLogText");
+            Assert.Contains("input.focus", eventLog, StringComparison.Ordinal);
+            Assert.Contains("input.textChanged", eventLog, StringComparison.Ordinal);
+            Assert.DoesNotContain("input.textChanging", eventLog, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(true);
+                process.WaitForExit(5000);
+            }
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(UnoDesktopOnlyTargets))]
+    public async Task FillEventProbe_CanUseNativeTextInputOnDesktop(string targetFramework)
+    {
+        var repoRoot = FindRepositoryRoot(Directory.GetCurrentDirectory());
+        var hostProjectPath = Path.GetFullPath(Path.Combine(repoRoot, "src", "DevFlow", "UnoDevFlowTestApp", "UnoDevFlowTestApp", "UnoDevFlowTestApp.csproj"));
+        var hostProjectDirectory = Path.GetDirectoryName(hostProjectPath)!;
+        BuildHostProject(hostProjectPath, targetFramework, hostProjectDirectory);
+        var exePath = GetHostExecutablePath(hostProjectDirectory, targetFramework);
+
+        var port = GetFreePort();
+        using var process = StartHiddenProcess(exePath, hostProjectDirectory, port);
+        try
+        {
+            using var client = new HttpClient { BaseAddress = new Uri($"http://localhost:{port}") };
+            await PollAgentStatusAsync(client, TimeSpan.FromSeconds(20));
+
+            using var fillResponse = await client.PostAsync(
+                "/api/v1/ui/actions/fill",
+                new StringContent("{\"elementId\":\"EventProbeInput\",\"text\":\"native path\"}", Encoding.UTF8, "application/json"));
+            fillResponse.EnsureSuccessStatusCode();
+            using var fillDoc = JsonDocument.Parse(await fillResponse.Content.ReadAsStreamAsync());
+            Assert.Equal("native", fillDoc.RootElement.GetProperty("simulationMode").GetString());
+
+            var text = await PollForElementTextAsync(client, "EventProbeInput", "native path", TimeSpan.FromSeconds(10));
+            Assert.Equal("native path", text);
+
+            var eventLog = await PollForElementTextContainingAsync(
+                client,
+                "EventLogText",
+                "input.textChanged",
+                TimeSpan.FromSeconds(10));
+            Assert.Contains("input.focus", eventLog, StringComparison.Ordinal);
+            Assert.Contains("input.textChanging", eventLog, StringComparison.Ordinal);
+            Assert.Contains("input.textChanged", eventLog, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(true);
+                process.WaitForExit(5000);
+            }
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(UnoDesktopOnlyTargets))]
+    public async Task KeyText_CanUseNativeAppendOnDesktop(string targetFramework)
+    {
+        var repoRoot = FindRepositoryRoot(Directory.GetCurrentDirectory());
+        var hostProjectPath = Path.GetFullPath(Path.Combine(repoRoot, "src", "DevFlow", "UnoDevFlowTestApp", "UnoDevFlowTestApp", "UnoDevFlowTestApp.csproj"));
+        var hostProjectDirectory = Path.GetDirectoryName(hostProjectPath)!;
+        BuildHostProject(hostProjectPath, targetFramework, hostProjectDirectory);
+        var exePath = GetHostExecutablePath(hostProjectDirectory, targetFramework);
+
+        var port = GetFreePort();
+        using var process = StartHiddenProcess(exePath, hostProjectDirectory, port);
+        try
+        {
+            using var client = new HttpClient { BaseAddress = new Uri($"http://localhost:{port}") };
+            await PollAgentStatusAsync(client, TimeSpan.FromSeconds(20));
+
+            using var fillResponse = await client.PostAsync(
+                "/api/v1/ui/actions/fill",
+                new StringContent("{\"elementId\":\"EventProbeInput\",\"text\":\"A\"}", Encoding.UTF8, "application/json"));
+            fillResponse.EnsureSuccessStatusCode();
+
+            using var keyResponse = await client.PostAsync(
+                "/api/v1/ui/actions/key",
+                new StringContent("{\"elementId\":\"EventProbeInput\",\"text\":\"B\"}", Encoding.UTF8, "application/json"));
+            keyResponse.EnsureSuccessStatusCode();
+            using var keyDoc = JsonDocument.Parse(await keyResponse.Content.ReadAsStreamAsync());
+            Assert.Equal("native", keyDoc.RootElement.GetProperty("simulationMode").GetString());
+
+            var text = await PollForElementTextAsync(client, "EventProbeInput", "AB", TimeSpan.FromSeconds(10));
+            Assert.Equal("AB", text);
+
+            var eventLog = await PollForElementTextContainingAsync(
+                client,
+                "EventLogText",
+                "input.keyDown",
+                TimeSpan.FromSeconds(10));
+            Assert.Contains("input.keyDown", eventLog, StringComparison.Ordinal);
+            Assert.Contains("input.textChanged", eventLog, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(true);
+                process.WaitForExit(5000);
+            }
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(UnoDesktopOnlyTargets))]
+    public async Task KeyEnter_CanUseNativeEnterOnDesktop(string targetFramework)
+    {
+        var repoRoot = FindRepositoryRoot(Directory.GetCurrentDirectory());
+        var hostProjectPath = Path.GetFullPath(Path.Combine(repoRoot, "src", "DevFlow", "UnoDevFlowTestApp", "UnoDevFlowTestApp", "UnoDevFlowTestApp.csproj"));
+        var hostProjectDirectory = Path.GetDirectoryName(hostProjectPath)!;
+        BuildHostProject(hostProjectPath, targetFramework, hostProjectDirectory);
+        var exePath = GetHostExecutablePath(hostProjectDirectory, targetFramework);
+
+        var port = GetFreePort();
+        using var process = StartHiddenProcess(exePath, hostProjectDirectory, port);
+        try
+        {
+            using var client = new HttpClient { BaseAddress = new Uri($"http://localhost:{port}") };
+            await PollAgentStatusAsync(client, TimeSpan.FromSeconds(20));
+
+            using var focusResponse = await client.PostAsync(
+                "/api/v1/ui/actions/focus",
+                new StringContent("{\"elementId\":\"EventProbeInput\"}", Encoding.UTF8, "application/json"));
+            focusResponse.EnsureSuccessStatusCode();
+
+            using var keyResponse = await client.PostAsync(
+                "/api/v1/ui/actions/key",
+                new StringContent("{\"elementId\":\"EventProbeInput\",\"key\":\"enter\"}", Encoding.UTF8, "application/json"));
+            keyResponse.EnsureSuccessStatusCode();
+            using var keyDoc = JsonDocument.Parse(await keyResponse.Content.ReadAsStreamAsync());
+            Assert.Equal("native", keyDoc.RootElement.GetProperty("simulationMode").GetString());
+
+            var responseText = await PollForElementTextAsync(client, "ResponseText", "Enter received", TimeSpan.FromSeconds(10));
+            Assert.Equal("Enter received", responseText);
+
+            var eventLog = await PollForElementTextContainingAsync(
+                client,
+                "EventLogText",
+                "input.keyDown:Enter",
+                TimeSpan.FromSeconds(10));
+            Assert.Contains("input.keyDown:Enter", eventLog, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(true);
+                process.WaitForExit(5000);
+            }
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(UnoTestTargets))]
+    public async Task TapDisabledButton_IsRejected(string targetFramework)
+    {
+        var repoRoot = FindRepositoryRoot(Directory.GetCurrentDirectory());
+        var hostProjectPath = Path.GetFullPath(Path.Combine(repoRoot, "src", "DevFlow", "UnoDevFlowTestApp", "UnoDevFlowTestApp", "UnoDevFlowTestApp.csproj"));
+        var hostProjectDirectory = Path.GetDirectoryName(hostProjectPath)!;
+        BuildHostProject(hostProjectPath, targetFramework, hostProjectDirectory);
+        var exePath = GetHostExecutablePath(hostProjectDirectory, targetFramework);
+
+        var port = GetFreePort();
+        using var process = StartHiddenProcess(exePath, hostProjectDirectory, port);
+        try
+        {
+            using var client = new HttpClient { BaseAddress = new Uri($"http://localhost:{port}") };
+            await PollAgentStatusAsync(client, TimeSpan.FromSeconds(20));
+
+            using var tapResponse = await client.PostAsync(
+                "/api/v1/ui/tap",
+                new StringContent("{\"id\":\"DisabledActionButton\"}", Encoding.UTF8, "application/json"));
+            Assert.Equal(System.Net.HttpStatusCode.NotFound, tapResponse.StatusCode);
+
+            var resultText = await GetElementTextAsync(client, "DisabledButtonResultText");
+            Assert.Equal("disabled button untouched", resultText);
+        }
+        finally
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(true);
+                process.WaitForExit(5000);
+            }
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(UnoTestTargets))]
+    public async Task FillDisabledInput_IsRejected(string targetFramework)
+    {
+        var repoRoot = FindRepositoryRoot(Directory.GetCurrentDirectory());
+        var hostProjectPath = Path.GetFullPath(Path.Combine(repoRoot, "src", "DevFlow", "UnoDevFlowTestApp", "UnoDevFlowTestApp", "UnoDevFlowTestApp.csproj"));
+        var hostProjectDirectory = Path.GetDirectoryName(hostProjectPath)!;
+        BuildHostProject(hostProjectPath, targetFramework, hostProjectDirectory);
+        var exePath = GetHostExecutablePath(hostProjectDirectory, targetFramework);
+
+        var port = GetFreePort();
+        using var process = StartHiddenProcess(exePath, hostProjectDirectory, port);
+        try
+        {
+            using var client = new HttpClient { BaseAddress = new Uri($"http://localhost:{port}") };
+            await PollAgentStatusAsync(client, TimeSpan.FromSeconds(20));
+
+            using var fillResponse = await client.PostAsync(
+                "/api/v1/ui/actions/fill",
+                new StringContent("{\"elementId\":\"DisabledInput\",\"text\":\"should fail\"}", Encoding.UTF8, "application/json"));
+            Assert.Equal(System.Net.HttpStatusCode.NotFound, fillResponse.StatusCode);
+
+            var text = await GetElementTextAsync(client, "DisabledInput");
+            Assert.Equal("disabled input untouched", text);
+        }
+        finally
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(true);
+                process.WaitForExit(5000);
+            }
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(UnoTestTargets))]
+    public async Task KeyOnDisabledInput_IsRejected(string targetFramework)
+    {
+        var repoRoot = FindRepositoryRoot(Directory.GetCurrentDirectory());
+        var hostProjectPath = Path.GetFullPath(Path.Combine(repoRoot, "src", "DevFlow", "UnoDevFlowTestApp", "UnoDevFlowTestApp", "UnoDevFlowTestApp.csproj"));
+        var hostProjectDirectory = Path.GetDirectoryName(hostProjectPath)!;
+        BuildHostProject(hostProjectPath, targetFramework, hostProjectDirectory);
+        var exePath = GetHostExecutablePath(hostProjectDirectory, targetFramework);
+
+        var port = GetFreePort();
+        using var process = StartHiddenProcess(exePath, hostProjectDirectory, port);
+        try
+        {
+            using var client = new HttpClient { BaseAddress = new Uri($"http://localhost:{port}") };
+            await PollAgentStatusAsync(client, TimeSpan.FromSeconds(20));
+
+            using var keyResponse = await client.PostAsync(
+                "/api/v1/ui/actions/key",
+                new StringContent("{\"elementId\":\"DisabledInput\",\"text\":\"x\"}", Encoding.UTF8, "application/json"));
+            Assert.Equal(System.Net.HttpStatusCode.NotFound, keyResponse.StatusCode);
+
+            var text = await GetElementTextAsync(client, "DisabledInput");
+            Assert.Equal("disabled input untouched", text);
         }
         finally
         {
@@ -662,6 +963,44 @@ public class UnoAgentIntegrationTests
         }
 
         throw new InvalidOperationException($"Screenshot endpoint did not return a PNG in time: {path}");
+    }
+
+    private static async Task<string?> GetElementTextAsync(HttpClient client, string elementId)
+    {
+        using var response = await client.GetAsync($"/api/v1/ui/element?id={elementId}");
+        response.EnsureSuccessStatusCode();
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStreamAsync());
+        return doc.RootElement.GetProperty("text").GetString();
+    }
+
+    private static async Task<string?> PollForElementTextAsync(HttpClient client, string elementId, string expectedText, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            var current = await GetElementTextAsync(client, elementId);
+            if (string.Equals(current, expectedText, StringComparison.Ordinal))
+                return current;
+
+            await Task.Delay(250);
+        }
+
+        return await GetElementTextAsync(client, elementId);
+    }
+
+    private static async Task<string?> PollForElementTextContainingAsync(HttpClient client, string elementId, string expectedFragment, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            var current = await GetElementTextAsync(client, elementId);
+            if (current?.Contains(expectedFragment, StringComparison.Ordinal) == true)
+                return current;
+
+            await Task.Delay(250);
+        }
+
+        return await GetElementTextAsync(client, elementId);
     }
 
     private static Process? StartHiddenProcess(string exePath, string workingDirectory, int port)

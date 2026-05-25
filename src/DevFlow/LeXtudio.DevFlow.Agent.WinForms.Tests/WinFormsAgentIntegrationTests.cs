@@ -82,10 +82,29 @@ public class WinFormsAgentIntegrationTests
         await WaitForElementAsync(client, "InputBox", TimeSpan.FromSeconds(10));
         await WaitForElementAsync(client, "ResponseLabel", TimeSpan.FromSeconds(10));
 
-        (await client.PostAsync("/api/v1/ui/tap", Json("{" + "\"id\":\"ActionButton\"}"))).EnsureSuccessStatusCode();
-        (await client.PostAsync("/api/v1/ui/actions/fill", Json("{" + "\"elementId\":\"InputBox\",\"text\":\"hello\"}"))).EnsureSuccessStatusCode();
-        (await client.PostAsync("/api/v1/ui/actions/focus", Json("{" + "\"elementId\":\"InputBox\"}"))).EnsureSuccessStatusCode();
-        (await client.PostAsync("/api/v1/ui/actions/clear", Json("{" + "\"elementId\":\"InputBox\"}"))).EnsureSuccessStatusCode();
+        using var tapResponse = await client.PostAsync("/api/v1/ui/tap", Json("{" + "\"id\":\"ActionButton\"}"));
+        tapResponse.EnsureSuccessStatusCode();
+        using var tapDoc = JsonDocument.Parse(await tapResponse.Content.ReadAsStreamAsync());
+        Assert.True(tapDoc.RootElement.GetProperty("success").GetBoolean());
+        Assert.Contains(tapDoc.RootElement.GetProperty("simulationMode").GetString(), new[] { "native", "semantic" });
+
+        using var fillResponse = await client.PostAsync("/api/v1/ui/actions/fill", Json("{" + "\"elementId\":\"InputBox\",\"text\":\"hello\"}"));
+        fillResponse.EnsureSuccessStatusCode();
+        using var fillDoc = JsonDocument.Parse(await fillResponse.Content.ReadAsStreamAsync());
+        Assert.True(fillDoc.RootElement.GetProperty("success").GetBoolean());
+        Assert.Contains(fillDoc.RootElement.GetProperty("simulationMode").GetString(), new[] { "native", "property-mutation" });
+
+        using var focusResponse = await client.PostAsync("/api/v1/ui/actions/focus", Json("{" + "\"elementId\":\"InputBox\"}"));
+        focusResponse.EnsureSuccessStatusCode();
+        using var focusDoc = JsonDocument.Parse(await focusResponse.Content.ReadAsStreamAsync());
+        Assert.True(focusDoc.RootElement.GetProperty("success").GetBoolean());
+        Assert.Contains(focusDoc.RootElement.GetProperty("simulationMode").GetString(), new[] { "native", "semantic" });
+
+        using var clearResponse = await client.PostAsync("/api/v1/ui/actions/clear", Json("{" + "\"elementId\":\"InputBox\"}"));
+        clearResponse.EnsureSuccessStatusCode();
+        using var clearDoc = JsonDocument.Parse(await clearResponse.Content.ReadAsStreamAsync());
+        Assert.True(clearDoc.RootElement.GetProperty("success").GetBoolean());
+        Assert.Contains(clearDoc.RootElement.GetProperty("simulationMode").GetString(), new[] { "native", "property-mutation" });
 
         using var input = await client.GetAsync("/api/v1/ui/element?id=InputBox");
         input.EnsureSuccessStatusCode();
@@ -133,6 +152,7 @@ public class WinFormsAgentIntegrationTests
         response.EnsureSuccessStatusCode();
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStreamAsync());
         Assert.True(doc.RootElement.GetProperty("success").GetBoolean());
+        Assert.True(doc.RootElement.TryGetProperty("simulationMode", out _));
     }
 
     [Fact]
@@ -148,6 +168,7 @@ public class WinFormsAgentIntegrationTests
         response.EnsureSuccessStatusCode();
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStreamAsync());
         Assert.True(doc.RootElement.GetProperty("success").GetBoolean());
+        Assert.Contains(doc.RootElement.GetProperty("simulationMode").GetString(), new[] { "native", "property-mutation" });
     }
 
     [Fact]

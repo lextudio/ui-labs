@@ -50,6 +50,18 @@ public abstract class DevFlowAgentServiceBase : IDisposable
     protected abstract Task<object?> GetThemeAsync();
     protected abstract Task<object?> SetThemeAsync(string theme);
     protected abstract Task<string?> GetApplicationNameAsync();
+    protected virtual async Task<object?> TryTapResponseAsync(string elementId)
+        => await TryTapAsync(elementId).ConfigureAwait(false) ? CreateSuccessResult() : null;
+    protected virtual async Task<object?> TryScrollResponseAsync(string elementId, double deltaX, double deltaY)
+        => await TryScrollAsync(elementId, deltaX, deltaY).ConfigureAwait(false) ? CreateSuccessResult(elementId: elementId, deltaX: deltaX, deltaY: deltaY) : null;
+    protected virtual async Task<object?> TryFillResponseAsync(string elementId, string text)
+        => await TryFillAsync(elementId, text).ConfigureAwait(false) ? CreateSuccessResult(elementId: elementId, text: text) : null;
+    protected virtual async Task<object?> TryClearResponseAsync(string elementId)
+        => await TryClearAsync(elementId).ConfigureAwait(false) ? CreateSuccessResult(elementId: elementId, text: string.Empty) : null;
+    protected virtual async Task<object?> TryFocusResponseAsync(string elementId)
+        => await TryFocusAsync(elementId).ConfigureAwait(false) ? CreateSuccessResult(elementId: elementId) : null;
+    protected virtual async Task<object?> TryBackResponseAsync()
+        => await TryBackAsync().ConfigureAwait(false) ? CreateSuccessResult() : null;
     protected virtual object GetCapabilities() => new
     {
         screenshots = true,
@@ -62,6 +74,24 @@ public abstract class DevFlowAgentServiceBase : IDisposable
         webviewCdp = false,
         multiWindow = false
     };
+
+    protected static ActionSimulationResult CreateSuccessResult(
+        string? simulationMode = null,
+        string? elementId = null,
+        string? key = null,
+        string? text = null,
+        double? deltaX = null,
+        double? deltaY = null)
+        => new()
+        {
+            Success = true,
+            SimulationMode = simulationMode,
+            ElementId = elementId,
+            Key = key,
+            Text = text,
+            DeltaX = deltaX,
+            DeltaY = deltaY
+        };
 
     private void RegisterRoutes()
     {
@@ -170,8 +200,8 @@ public abstract class DevFlowAgentServiceBase : IDisposable
         if (payload == null || string.IsNullOrWhiteSpace(payload.Id))
             return HttpResponse.Error("Request must include a JSON body with an 'id' field", 400);
 
-        var result = await TryTapAsync(payload.Id).ConfigureAwait(false);
-        return result ? HttpResponse.Ok() : HttpResponse.Error($"Tap target '{payload.Id}' could not be activated", 404);
+        var result = await TryTapResponseAsync(payload.Id).ConfigureAwait(false);
+        return result != null ? HttpResponse.Json(result) : HttpResponse.Error($"Tap target '{payload.Id}' could not be activated", 404);
     }
 
     private async Task<HttpResponse> HandleScrollAsync(HttpRequest request)
@@ -180,8 +210,8 @@ public abstract class DevFlowAgentServiceBase : IDisposable
         if (payload == null || string.IsNullOrWhiteSpace(payload.Id))
             return HttpResponse.Error("Request must include a JSON body with an 'id' field", 400);
 
-        var result = await TryScrollAsync(payload.Id, payload.DeltaX, payload.DeltaY).ConfigureAwait(false);
-        return result ? HttpResponse.Ok() : HttpResponse.Error($"Scroll target '{payload.Id}' could not be scrolled", 404);
+        var result = await TryScrollResponseAsync(payload.Id, payload.DeltaX, payload.DeltaY).ConfigureAwait(false);
+        return result != null ? HttpResponse.Json(result) : HttpResponse.Error($"Scroll target '{payload.Id}' could not be scrolled", 404);
     }
 
     private async Task<HttpResponse> HandleFillAsync(HttpRequest request)
@@ -190,8 +220,8 @@ public abstract class DevFlowAgentServiceBase : IDisposable
         if (payload == null || string.IsNullOrWhiteSpace(payload.ElementId) || payload.Text == null)
             return HttpResponse.Error("elementId and text are required", 400);
 
-        var result = await TryFillAsync(payload.ElementId, payload.Text).ConfigureAwait(false);
-        return result ? HttpResponse.Ok("Text set") : HttpResponse.Error("Element does not accept text input", 404);
+        var result = await TryFillResponseAsync(payload.ElementId, payload.Text).ConfigureAwait(false);
+        return result != null ? HttpResponse.Json(result) : HttpResponse.Error("Element does not accept text input", 404);
     }
 
     private async Task<HttpResponse> HandleClearAsync(HttpRequest request)
@@ -200,8 +230,8 @@ public abstract class DevFlowAgentServiceBase : IDisposable
         if (payload == null || string.IsNullOrWhiteSpace(payload.ElementId))
             return HttpResponse.Error("elementId is required", 400);
 
-        var result = await TryClearAsync(payload.ElementId).ConfigureAwait(false);
-        return result ? HttpResponse.Ok("Cleared") : HttpResponse.Error("Element does not accept text input", 404);
+        var result = await TryClearResponseAsync(payload.ElementId).ConfigureAwait(false);
+        return result != null ? HttpResponse.Json(result) : HttpResponse.Error("Element does not accept text input", 404);
     }
 
     private async Task<HttpResponse> HandleKeyAsync(HttpRequest request)
@@ -220,14 +250,14 @@ public abstract class DevFlowAgentServiceBase : IDisposable
         if (payload == null || string.IsNullOrWhiteSpace(payload.ElementId))
             return HttpResponse.Error("elementId is required", 400);
 
-        var result = await TryFocusAsync(payload.ElementId).ConfigureAwait(false);
-        return result ? HttpResponse.Ok("Focused") : HttpResponse.Error("Element could not be focused", 404);
+        var result = await TryFocusResponseAsync(payload.ElementId).ConfigureAwait(false);
+        return result != null ? HttpResponse.Json(result) : HttpResponse.Error("Element could not be focused", 404);
     }
 
     private async Task<HttpResponse> HandleBackAsync(HttpRequest request)
     {
-        var result = await TryBackAsync().ConfigureAwait(false);
-        return result ? HttpResponse.Ok("Navigated back") : HttpResponse.Error("Back navigation failed", 404);
+        var result = await TryBackResponseAsync().ConfigureAwait(false);
+        return result != null ? HttpResponse.Json(result) : HttpResponse.Error("Back navigation failed", 404);
     }
 
     private async Task<HttpResponse> HandleBatchAsync(HttpRequest request)

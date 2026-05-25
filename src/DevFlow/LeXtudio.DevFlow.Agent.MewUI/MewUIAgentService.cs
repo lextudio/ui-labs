@@ -202,6 +202,29 @@ public sealed class MewUIAgentService : DevFlowAgentServiceBase
         return Task.FromResult(result);
     }
 
+    protected override Task<object?> TryTapResponseAsync(string elementId)
+    {
+        if (!Application.IsRunning)
+            return Task.FromResult<object?>(null);
+
+        var app = Application.Current;
+        if (app == null)
+            return Task.FromResult<object?>(null);
+
+        object? result = null;
+        app.Dispatcher.Invoke(() =>
+        {
+            var target = _treeWalker.FindElementObjectById(elementId);
+            if (target == null)
+                return;
+
+            result = ActionSimulationExecutor.Execute(
+                () => TryNativeTap(target) ? CreateSuccessResult(SimulationModes.Native, elementId) : null,
+                () => TryInvokeOnElement(target) ? CreateSuccessResult(SimulationModes.Reflection, elementId) : null);
+        });
+        return Task.FromResult(result);
+    }
+
     protected override Task<bool> TryScrollAsync(string elementId, double deltaX, double deltaY)
     {
         if (!Application.IsRunning)
@@ -213,6 +236,24 @@ public sealed class MewUIAgentService : DevFlowAgentServiceBase
 
         var result = false;
         app.Dispatcher.Invoke(() => result = TryScroll(elementId, deltaX, deltaY));
+        return Task.FromResult(result);
+    }
+
+    protected override Task<object?> TryScrollResponseAsync(string elementId, double deltaX, double deltaY)
+    {
+        if (!Application.IsRunning)
+            return Task.FromResult<object?>(null);
+
+        var app = Application.Current;
+        if (app == null)
+            return Task.FromResult<object?>(null);
+
+        object? result = null;
+        app.Dispatcher.Invoke(() =>
+        {
+            if (TryScroll(elementId, deltaX, deltaY))
+                result = CreateSuccessResult(SimulationModes.Semantic, elementId, deltaX: deltaX, deltaY: deltaY);
+        });
         return Task.FromResult(result);
     }
 
@@ -234,10 +275,36 @@ public sealed class MewUIAgentService : DevFlowAgentServiceBase
         return Task.FromResult(result);
     }
 
+    protected override Task<object?> TryFillResponseAsync(string elementId, string text)
+    {
+        if (!Application.IsRunning)
+            return Task.FromResult<object?>(null);
+
+        var app = Application.Current;
+        if (app == null)
+            return Task.FromResult<object?>(null);
+
+        object? result = null;
+        app.Dispatcher.Invoke(() =>
+        {
+            var target = _treeWalker.FindElementObjectById(elementId);
+            if (target == null)
+                return;
+
+            result = ActionSimulationExecutor.Execute(
+                () => TryNativeTextInput(target, text, replace: true) ? CreateSuccessResult(SimulationModes.Native, elementId, text: text) : null,
+                () => TrySetTextValue(target, text) ? CreateSuccessResult(SimulationModes.PropertyMutation, elementId, text: text) : null);
+        });
+        return Task.FromResult(result);
+    }
+
     protected override Task<bool> TryClearAsync(string elementId)
     {
         return TryFillAsync(elementId, string.Empty);
     }
+
+    protected override Task<object?> TryClearResponseAsync(string elementId)
+        => TryFillResponseAsync(elementId, string.Empty);
 
     protected override Task<bool> TryFocusAsync(string elementId)
     {
@@ -269,6 +336,44 @@ public sealed class MewUIAgentService : DevFlowAgentServiceBase
         return Task.FromResult(result);
     }
 
+    protected override Task<object?> TryFocusResponseAsync(string elementId)
+    {
+        if (!Application.IsRunning)
+            return Task.FromResult<object?>(null);
+
+        var app = Application.Current;
+        if (app == null)
+            return Task.FromResult<object?>(null);
+
+        object? result = null;
+        app.Dispatcher.Invoke(() =>
+        {
+            var target = _treeWalker.FindElementObjectById(elementId);
+            if (target != null && TryNativeTap(target))
+            {
+                result = CreateSuccessResult(SimulationModes.Native, elementId);
+                return;
+            }
+
+            if (target is Control control)
+            {
+                control.Focus();
+                result = CreateSuccessResult(SimulationModes.Semantic, elementId);
+                return;
+            }
+
+            var focusMethod = target?.GetType().GetMethod("Focus", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance, null, Type.EmptyTypes, null);
+            if (focusMethod != null)
+            {
+                var focusValue = focusMethod.Invoke(target, null);
+                var focused = focusValue is bool boolResult ? boolResult : true;
+                if (focused)
+                    result = CreateSuccessResult(SimulationModes.Semantic, elementId);
+            }
+        });
+        return Task.FromResult(result);
+    }
+
     protected override Task<object?> TryKeyAsync(string? elementId, string? key, string? text)
     {
         if (!Application.IsRunning)
@@ -287,7 +392,7 @@ public sealed class MewUIAgentService : DevFlowAgentServiceBase
 
             if (string.IsNullOrWhiteSpace(elementId))
             {
-                result = new { success = true, key = keyValue, text, elementId };
+                result = CreateSuccessResult(SimulationModes.Semantic, elementId, key: keyValue, text: text);
                 return;
             }
 
@@ -296,22 +401,38 @@ public sealed class MewUIAgentService : DevFlowAgentServiceBase
                 return;
 
             var current = ReadStringProperty(target, "Text") ?? ReadStringProperty(target, "Value") ?? string.Empty;
+
+            if (normalized is "enter" or "return")
+            {
+                if (TryNativeSpecialKey(target, WindowsNativeInput.VirtualKeyReturn))
+                {
+                    result = CreateSuccessResult(SimulationModes.Native, elementId, key: keyValue, text: text);
+                    return;
+                }
+            }
+
+            if (!string.IsNullOrEmpty(insertText) && TryNativeTextInput(target, insertText, replace: false))
+            {
+                result = CreateSuccessResult(SimulationModes.Native, elementId, key: keyValue, text: text);
+                return;
+            }
+
             if (normalized is "backspace" or "delete")
             {
                 var next = current.Length > 0 ? current[..^1] : string.Empty;
                 if (TrySetTextValue(target, next))
-                    result = new { success = true, key = keyValue, text, elementId };
+                    result = CreateSuccessResult(SimulationModes.PropertyMutation, elementId, key: keyValue, text: text);
                 return;
             }
 
             if (normalized is "enter" or "return")
             {
-                result = new { success = true, key = keyValue, text, elementId };
+                result = CreateSuccessResult(SimulationModes.Semantic, elementId, key: keyValue, text: text);
                 return;
             }
 
             if (!string.IsNullOrEmpty(insertText) && TrySetTextValue(target, current + insertText))
-                result = new { success = true, key = keyValue, text, elementId };
+                result = CreateSuccessResult(SimulationModes.PropertyMutation, elementId, key: keyValue, text: text);
         });
 
         return Task.FromResult(result);
@@ -341,6 +462,30 @@ public sealed class MewUIAgentService : DevFlowAgentServiceBase
         return Task.FromResult(result);
     }
 
+    protected override Task<object?> TryBackResponseAsync()
+    {
+        if (!Application.IsRunning)
+            return Task.FromResult<object?>(null);
+
+        var app = Application.Current;
+        if (app == null)
+            return Task.FromResult<object?>(null);
+
+        object? result = null;
+        app.Dispatcher.Invoke(() =>
+        {
+            var windows = app.AllWindows;
+            if (windows.Count > 1)
+            {
+                var top = windows[^1];
+                top.Close();
+                result = CreateSuccessResult(SimulationModes.Semantic);
+            }
+        });
+
+        return Task.FromResult(result);
+    }
+
     private static bool TrySetTextValue(object target, string text)
     {
         var type = target.GetType();
@@ -359,6 +504,33 @@ public sealed class MewUIAgentService : DevFlowAgentServiceBase
         }
 
         return false;
+    }
+
+    private static bool TryNativeTap(object target)
+        => WindowsNativeActions.TryTap(() => TryGetWindowsScreenPoint(target));
+
+    private static bool TryNativeTextInput(object target, string text, bool replace)
+        => WindowsNativeActions.TryTextInput(() => TryGetWindowsScreenPoint(target), text, replace);
+
+    private static bool TryNativeSpecialKey(object target, ushort virtualKey)
+        => WindowsNativeActions.TrySpecialKey(() => TryGetWindowsScreenPoint(target), virtualKey);
+
+    private static WindowsScreenPoint? TryGetWindowsScreenPoint(object target)
+    {
+        if (!OperatingSystem.IsWindows() || target is not Element element)
+            return null;
+
+        var window = Application.Current?.AllWindows.FirstOrDefault(w => w.Handle != 0);
+        if (window == null)
+            return null;
+
+        var bounds = element.Bounds;
+        if (bounds.Width <= 0 || bounds.Height <= 0)
+            return null;
+
+        var center = new Point(bounds.X + (bounds.Width / 2d), bounds.Y + (bounds.Height / 2d));
+        var screenPoint = window.ClientToScreen(center);
+        return new WindowsScreenPoint((int)Math.Round(screenPoint.X), (int)Math.Round(screenPoint.Y));
     }
 
     private static string? ReadStringProperty(object target, string propertyName)

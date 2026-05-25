@@ -81,6 +81,10 @@ public class WpfAgentIntegrationTests
 
         using var tapResponse = await client.PostAsync("/api/v1/ui/tap", new StringContent("{ \"id\": \"ActionButton\" }", System.Text.Encoding.UTF8, "application/json"));
         tapResponse.EnsureSuccessStatusCode();
+        using var tapDoc = JsonDocument.Parse(await tapResponse.Content.ReadAsStreamAsync());
+        Assert.True(tapDoc.RootElement.GetProperty("success").GetBoolean());
+        Assert.True(tapDoc.RootElement.TryGetProperty("simulationMode", out var tapMode));
+        Assert.Contains(tapMode.GetString(), new[] { "native", "semantic" });
 
         using var elementResponse = await client.GetAsync("/api/v1/ui/element?id=ResponseText");
         elementResponse.EnsureSuccessStatusCode();
@@ -252,6 +256,25 @@ public class WpfAgentIntegrationTests
         using var batchDoc = JsonDocument.Parse(await batchResponse.Content.ReadAsStreamAsync());
         Assert.True(batchDoc.RootElement.GetProperty("success").GetBoolean());
         Assert.Equal(2, batchDoc.RootElement.GetProperty("results").GetArrayLength());
+    }
+
+    [Fact]
+    public async Task Focus_ReturnsSimulationMode()
+    {
+        var port = GetFreePort();
+        await using var host = await StartWpfAgentHostAsync(port);
+
+        using var client = new HttpClient { BaseAddress = new Uri($"http://localhost:{port}") };
+        await PollAgentStatusAsync(client, TimeSpan.FromSeconds(15));
+
+        using var response = await client.PostAsync(
+            "/api/v1/ui/actions/focus",
+            new StringContent("{\"elementId\":\"ActionButton\"}", Encoding.UTF8, "application/json"));
+        response.EnsureSuccessStatusCode();
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStreamAsync());
+        Assert.True(doc.RootElement.GetProperty("success").GetBoolean());
+        Assert.True(doc.RootElement.TryGetProperty("simulationMode", out var mode));
+        Assert.Contains(mode.GetString(), new[] { "native", "semantic" });
     }
 
     [Fact]

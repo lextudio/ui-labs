@@ -41,6 +41,9 @@ public class MewUIAgentIntegrationTests
 
         using var tapResponse = await client.PostAsync("/api/v1/ui/tap", new StringContent("{ \"id\": \"ActionButton\" }", Encoding.UTF8, "application/json"));
         tapResponse.EnsureSuccessStatusCode();
+        using var tapDoc = JsonDocument.Parse(await tapResponse.Content.ReadAsStreamAsync());
+        Assert.True(tapDoc.RootElement.GetProperty("success").GetBoolean());
+        Assert.Contains(tapDoc.RootElement.GetProperty("simulationMode").GetString(), new[] { "native", "reflection" });
 
         using var elementResponse = await client.GetAsync("/api/v1/ui/element?id=ResponseText");
         elementResponse.EnsureSuccessStatusCode();
@@ -83,6 +86,9 @@ public class MewUIAgentIntegrationTests
             "/api/v1/ui/actions/fill",
             new StringContent("{\"elementId\":\"ResponseText\",\"text\":\"Filled by test\"}", Encoding.UTF8, "application/json"));
         fillResponse.EnsureSuccessStatusCode();
+        using var fillResultDoc = JsonDocument.Parse(await fillResponse.Content.ReadAsStreamAsync());
+        Assert.True(fillResultDoc.RootElement.GetProperty("success").GetBoolean());
+        Assert.Contains(fillResultDoc.RootElement.GetProperty("simulationMode").GetString(), new[] { "native", "property-mutation" });
 
         using var afterFill = await client.GetAsync("/api/v1/ui/element?id=ResponseText");
         afterFill.EnsureSuccessStatusCode();
@@ -116,6 +122,7 @@ public class MewUIAgentIntegrationTests
         keyResponse.EnsureSuccessStatusCode();
         using var keyDoc = JsonDocument.Parse(await keyResponse.Content.ReadAsStreamAsync());
         Assert.True(keyDoc.RootElement.GetProperty("success").GetBoolean());
+        Assert.Contains(keyDoc.RootElement.GetProperty("simulationMode").GetString(), new[] { "native", "semantic" });
     }
 
     [Fact]
@@ -132,6 +139,9 @@ public class MewUIAgentIntegrationTests
             "/api/v1/ui/actions/focus",
             new StringContent("{\"elementId\":\"ActionButton\"}", Encoding.UTF8, "application/json"));
         focusResponse.EnsureSuccessStatusCode();
+        using var focusDoc = JsonDocument.Parse(await focusResponse.Content.ReadAsStreamAsync());
+        Assert.True(focusDoc.RootElement.GetProperty("success").GetBoolean());
+        Assert.Contains(focusDoc.RootElement.GetProperty("simulationMode").GetString(), new[] { "native", "semantic" });
     }
 
     [Fact]
