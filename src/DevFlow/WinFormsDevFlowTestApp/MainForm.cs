@@ -1,4 +1,6 @@
 using System.Windows.Forms;
+using LeXtudio.DevFlow.Agent.Core;
+using Microsoft.Web.WebView2.WinForms;
 
 namespace WinFormsDevFlowTestApp;
 
@@ -11,7 +13,7 @@ public class MainForm : Form
         Name = "MainForm";
         Text = "WinForms DevFlow Test";
         Width = 500;
-        Height = 350;
+        Height = 520;
 
         _response = new Label
         {
@@ -53,9 +55,42 @@ public class MainForm : Form
         var spacer = new Label { Name = "ScrollSpacer", Top = 220, Left = 0, Width = 200, Text = "bottom" };
         panel.Controls.Add(spacer);
 
+        var webView = new WebView2
+        {
+            Name = "WebViewHost",
+            Left = 20,
+            Top = 275,
+            Width = 420,
+            Height = 160
+        };
+        _ = InitializeWebViewAsync(webView);
+
         Controls.Add(button);
         Controls.Add(input);
         Controls.Add(_response);
         Controls.Add(panel);
+        Controls.Add(webView);
     }
+
+    private static async Task InitializeWebViewAsync(WebView2 webView)
+    {
+        try
+        {
+            await webView.EnsureCoreWebView2Async();
+            webView.CoreWebView2.NavigateToString("""
+<!doctype html>
+<html><body style="font-family:Segoe UI;padding:12px">
+<h3 id="title">DevFlow WinForms WebView Test</h3>
+<p id="content">Deterministic inline HTML for screenshot validation.</p>
+</body></html>
+""");
+        }
+        catch
+        {
+            // Keep sample app resilient when the WebView2 runtime is unavailable.
+        }
+    }
+
+    [DevFlowAction("winforms.echo", Description = "Echoes an input string for invoke API tests.")]
+    public static string Echo(string value) => $"echo:{value}";
 }

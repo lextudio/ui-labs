@@ -22,7 +22,7 @@ namespace LeXtudio.WinForms.Cli.UnitTests
                 const string validationAppName = "WinFormsDevFlowValidationApp";
                 const int validationPort = 5500;
 
-                Assert.True(RunCommand("dotnet", $"new WinForms --name {validationAppName} --output \"{tempRoot}\"", tempRoot, out var createOutput, out var createError), $"Failed to create temporary WinForms app:\n{createError}\n{createOutput}");
+                Assert.True(RunCommand("dotnet", $"new winforms --name {validationAppName} --output \"{tempRoot}\"", tempRoot, out var createOutput, out var createError), $"Failed to create temporary WinForms app:\n{createError}\n{createOutput}");
 
                 var projectPath = Path.Combine(tempRoot, $"{validationAppName}.csproj");
                 Assert.True(File.Exists(projectPath), $"Expected temporary project file not found: {projectPath}");
@@ -32,8 +32,8 @@ namespace LeXtudio.WinForms.Cli.UnitTests
                 Assert.True(File.Exists(agentProjectPath), $"Unable to find WinForms DevFlow agent project at {agentProjectPath}");
 
                 InjectProjectReference(projectPath, agentProjectPath);
-                File.WriteAllText(Path.Combine(tempRoot, "App.xaml"), GetAppXamlContents(), Encoding.UTF8);
-                File.WriteAllText(Path.Combine(tempRoot, "App.xaml.cs"), GetAppCsContents(validationPort), Encoding.UTF8);
+                File.WriteAllText(Path.Combine(tempRoot, "Program.cs"), GetProgramCsContents(validationPort), Encoding.UTF8);
+                File.WriteAllText(Path.Combine(tempRoot, "MainForm.cs"), GetMainFormCsContents(), Encoding.UTF8);
 
                 Assert.True(RunCommand("dotnet", $"build \"{projectPath}\" -c Debug", tempRoot, out var buildOutput, out var buildError), $"Temporary project build failed:\n{buildError}\n{buildOutput}");
 
@@ -214,14 +214,14 @@ namespace LeXtudio.WinForms.Cli.UnitTests
             return process.ExitCode == 0;
         }
 
-        private static string GetAppXamlContents()
+        private static string GetProgramCsContents(int port)
         {
-            return "<Application x:Class=\"WinFormsDevFlowValidationApp.App\"\r\n             xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"\r\n             xmlns:x=\"http://schemas.microsoft.com/winfx/2006/xaml\">\r\n</Application>\r\n";
+            return $"using System.Windows.Forms;\r\nusing LeXtudio.DevFlow.Agent.WinForms;\r\nusing Microsoft.Maui.DevFlow.Agent.Core;\r\n\r\nnamespace WinFormsDevFlowValidationApp;\r\n\r\ninternal static class Program\r\n{{\r\n    [STAThread]\r\n    private static void Main()\r\n    {{\r\n        ApplicationConfiguration.Initialize();\r\n\r\n        var form = new MainForm();\r\n        var context = new ApplicationContext(form);\r\n        context.AddWinFormsDevFlowAgent(new AgentOptions {{ Port = {port} }});\r\n\r\n        Application.Run(context);\r\n    }}\r\n}}\r\n";
         }
 
-        private static string GetAppCsContents(int port)
+        private static string GetMainFormCsContents()
         {
-            return $"using System.Windows;\r\nusing LeXtudio.DevFlow.Agent.WinForms;\r\nusing Microsoft.Maui.DevFlow.Agent.Core;\r\n\r\nnamespace WinFormsDevFlowValidationApp;\r\n\r\npublic partial class App : Application\r\n{{\r\n    private const int ValidationPort = {port};\r\n    private WinFormsAgentService? _devFlowService;\r\n\r\n    public App()\r\n    {{\r\n        Startup += OnStartup;\r\n    }}\r\n\r\n    private void OnStartup(object? sender, StartupEventArgs e)\r\n    {{\r\n        _devFlowService = this.AddWinFormsDevFlowAgent(new AgentOptions {{ Port = ValidationPort }});\r\n        var hiddenWindow = new MainWindow\r\n        {{\r\n            Visibility = Visibility.Hidden,\r\n            ShowInTaskbar = false\r\n        }};\r\n        hiddenWindow.Show();\r\n    }}\r\n}}\r\n";
+            return "using System.Drawing;\r\nusing System.Windows.Forms;\r\n\r\nnamespace WinFormsDevFlowValidationApp;\r\n\r\ninternal sealed class MainForm : Form\r\n{\r\n    public MainForm()\r\n    {\r\n        Name = \"MainForm\";\r\n        Text = \"WinForms DevFlow Validation\";\r\n        Size = new Size(360, 220);\r\n        StartPosition = FormStartPosition.Manual;\r\n        Location = new Point(-2000, -2000);\r\n        ShowInTaskbar = false;\r\n\r\n        Controls.Add(new Label\r\n        {\r\n            Name = \"StatusLabel\",\r\n            Text = \"Ready\",\r\n            AutoSize = true,\r\n            Location = new Point(20, 20)\r\n        });\r\n\r\n        Controls.Add(new TextBox\r\n        {\r\n            Name = \"NameTextBox\",\r\n            Text = \"Initial\",\r\n            Location = new Point(20, 55),\r\n            Width = 180\r\n        });\r\n\r\n        Controls.Add(new Button\r\n        {\r\n            Name = \"SubmitButton\",\r\n            Text = \"Submit\",\r\n            Location = new Point(20, 95),\r\n            Width = 100\r\n        });\r\n    }\r\n}\r\n";
         }
     }
 }

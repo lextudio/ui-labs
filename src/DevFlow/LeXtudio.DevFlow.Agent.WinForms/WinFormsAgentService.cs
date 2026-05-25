@@ -1,5 +1,7 @@
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.Reflection;
+using System.Text.Json;
 using System.Windows.Forms;
 using LeXtudio.DevFlow.Agent.Core;
 using Microsoft.Maui.DevFlow.Agent.Core;
@@ -23,14 +25,29 @@ public sealed class WinFormsAgentService(AgentOptions? options = null) : DevFlow
         scroll = true,
         structuredErrors = true,
         appTheme = false,
-        webview = false,
-        webviewCdp = false,
+        webview = true,
+        webviewCdp = true,
         multiWindow = true
     };
 
     protected override Task<string?> GetApplicationNameAsync() => Task.FromResult(Application.ProductName);
     protected override Task<List<ElementInfo>> BuildTreeAsync() => Task.FromResult(_walker.WalkTree());
     protected override Task<ElementInfo?> FindElementAsync(string id) => Task.FromResult(_walker.FindElementById(id));
+
+    protected override Task<object?> GetWebViewContextsAsync()
+    {
+        return InvokeOnUiThread<object?>(GetWebViewContextsOnUiThread);
+    }
+
+    protected override Task<byte[]?> CaptureWebViewScreenshotAsync(string? contextId = null)
+    {
+        return InvokeOnUiThreadAsync(() => CaptureWebViewScreenshotOnUiThreadAsync(contextId));
+    }
+
+    protected override Task<object?> SendWebViewCdpCommandAsync(string? contextId, string method, JsonElement? @params)
+    {
+        return InvokeOnUiThreadAsync<object?>(() => SendWebViewCdpCommandOnUiThreadAsync(contextId, method, @params));
+    }
 
     protected override Task<List<ElementInfo>> QueryElementsAsync(string? type = null, string? automationId = null, string? text = null)
     {
@@ -170,6 +187,121 @@ public sealed class WinFormsAgentService(AgentOptions? options = null) : DevFlow
         return null;
     }
 
+    private static object GetWebViewContextsOnUiThread()
+    {
+        var webViewType = FindType("Microsoft.Web.WebView2.WinForms.WebView2");
+        if (webViewType == null)
+            return new { contexts = Array.Empty<object>() };
+
+        var contexts = new List<object>();
+        foreach (var webView in EnumerateControls().Where(webViewType.IsInstanceOfType))
+        {
+            var control = (Control)webView;
+            var id = !string.IsNullOrWhiteSpace(control.Name) ? control.Name : $"webview-{contexts.Count + 1}";
+            contexts.Add(new { id, type = "webview2", title = control.Name ?? id });
+        }
+
+        return new { contexts };
+    }
+
+    private static Task<byte[]?> CaptureWebViewScreenshotOnUiThreadAsync(string? contextId)
+    {
+        var target = FindWebView(contextId);
+        return TryCaptureWebView2ScreenshotAsync(target);
+    }
+
+    private static async Task<object?> SendWebViewCdpCommandOnUiThreadAsync(string? contextId, string method, JsonElement? @params)
+    {
+        var target = FindWebView(contextId);
+        if (target == null)
+            return null;
+
+        var core = target.GetType().GetProperty("CoreWebView2", BindingFlags.Public | BindingFlags.Instance)?.GetValue(target);
+        if (core == null)
+            return null;
+
+        if (string.Equals(method, "Runtime.evaluate", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!@params.HasValue || !@params.Value.TryGetProperty("expression", out var exprProp))
+                return new { error = "Missing params.expression for Runtime.evaluate" };
+
+            var expression = exprProp.GetString() ?? string.Empty;
+            var execute = core.GetType().GetMethod("ExecuteScriptAsync", [typeof(string)]);
+            if (execute == null)
+                return null;
+
+            var task = execute.Invoke(core, [expression]) as Task<string>;
+            var result = task == null ? null : await task.ConfigureAwait(true);
+            return new { result = new { value = result } };
+        }
+
+        return new { error = $"Unsupported CDP method: {method}" };
+    }
+
+    private static Control? FindWebView(string? contextId)
+    {
+        var webViewType = FindType("Microsoft.Web.WebView2.WinForms.WebView2");
+        if (webViewType == null)
+            return null;
+
+        return EnumerateControls()
+            .FirstOrDefault(c =>
+                webViewType.IsInstanceOfType(c) &&
+                (string.IsNullOrWhiteSpace(contextId) || string.Equals(c.Name, contextId, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private static async Task<byte[]?> TryCaptureWebView2ScreenshotAsync(Control? target)
+    {
+        try
+        {
+            if (target == null)
+                return null;
+
+            var coreWebView2 = target.GetType().GetProperty("CoreWebView2", BindingFlags.Public | BindingFlags.Instance)?.GetValue(target);
+            if (coreWebView2 == null)
+                return null;
+
+            var imageFormatType = FindType("Microsoft.Web.WebView2.Core.CoreWebView2CapturePreviewImageFormat");
+            if (imageFormatType == null)
+                return null;
+
+            var pngFormat = Enum.Parse(imageFormatType, "Png");
+            var capturePreviewAsync = coreWebView2.GetType().GetMethod("CapturePreviewAsync", [imageFormatType, typeof(Stream)]);
+            if (capturePreviewAsync == null)
+                return null;
+
+            var stream = new MemoryStream();
+            if (capturePreviewAsync.Invoke(coreWebView2, [pngFormat, stream]) is not Task task)
+                return null;
+
+            using (stream)
+            {
+                await task.ConfigureAwait(true);
+                return stream.Length > 0 ? stream.ToArray() : null;
+            }
+        }
+        catch
+        {
+            return target == null ? null : CaptureControl(target);
+        }
+    }
+
+    private static IEnumerable<Control> EnumerateControls()
+    {
+        foreach (Form form in Application.OpenForms)
+        {
+            var queue = new Queue<Control>();
+            queue.Enqueue(form);
+            while (queue.Count > 0)
+            {
+                var current = queue.Dequeue();
+                yield return current;
+                foreach (Control child in current.Controls)
+                    queue.Enqueue(child);
+            }
+        }
+    }
+
     private static byte[]? CaptureControl(Control control)
     {
         if (control.Width <= 0 || control.Height <= 0)
@@ -180,6 +312,22 @@ public sealed class WinFormsAgentService(AgentOptions? options = null) : DevFlow
         using var ms = new MemoryStream();
         bmp.Save(ms, ImageFormat.Png);
         return ms.ToArray();
+    }
+
+    private static Type? FindType(string typeName)
+    {
+        var type = Type.GetType(typeName, false, true);
+        if (type != null)
+            return type;
+
+        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+        {
+            type = assembly.GetType(typeName, false, true);
+            if (type != null)
+                return type;
+        }
+
+        return null;
     }
 
     private static Task<T> InvokeOnUiThread<T>(Func<T> action)
@@ -197,6 +345,31 @@ public sealed class WinFormsAgentService(AgentOptions? options = null) : DevFlow
             try
             {
                 completion.SetResult(action());
+            }
+            catch (Exception ex)
+            {
+                completion.SetException(ex);
+            }
+        });
+
+        return completion.Task;
+    }
+
+    private static Task<T> InvokeOnUiThreadAsync<T>(Func<Task<T>> action)
+    {
+        var invoker = Application.OpenForms.Cast<Form>().FirstOrDefault();
+        if (invoker == null || invoker.IsDisposed || !invoker.IsHandleCreated)
+            return action();
+
+        if (!invoker.InvokeRequired)
+            return action();
+
+        var completion = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+        invoker.BeginInvoke(async () =>
+        {
+            try
+            {
+                completion.SetResult(await action().ConfigureAwait(true));
             }
             catch (Exception ex)
             {
