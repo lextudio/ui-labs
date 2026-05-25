@@ -1512,6 +1512,15 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
 
     private static bool TryNativeTextInput(object element, string text, bool replace)
     {
+        // Native input synthesises OS keystrokes that flow through the focused
+        // control. Only elements that actually accept keyboard text (TextBox,
+        // PasswordBox, RichEditBox, AutoSuggestBox) can absorb those events;
+        // for read-only controls like TextBlock the keystrokes go to the void
+        // and the property-mutation fallback is the only thing that works, so
+        // refuse native up front rather than claiming a phantom success.
+        if (!IsKeyboardEditableElement(element))
+            return false;
+
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             return TryNativeAction(element, resolver => WindowsNativeActions.TryTextInput(resolver, text, replace));
 
@@ -1530,8 +1539,31 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
         if (!PosixNativeActions.IsAvailable)
             return false;
 
+        // Same reasoning as TryNativeTextInput, but Enter on a non-editable
+        // element is still legitimately a no-op the caller should be told
+        // about; the semantic path will report success in that case.
+        if (!IsKeyboardEditableElement(element))
+            return false;
+
         TryFocusElement(element);
         return PosixNativeActions.TryKeyInput(normalizedKey, insertText);
+    }
+
+    private static bool IsKeyboardEditableElement(object element)
+    {
+        for (var type = element.GetType(); type != null; type = type.BaseType)
+        {
+            switch (type.Name)
+            {
+                case "TextBox":
+                case "PasswordBox":
+                case "RichEditBox":
+                case "AutoSuggestBox":
+                    return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool TryNativeAction(object element, Func<Func<WindowsScreenPoint?>, bool> action)
