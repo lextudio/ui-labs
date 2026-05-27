@@ -202,13 +202,62 @@ public sealed class MewUIVisualTreeWalker : IVisualTreeWalker
         return value is double doubleValue ? doubleValue : defaultValue;
     }
 
+    private static readonly string[] s_brushPropertyNames =
+    [
+        "Background",
+        "Foreground",
+        "BorderBrush",
+        "Fill",
+        "Stroke",
+    ];
+
     private static Dictionary<string, string?> GetFrameworkProperties(object element)
     {
-        return new Dictionary<string, string?>
+        var props = new Dictionary<string, string?>
         {
             ["tag"] = GetPropertyValue(element, "Tag") as string,
             ["name"] = GetPropertyValue(element, "Name") as string,
         };
+
+        foreach (var brushProp in s_brushPropertyNames)
+        {
+            var brush = GetPropertyValue(element, brushProp);
+            if (brush != null)
+                props[char.ToLowerInvariant(brushProp[0]) + brushProp[1..]] = BrushToString(brush);
+        }
+
+        return props;
+    }
+
+    private static string? BrushToString(object brush)
+    {
+        var colorProp = brush.GetType().GetProperty("Color", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+        if (colorProp != null)
+        {
+            var color = colorProp.GetValue(brush);
+            if (color != null)
+            {
+                var a = GetColorChannel(color, "A");
+                var r = GetColorChannel(color, "R");
+                var g = GetColorChannel(color, "G");
+                var b = GetColorChannel(color, "B");
+                if (a.HasValue && r.HasValue && g.HasValue && b.HasValue)
+                {
+                    return a.Value == 255
+                        ? $"#{r.Value:X2}{g.Value:X2}{b.Value:X2}"
+                        : $"#{a.Value:X2}{r.Value:X2}{g.Value:X2}{b.Value:X2}";
+                }
+            }
+        }
+        return brush.GetType().Name;
+    }
+
+    private static byte? GetColorChannel(object color, string channel)
+    {
+        var prop = color.GetType().GetProperty(channel, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+        if (prop == null) return null;
+        var val = prop.GetValue(color);
+        return val is byte b ? b : null;
     }
 
     private static string CreateGeneratedId(string? parentId, string typeName, int siblingIndex)

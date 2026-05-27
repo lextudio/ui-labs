@@ -399,7 +399,64 @@ public sealed class UnoVisualTreeWalker : IVisualTreeWalker
             properties["extentHeight"] = GetPropertyValue(element, "ExtentHeight")?.ToString();
         }
 
+        foreach (var brushProp in s_brushPropertyNames)
+        {
+            var brush = GetPropertyValue(element, brushProp);
+            if (brush != null)
+                properties[char.ToLowerInvariant(brushProp[0]) + brushProp[1..]] = BrushToString(brush);
+        }
+
+        var requestedTheme = GetPropertyValue(element, "RequestedTheme");
+        if (requestedTheme != null)
+            properties["requestedTheme"] = requestedTheme.ToString();
+
+        var actualTheme = GetPropertyValue(element, "ActualTheme");
+        if (actualTheme != null)
+            properties["actualTheme"] = actualTheme.ToString();
+
         return properties;
+    }
+
+    private static readonly string[] s_brushPropertyNames =
+    [
+        "Background",
+        "Foreground",
+        "BorderBrush",
+        "Fill",
+        "Stroke",
+    ];
+
+    private static string? BrushToString(object brush)
+    {
+        // SolidColorBrush: read the Color property and format as #AARRGGBB / #RRGGBB
+        var colorProp = brush.GetType().GetProperty("Color", BindingFlags.Public | BindingFlags.Instance);
+        if (colorProp != null)
+        {
+            var color = colorProp.GetValue(brush);
+            if (color != null)
+            {
+                var a = GetColorChannel(color, "A");
+                var r = GetColorChannel(color, "R");
+                var g = GetColorChannel(color, "G");
+                var b = GetColorChannel(color, "B");
+                if (a.HasValue && r.HasValue && g.HasValue && b.HasValue)
+                {
+                    return a.Value == 255
+                        ? $"#{r.Value:X2}{g.Value:X2}{b.Value:X2}"
+                        : $"#{a.Value:X2}{r.Value:X2}{g.Value:X2}{b.Value:X2}";
+                }
+            }
+        }
+
+        return brush.GetType().Name;
+    }
+
+    private static byte? GetColorChannel(object color, string channel)
+    {
+        var prop = color.GetType().GetProperty(channel, BindingFlags.Public | BindingFlags.Instance);
+        if (prop == null) return null;
+        var val = prop.GetValue(color);
+        return val is byte b ? b : null;
     }
 
     private static bool IsScrollViewer(object element)

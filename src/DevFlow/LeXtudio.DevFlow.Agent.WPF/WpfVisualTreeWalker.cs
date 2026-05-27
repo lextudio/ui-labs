@@ -223,7 +223,49 @@ public class WpfVisualTreeWalker : IVisualTreeWalker
             props["extentHeight"] = scroll.ExtentHeight.ToString();
         }
 
+        if (element is Control control)
+        {
+            props["background"] = BrushToString(control.Background);
+            props["foreground"] = BrushToString(control.Foreground);
+            props["borderBrush"] = BrushToString(control.BorderBrush);
+        }
+        else if (element is System.Windows.Shapes.Shape shape)
+        {
+            props["fill"] = BrushToString(shape.Fill);
+            props["stroke"] = BrushToString(shape.Stroke);
+        }
+        else if (element is Panel panel)
+        {
+            props["background"] = BrushToString(panel.Background);
+        }
+        else if (element is Border border)
+        {
+            props["background"] = BrushToString(border.Background);
+            props["borderBrush"] = BrushToString(border.BorderBrush);
+        }
+        else if (element is TextBlock textBlock)
+        {
+            props["foreground"] = BrushToString(textBlock.Foreground);
+            props["background"] = BrushToString(textBlock.Background);
+        }
+
+        // Remove null/absent entries to keep the payload lean
+        foreach (var key in props.Keys.Where(k => props[k] == null).ToList())
+            props.Remove(key);
+
         return props.Count > 0 ? props : null;
+    }
+
+    private static string? BrushToString(Brush? brush)
+    {
+        if (brush is SolidColorBrush solid)
+        {
+            var c = solid.Color;
+            return c.A == 255
+                ? $"#{c.R:X2}{c.G:X2}{c.B:X2}"
+                : $"#{c.A:X2}{c.R:X2}{c.G:X2}{c.B:X2}";
+        }
+        return brush?.GetType().Name;
     }
 
     private static IEnumerable<DependencyObject> GetChildren(DependencyObject element)

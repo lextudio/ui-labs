@@ -47,6 +47,23 @@ public sealed class WinFormsVisualTreeWalker
         return null;
     }
 
+    private static Dictionary<string, string?>? BuildFrameworkProperties(Control c)
+    {
+        var props = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["backColor"] = ColorToString(c.BackColor),
+            ["foreColor"] = ColorToString(c.ForeColor),
+        };
+        return props;
+    }
+
+    private static string ColorToString(System.Drawing.Color color)
+    {
+        return color.A == 255
+            ? $"#{color.R:X2}{color.G:X2}{color.B:X2}"
+            : $"#{color.A:X2}{color.R:X2}{color.G:X2}{color.B:X2}";
+    }
+
     private ElementInfo BuildElement(Control c, string? parentId)
     {
         var id = _stableIds.GetValue(c, x => string.IsNullOrWhiteSpace(x.Name) ? $"_winforms_{Guid.NewGuid():N}" : x.Name);
@@ -62,6 +79,7 @@ public sealed class WinFormsVisualTreeWalker
             Text = c.Text,
             IsVisible = c.Visible,
             IsEnabled = c.Enabled,
+            FrameworkProperties = BuildFrameworkProperties(c),
             Children = c.Controls.Cast<Control>().Select(child => BuildElement(child, id)).ToList()
         };
     }
