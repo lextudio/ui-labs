@@ -214,6 +214,9 @@ public class JaliumAgentIntegrationTests
             RedirectStandardError = true,
         };
         startInfo.Environment["DEVFLOW_AGENT_PORT"] = port.ToString();
+        // Force Jalium software renderer so tests run on machines without a D3D12-capable
+        // GPU (e.g. ARM64 boxes where d3d10warp.dll WARP crashes in ConstructLoadStoreSets).
+        startInfo.Environment["JALIUM_RENDER_BACKEND"] = "software";
 
         var process = Process.Start(startInfo);
         if (process != null)
