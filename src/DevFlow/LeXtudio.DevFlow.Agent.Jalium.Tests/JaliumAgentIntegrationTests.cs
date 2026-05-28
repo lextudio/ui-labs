@@ -15,8 +15,8 @@ public class JaliumAgentIntegrationTests
 {
     public JaliumAgentIntegrationTests()
     {
-        Skip.Unless(RuntimeInformation.IsOSPlatform(OSPlatform.Windows),
-            "Jalium integration tests require Windows — jalium.native.platform is Windows-only.");
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            Assert.Skip("Jalium integration tests require Windows — jalium.native.platform is Windows-only.");
     }
 
     [Fact]
