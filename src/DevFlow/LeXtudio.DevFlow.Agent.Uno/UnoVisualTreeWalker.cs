@@ -42,7 +42,7 @@ public sealed class UnoVisualTreeWalker : IVisualTreeWalker
         var elements = new List<ElementInfo>();
         foreach (var windowRoot in windowRoots)
         {
-            var windowInfo = CreateElementInfo(windowRoot, null);
+            var windowInfo = CreateElementInfo(windowRoot, null, windowRoot);
             if (windowInfo != null)
                 elements.Add(windowInfo);
         }
@@ -173,7 +173,7 @@ public sealed class UnoVisualTreeWalker : IVisualTreeWalker
         return window;
     }
 
-    private ElementInfo? CreateElementInfo(object element, string? parentId)
+    private ElementInfo? CreateElementInfo(object element, string? parentId, object? windowRoot = null)
     {
         if (element == null)
             return null;
@@ -200,7 +200,8 @@ public sealed class UnoVisualTreeWalker : IVisualTreeWalker
                 IsFocused = SafeGet(() => GetBoolProperty(element, "IsFocused", false), false),
                 Opacity = SafeGet(() => GetDoubleProperty(element, "Opacity", 1.0), 1.0),
                 NativeType = element.GetType().FullName,
-                FrameworkProperties = SafeGet(() => GetFrameworkProperties(element)) ?? new Dictionary<string, string?>()
+                FrameworkProperties = SafeGet(() => GetFrameworkProperties(element)) ?? new Dictionary<string, string?>(),
+                Bounds = SafeGet(() => GetElementBounds(element, windowRoot)),
             };
         }
         catch
@@ -231,7 +232,7 @@ public sealed class UnoVisualTreeWalker : IVisualTreeWalker
             foreach (var child in children)
             {
                 ElementInfo? childInfo = null;
-                try { childInfo = CreateElementInfo(child, elementInfo.Id); }
+                try { childInfo = CreateElementInfo(child, elementInfo.Id, windowRoot); }
                 catch { /* skip the child, keep walking siblings */ }
                 if (childInfo != null)
                     elementInfo.Children.Add(childInfo);
@@ -251,6 +252,58 @@ public sealed class UnoVisualTreeWalker : IVisualTreeWalker
     {
         try { return getter(); }
         catch { return fallback; }
+    }
+
+    // Bounds in window-content DIP coordinates (top-left origin, matches
+    // screenshot pixel coordinates at scale 1). Uses TransformToVisual(root)
+    // so every element reports its origin relative to the content root.
+    private static BoundsInfo? GetElementBounds(object element, object? root)
+    {
+        if (root == null) return null;
+
+        var transformToVisual = element.GetType()
+            .GetMethods(BindingFlags.Public | BindingFlags.Instance)
+            .FirstOrDefault(m => m.Name == "TransformToVisual" && m.GetParameters().Length == 1);
+        if (transformToVisual == null) return null;
+
+        var transform = transformToVisual.Invoke(element, new[] { root });
+        if (transform == null) return null;
+
+        var w = GetDoubleProperty(element, "ActualWidth");
+        var h = GetDoubleProperty(element, "ActualHeight");
+        if (w is null or <= 0 || h is null or <= 0) return null;
+
+        var pointType = FindType2("Windows.Foundation.Point");
+        if (pointType == null) return null;
+
+        var origin = Activator.CreateInstance(pointType, 0.0, 0.0);
+        var transformPoint = transform.GetType().GetMethod("TransformPoint", BindingFlags.Public | BindingFlags.Instance);
+        var transformed = transformPoint?.Invoke(transform, new[] { origin });
+        if (transformed == null) return null;
+
+        var x = GetDoubleProperty(transformed, "X");
+        var y = GetDoubleProperty(transformed, "Y");
+        if (x is null || y is null) return null;
+
+        return new BoundsInfo { X = x.Value, Y = y.Value, Width = w.Value, Height = h.Value };
+    }
+
+    private static double? GetDoubleProperty(object? target, string name)
+    {
+        if (target == null) return null;
+        var val = target.GetType().GetProperty(name, BindingFlags.Public | BindingFlags.Instance)?.GetValue(target);
+        return val switch { double d => d, float f => f, int i => i, long l => l, _ => null };
+    }
+
+    private static Type? FindType2(params string[] names)
+    {
+        foreach (var n in names)
+        {
+            var t = System.AppDomain.CurrentDomain.GetAssemblies()
+                .Select(a => a.GetType(n)).FirstOrDefault(x => x != null);
+            if (t != null) return t;
+        }
+        return null;
     }
 
     private List<object> GetChildren(object element)

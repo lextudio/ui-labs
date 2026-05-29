@@ -153,32 +153,44 @@ public static class MacOSNativeInput
     private const uint kCGEventMouseMoved = 5;
     private const uint kCGEventLeftMouseDragged = 6;
     private const uint kCGMouseButtonLeft = 0;
+    private const int kCGMouseEventClickState = 1;   // CGEventField value for click count
+    // kCGEventSourceStatePrivate = -1: private stateful source so button-down
+    // persists across events and AppKit/Uno see IsLeftButtonPressed = true.
+    private const int kCGEventSourceStatePrivate = -1;
 
     [SupportedOSPlatform("macos")]
     public static bool TryMouseDrag(double fromX, double fromY, double toX, double toY,
-        int steps = 24, int stepDelayMs = 16, int holdAfterDownMs = 60)
+        int steps = 24, int stepDelayMs = 16, int holdAfterDownMs = 200)
     {
         if (steps < 1) steps = 1;
 
-        // 1) Move to the start, 2) press, 3) interpolate drags past the
-        // tear-off threshold, 4) release. Delays let the tracker's 16 ms poll
-        // sample intermediate positions and the button-down state.
-        if (!PostMouse(kCGEventMouseMoved, fromX, fromY)) return false;
-        Sleep(stepDelayMs);
-        if (!PostMouse(kCGEventLeftMouseDown, fromX, fromY)) return false;
-        Sleep(holdAfterDownMs);
-
-        for (int i = 1; i <= steps; i++)
+        // Private stateful source: the source tracks button state, so
+        // kCGEventLeftMouseDragged events inherit the button-down from the
+        // preceding kCGEventLeftMouseDown, giving AppKit a coherent gesture.
+        var source = CGEventSourceCreate(kCGEventSourceStatePrivate);
+        try
         {
-            double t = (double)i / steps;
-            double x = fromX + (toX - fromX) * t;
-            double y = fromY + (toY - fromY) * t;
-            if (!PostMouse(kCGEventLeftMouseDragged, x, y)) return false;
+            if (!PostMouse(kCGEventMouseMoved, fromX, fromY, source)) return false;
             Sleep(stepDelayMs);
-        }
+            if (!PostMouse(kCGEventLeftMouseDown, fromX, fromY, source)) return false;
+            Sleep(holdAfterDownMs);
 
-        if (!PostMouse(kCGEventLeftMouseUp, toX, toY)) return false;
-        return true;
+            for (int i = 1; i <= steps; i++)
+            {
+                double t = (double)i / steps;
+                double x = fromX + (toX - fromX) * t;
+                double y = fromY + (toY - fromY) * t;
+                if (!PostMouse(kCGEventLeftMouseDragged, x, y, source)) return false;
+                Sleep(stepDelayMs);
+            }
+
+            PostMouse(kCGEventLeftMouseUp, toX, toY, source);
+            return true;
+        }
+        finally
+        {
+            if (source != IntPtr.Zero) CFRelease(source);
+        }
     }
 
     private static void Sleep(int ms)
@@ -186,13 +198,25 @@ public static class MacOSNativeInput
         if (ms > 0) global::System.Threading.Thread.Sleep(ms);
     }
 
-    private static bool PostMouse(uint type, double x, double y)
+    private static bool PostMouse(uint type, double x, double y, IntPtr source)
     {
-        var evt = CGEventCreateMouseEvent(IntPtr.Zero, type, new CGPoint { X = x, Y = y }, kCGMouseButtonLeft);
+        var evt = CGEventCreateMouseEvent(source, type, new CGPoint { X = x, Y = y }, kCGMouseButtonLeft);
         if (evt == IntPtr.Zero) return false;
-        try { CGEventPost(CGHIDEventTap, evt); return true; }
+        try
+        {
+            if (type == kCGEventLeftMouseDown || type == kCGEventLeftMouseUp)
+                CGEventSetIntegerValueField(evt, kCGMouseEventClickState, 1);
+            CGEventPost(CGHIDEventTap, evt);
+            return true;
+        }
         finally { CFRelease(evt); }
     }
+
+    [DllImport(ApplicationServices)]
+    private static extern IntPtr CGEventSourceCreate(int stateID);
+
+    [DllImport(ApplicationServices)]
+    private static extern void CGEventSetIntegerValueField(IntPtr @event, int field, long value);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct CGPoint { public double X; public double Y; }
