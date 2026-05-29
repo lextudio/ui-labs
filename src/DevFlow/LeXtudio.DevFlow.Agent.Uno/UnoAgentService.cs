@@ -36,12 +36,26 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
         selectorScreenshots = false,
         tap = true,
         scroll = true,
+        drag = RuntimeInformation.IsOSPlatform(OSPlatform.OSX),
         structuredErrors = true,
         appTheme = true,
         webview = true,
         webviewCdp = true,
-        multiWindow = true
+        multiWindow = true,
+        windowContentOrigin = TryDescribeWindowOrigin(),
     };
+
+    // Diagnostic: the window content origin (screen points) + scale used to
+    // map element/window coordinates to the global space for drag injection.
+    private static object? TryDescribeWindowOrigin()
+    {
+        try
+        {
+            var m = TryGetWindowMetrics();
+            return m is null ? null : new { x = m.Value.OriginX, y = m.Value.OriginY, scale = m.Value.Scale };
+        }
+        catch { return null; }
+    }
 
     protected override Task<string?> GetApplicationNameAsync()
     {
@@ -145,6 +159,233 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
                 () => TryInvokeAutomationPattern(target) ? CreateSuccessResult(SimulationModes.Reflection, elementId) : null,
                 () => TryInvokeOnClick(target) ? CreateSuccessResult(SimulationModes.Reflection, elementId) : null);
         });
+    }
+
+    private static readonly string DragLogPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "devflow_drag.log");
+
+    internal static void DragLog(string message)
+    {
+        try
+        {
+            System.IO.File.AppendAllText(DragLogPath,
+                $"{DateTime.Now:HH:mm:ss.fff} {message}{Environment.NewLine}");
+        }
+        catch { /* logging must never throw */ }
+    }
+
+    protected override Task<object?> TryDragResponseAsync(DragRequest request)
+    {
+        // OS-level press → drag → release. Needed because some gestures (e.g.
+        // the Reactor docking tab tear-off) poll the *global* cursor / button
+        // state rather than listening to XAML pointer events, so only a real
+        // synthesized OS drag exercises them.
+        return InvokeOnUiThreadAsync<object?>(() =>
+        {
+            DragLog($"--- drag request from=({request.FromX},{request.FromY}) to=({request.ToX},{request.ToY}) d=({request.Dx},{request.Dy}) fromId={request.FromId} toId={request.ToId} steps={request.Steps}");
+            if (!RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+                return new { ok = false, reason = "drag injection is implemented for macOS only" };
+
+            TryActivateMainWindow();
+
+            // Diagnostic path: coordinates are already absolute global points.
+            if (request.Global && request.FromX.HasValue && request.FromY.HasValue)
+            {
+                double gToX = request.ToX ?? (request.FromX.Value + (request.Dx ?? 0));
+                double gToY = request.ToY ?? (request.FromY.Value + (request.Dy ?? 0));
+                var gSteps = request.Steps is > 0 ? request.Steps.Value : 24;
+                DragLog($"drag(global): from=({request.FromX},{request.FromY}) to=({gToX},{gToY}) steps={gSteps}");
+                var gok = MacOSNativeInput.TryMouseDrag(request.FromX.Value, request.FromY.Value, gToX, gToY, gSteps);
+                DragLog($"drag(global): TryMouseDrag returned {gok}");
+                return new { ok = gok, mode = "native-global", from = new { x = request.FromX, y = request.FromY }, to = new { x = gToX, y = gToY }, steps = gSteps };
+            }
+
+            var metrics = TryGetWindowMetrics();
+            if (metrics is null)
+                return new { ok = false, reason = "could not resolve window metrics (AppWindow.Position)" };
+            var m = metrics.Value;
+
+            if (!TryResolveScreenPoint(request.FromId, request.FromX, request.FromY, m, out var fromX, out var fromY))
+                return new { ok = false, reason = "could not resolve source point (need fromId or fromX/fromY)" };
+
+            double toX, toY;
+            if (TryResolveScreenPoint(request.ToId, request.ToX, request.ToY, m, out var tx, out var ty))
+            {
+                toX = tx; toY = ty;
+            }
+            else if (request.Dx.HasValue || request.Dy.HasValue)
+            {
+                // Deltas are in screenshot pixels too → convert to points.
+                toX = fromX + (request.Dx ?? 0) / m.Scale;
+                toY = fromY + (request.Dy ?? 0) / m.Scale;
+            }
+            else
+            {
+                return new { ok = false, reason = "could not resolve target point (need toId, toX/toY, or dx/dy)" };
+            }
+
+            var steps = request.Steps is > 0 ? request.Steps.Value : 24;
+            DragLog($"drag: posting global from=({fromX},{fromY}) to=({toX},{toY}) steps={steps}");
+            var ok = MacOSNativeInput.TryMouseDrag(fromX, fromY, toX, toY, steps);
+            DragLog($"drag: TryMouseDrag returned {ok}");
+            return new
+            {
+                ok,
+                mode = "native",
+                from = new { x = fromX, y = fromY },
+                to = new { x = toX, y = toY },
+                steps,
+                note = ok ? null : "CGEventPost returned without delivery — grant Accessibility (TCC) permission to the host process",
+            };
+        });
+    }
+
+    // Resolves a drag endpoint to global screen points (top-left origin).
+    // X/Y, when supplied, are WINDOW-CONTENT-relative points (matching the
+    // coordinate space of a window screenshot at scale 1) — the window content
+    // origin is added here. An element id resolves to that element's centre in
+    // the same window-content space. Both then add the on-screen origin.
+    private bool TryResolveScreenPoint(string? elementId, double? winX, double? winY,
+        (double OriginX, double OriginY, double Scale) m, out double x, out double y)
+    {
+        x = 0; y = 0;
+
+        // local point in window-content POINTS.
+        (double X, double Y)? localPt = null;
+        if (winX.HasValue && winY.HasValue)
+        {
+            // Request coords are screenshot PIXELS → divide by scale for points.
+            localPt = (winX.Value / m.Scale, winY.Value / m.Scale);
+        }
+        else if (!string.IsNullOrWhiteSpace(elementId))
+        {
+            var target = _treeWalker.FindElementObjectById(elementId);
+            if (target != null)
+                localPt = TryGetElementWindowDip(target); // already in DIPs (points)
+        }
+
+        if (localPt is null)
+        {
+            DragLog($"resolve: local=null (winX={winX} winY={winY} id={elementId})");
+            return false;
+        }
+
+        x = m.OriginX + localPt.Value.X;
+        y = m.OriginY + localPt.Value.Y;
+        DragLog($"resolve: localPt=({localPt.Value.X},{localPt.Value.Y}) origin=({m.OriginX},{m.OriginY}) scale={m.Scale} => globalPt=({x},{y})");
+        return true;
+    }
+
+    // Element centre in window-content-relative DIPs (TransformToVisual(root)).
+    private static (double X, double Y)? TryGetElementWindowDip(object element)
+    {
+        var transformToVisual = element.GetType().GetMethods(BindingFlags.Public | BindingFlags.Instance)
+            .FirstOrDefault(m => string.Equals(m.Name, "TransformToVisual", StringComparison.Ordinal) && m.GetParameters().Length == 1);
+        var root = GetRootForTransform(element);
+        if (transformToVisual == null || root == null)
+            return null;
+
+        var transform = transformToVisual.Invoke(element, new[] { root });
+        var actualWidth = GetDoubleProperty(element, "ActualWidth");
+        var actualHeight = GetDoubleProperty(element, "ActualHeight");
+        if (transform == null || actualWidth is null or <= 0 || actualHeight is null or <= 0)
+            return null;
+
+        var pointType = FindType("Windows.Foundation.Point");
+        if (pointType == null)
+            return null;
+
+        var center = Activator.CreateInstance(pointType, actualWidth.Value / 2d, actualHeight.Value / 2d);
+        var transformPoint = transform.GetType().GetMethod("TransformPoint", BindingFlags.Public | BindingFlags.Instance);
+        var transformed = transformPoint?.Invoke(transform, new[] { center });
+        if (transformed == null)
+            return null;
+
+        var x = GetDoubleProperty(transformed, "X");
+        var y = GetDoubleProperty(transformed, "Y");
+        if (x is null || y is null)
+            return null;
+
+        return (x.Value, y.Value);
+    }
+
+    // The window's content-area top-left in global screen points.
+    // AppWindow.Position is in physical pixels; divide by the rasterization
+    // scale to get points (the space CGEvent mouse coordinates use).
+    // Window content origin in screen POINTS plus the rasterization scale.
+    // AppWindow.Position is in physical pixels; CGEvent mouse coordinates and
+    // element DIPs are in points, so origin-in-points = positionPx / scale.
+    private static (double OriginX, double OriginY, double Scale)? TryGetWindowMetrics()
+    {
+        var window = TryGetMainWindow();
+        if (window == null)
+        {
+            DragLog("metrics: window=null");
+            return null;
+        }
+
+        var appWindow = GetPropertyValueAny(window, "AppWindow");
+        var position = appWindow != null ? GetPropertyValueAny(appWindow, "Position") : null;
+        if (position == null)
+        {
+            DragLog($"metrics: position=null (appWindow={(appWindow == null ? "null" : "ok")})");
+            return null;
+        }
+
+        var px = GetInt32Member(position, "X");
+        var py = GetInt32Member(position, "Y");
+        var scale = TryGetRasterizationScale(window);
+        if (scale <= 0) scale = 1.0;
+        DragLog($"metrics: posPx=({px},{py}) scale={scale}");
+        if (px is null || py is null)
+            return null;
+
+        return (px.Value / scale, py.Value / scale, scale);
+    }
+
+    // PointInt32.X/Y surface as fields (not properties) under Uno's projection,
+    // so the property-only reader misses them. Read property OR field.
+    private static int? GetInt32Member(object target, string name)
+    {
+        var t = target.GetType();
+        var prop = t.GetProperty(name, BindingFlags.Public | BindingFlags.Instance);
+        var raw = prop != null ? prop.GetValue(target)
+            : t.GetField(name, BindingFlags.Public | BindingFlags.Instance)?.GetValue(target);
+        return raw switch
+        {
+            int i => i,
+            long l => (int)l,
+            double d => (int)d,
+            _ => null,
+        };
+    }
+
+    private static object? TryGetMainWindow()
+    {
+        var appType = FindType("Microsoft.UI.Xaml.Application", "Windows.UI.Xaml.Application");
+        var app = appType?.GetProperty("Current", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
+        return GetPropertyValueAny(app, "MainWindow") ?? GetPropertyValueAny(app, "CurrentWindow");
+    }
+
+    // Bring the app window to the foreground so synthesized OS pointer events
+    // land on it (and the docking tear-off's PointerPressed routing fires).
+    private static void TryActivateMainWindow()
+    {
+        try
+        {
+            var window = TryGetMainWindow();
+            var activate = window?.GetType().GetMethod("Activate", BindingFlags.Public | BindingFlags.Instance, Type.EmptyTypes);
+            activate?.Invoke(window, null);
+            DragLog($"activate: window={(window == null ? "null" : "ok")} activateInvoked={activate != null}");
+        }
+        catch (Exception ex) { DragLog($"activate: ex {ex.Message}"); }
+    }
+
+    private static double TryGetRasterizationScale(object window)
+    {
+        var content = GetPropertyValueAny(window, "Content");
+        var xamlRoot = content != null ? GetPropertyValueAny(content, "XamlRoot") : null;
+        var scale = xamlRoot != null ? GetDoubleProperty(xamlRoot, "RasterizationScale") : null;
+        return scale ?? 1.0;
     }
 
     protected override Task<bool> TryScrollAsync(string elementId, double deltaX, double deltaY)

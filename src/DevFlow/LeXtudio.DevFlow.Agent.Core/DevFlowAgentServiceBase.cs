@@ -62,6 +62,9 @@ public abstract class DevFlowAgentServiceBase : IDisposable
         => await TryFocusAsync(elementId).ConfigureAwait(false) ? CreateSuccessResult(elementId: elementId) : null;
     protected virtual async Task<object?> TryBackResponseAsync()
         => await TryBackAsync().ConfigureAwait(false) ? CreateSuccessResult() : null;
+    // Drag is opt-in per agent (needs OS-level pointer injection). Default: unsupported.
+    protected virtual Task<object?> TryDragResponseAsync(DragRequest request)
+        => Task.FromResult<object?>(null);
     protected virtual object GetCapabilities() => new
     {
         screenshots = true,
@@ -111,6 +114,7 @@ public abstract class DevFlowAgentServiceBase : IDisposable
         _server.MapPost("/api/v1/ui/actions/back", HandleBackAsync);
         _server.MapPost("/api/v1/ui/actions/batch", HandleBatchAsync);
         _server.MapPost("/api/v1/ui/actions/scroll", HandleScrollAsync);
+        _server.MapPost("/api/v1/ui/actions/drag", HandleDragAsync);
         _server.MapGet("/api/v1/device/app/theme", HandleThemeGetAsync);
         _server.MapPut("/api/v1/device/app/theme", HandleThemeSetAsync);
         _server.MapGet("/api/v1/invoke/actions", HandleListInvokeActionsAsync);
@@ -212,6 +216,18 @@ public abstract class DevFlowAgentServiceBase : IDisposable
 
         var result = await TryScrollResponseAsync(payload.Id, payload.DeltaX, payload.DeltaY).ConfigureAwait(false);
         return result != null ? HttpResponse.Json(result) : HttpResponse.Error($"Scroll target '{payload.Id}' could not be scrolled", 404);
+    }
+
+    private async Task<HttpResponse> HandleDragAsync(HttpRequest request)
+    {
+        var payload = request.BodyAs<DragRequest>();
+        if (payload == null)
+            return HttpResponse.Error("Request must include a JSON body", 400);
+
+        var result = await TryDragResponseAsync(payload).ConfigureAwait(false);
+        return result != null
+            ? HttpResponse.Json(result)
+            : HttpResponse.Error("Drag is not supported by this agent", 501);
     }
 
     private async Task<HttpResponse> HandleFillAsync(HttpRequest request)
@@ -344,6 +360,28 @@ public abstract class DevFlowAgentServiceBase : IDisposable
     {
         public string? ElementId { get; set; }
         public string? Text { get; set; }
+    }
+
+    /// <summary>
+    /// Body for <c>POST /api/v1/ui/actions/drag</c>. Drives a real OS-level
+    /// press → drag → release. Source/target may be given as element ids
+    /// (resolved to their on-screen centre) and/or absolute screen points;
+    /// a delta (<see cref="Dx"/>/<see cref="Dy"/>) offsets the source.
+    /// </summary>
+    protected sealed class DragRequest
+    {
+        public string? FromId { get; set; }
+        public string? ToId { get; set; }
+        public double? FromX { get; set; }
+        public double? FromY { get; set; }
+        public double? ToX { get; set; }
+        public double? ToY { get; set; }
+        public double? Dx { get; set; }
+        public double? Dy { get; set; }
+        public int? Steps { get; set; }
+        /// <summary>When true, From/To are absolute global screen points (no
+        /// window-origin/scale mapping). Used for diagnostics.</summary>
+        public bool Global { get; set; }
     }
 
     private sealed class ActionRequest

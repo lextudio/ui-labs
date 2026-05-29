@@ -136,6 +136,70 @@ public static class MacOSNativeInput
             CFRelease(handle);
     }
 
+    // ── Mouse injection (independent of the keyboard IsAvailable gate) ──────
+    //
+    // Posts a real press → drag → release gesture into the HID event stream so
+    // that code reading the *global* cursor / button state (e.g. the Reactor
+    // docking tear-off tracker, which polls CGEventSourceButtonState +
+    // CGEventGetLocation on a timer) observes it exactly as it would a human
+    // drag. Coordinates are Quartz global display points, top-left origin —
+    // the same space CGEventGetLocation reports.
+    //
+    // Like the keyboard path, delivery requires macOS Accessibility (TCC)
+    // permission for the host process; without it CGEventPost silently no-ops.
+
+    private const uint kCGEventLeftMouseDown = 1;
+    private const uint kCGEventLeftMouseUp = 2;
+    private const uint kCGEventMouseMoved = 5;
+    private const uint kCGEventLeftMouseDragged = 6;
+    private const uint kCGMouseButtonLeft = 0;
+
+    [SupportedOSPlatform("macos")]
+    public static bool TryMouseDrag(double fromX, double fromY, double toX, double toY,
+        int steps = 24, int stepDelayMs = 16, int holdAfterDownMs = 60)
+    {
+        if (steps < 1) steps = 1;
+
+        // 1) Move to the start, 2) press, 3) interpolate drags past the
+        // tear-off threshold, 4) release. Delays let the tracker's 16 ms poll
+        // sample intermediate positions and the button-down state.
+        if (!PostMouse(kCGEventMouseMoved, fromX, fromY)) return false;
+        Sleep(stepDelayMs);
+        if (!PostMouse(kCGEventLeftMouseDown, fromX, fromY)) return false;
+        Sleep(holdAfterDownMs);
+
+        for (int i = 1; i <= steps; i++)
+        {
+            double t = (double)i / steps;
+            double x = fromX + (toX - fromX) * t;
+            double y = fromY + (toY - fromY) * t;
+            if (!PostMouse(kCGEventLeftMouseDragged, x, y)) return false;
+            Sleep(stepDelayMs);
+        }
+
+        if (!PostMouse(kCGEventLeftMouseUp, toX, toY)) return false;
+        return true;
+    }
+
+    private static void Sleep(int ms)
+    {
+        if (ms > 0) global::System.Threading.Thread.Sleep(ms);
+    }
+
+    private static bool PostMouse(uint type, double x, double y)
+    {
+        var evt = CGEventCreateMouseEvent(IntPtr.Zero, type, new CGPoint { X = x, Y = y }, kCGMouseButtonLeft);
+        if (evt == IntPtr.Zero) return false;
+        try { CGEventPost(CGHIDEventTap, evt); return true; }
+        finally { CFRelease(evt); }
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct CGPoint { public double X; public double Y; }
+
+    [DllImport(ApplicationServices)]
+    private static extern IntPtr CGEventCreateMouseEvent(IntPtr source, uint mouseType, CGPoint mouseCursorPosition, uint mouseButton);
+
     [DllImport(ApplicationServices)]
     private static extern IntPtr CGEventCreateKeyboardEvent(IntPtr source, ushort virtualKey, [MarshalAs(UnmanagedType.I1)] bool keyDown);
 
