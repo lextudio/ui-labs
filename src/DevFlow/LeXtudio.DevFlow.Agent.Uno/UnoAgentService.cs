@@ -173,6 +173,45 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
         catch { /* logging must never throw */ }
     }
 
+    /// <summary>
+    /// Injects a global-coordinate left-click via CGEvent (macOS only).
+    /// Accepts x/y in global screen coordinates (same space as CGEventGetLocation).
+    /// When global=false, x/y are window-relative logical points converted to screen.
+    /// </summary>
+    protected override Task<object?> TryClickResponseAsync(ClickRequest request)
+    {
+        return InvokeOnUiThreadAsync<object?>(() =>
+        {
+            DragLog($"--- click request x={request.X} y={request.Y} global={request.Global} clicks={request.ClickCount}");
+            if (!RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+                return new { ok = false, reason = "click injection implemented for macOS only" };
+
+            TryActivateMainWindow();
+
+            double x, y;
+            if (request.Global)
+            {
+                x = request.X!.Value;
+                y = request.Y!.Value;
+            }
+            else
+            {
+                // Convert window-relative logical points to global screen points
+                var metrics = TryGetWindowMetrics();
+                if (metrics is null)
+                    return new { ok = false, reason = "could not resolve window metrics" };
+                var m = metrics.Value;
+                x = m.OriginX + request.X!.Value * m.Scale;
+                y = m.OriginY + request.Y!.Value * m.Scale;
+            }
+
+            DragLog($"click: injecting at ({x:F1},{y:F1}) count={request.ClickCount}");
+            var ok = MacOSNativeInput.TryMouseClick(x, y, request.ClickCount);
+            DragLog($"click: TryMouseClick returned {ok}");
+            return new { ok, mode = request.Global ? "native-global" : "native-window", x, y };
+        });
+    }
+
     protected override Task<object?> TryDragResponseAsync(DragRequest request)
     {
         // OS-level press → drag → release. Needed because some gestures (e.g.

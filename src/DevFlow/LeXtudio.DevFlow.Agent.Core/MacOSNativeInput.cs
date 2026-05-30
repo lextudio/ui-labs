@@ -158,6 +158,31 @@ public static class MacOSNativeInput
     // persists across events and AppKit/Uno see IsLeftButtonPressed = true.
     private const int kCGEventSourceStatePrivate = -1;
 
+    /// <summary>Injects a left-click (MouseDown + MouseUp) at the given global screen point.
+    /// Uses a private stateful source so button state is coherent with any concurrent drag.</summary>
+    [SupportedOSPlatform("macos")]
+    public static bool TryMouseClick(double x, double y, int clickCount = 1)
+    {
+        var source = CGEventSourceCreate(kCGEventSourceStatePrivate);
+        try
+        {
+            if (!PostMouse(kCGEventMouseMoved,     x, y, source)) return false;
+            Sleep(16);
+            for (int c = 0; c < clickCount; c++)
+            {
+                if (!PostMouse(kCGEventLeftMouseDown, x, y, source)) return false;
+                Sleep(50);
+                if (!PostMouse(kCGEventLeftMouseUp,   x, y, source)) return false;
+                if (c < clickCount - 1) Sleep(80);
+            }
+            return true;
+        }
+        finally
+        {
+            if (source != IntPtr.Zero) CFRelease(source);
+        }
+    }
+
     [SupportedOSPlatform("macos")]
     public static bool TryMouseDrag(double fromX, double fromY, double toX, double toY,
         int steps = 24, int stepDelayMs = 16, int holdAfterDownMs = 200)

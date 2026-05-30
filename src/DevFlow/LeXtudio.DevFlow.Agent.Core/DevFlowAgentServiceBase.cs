@@ -115,6 +115,7 @@ public abstract class DevFlowAgentServiceBase : IDisposable
         _server.MapPost("/api/v1/ui/actions/batch", HandleBatchAsync);
         _server.MapPost("/api/v1/ui/actions/scroll", HandleScrollAsync);
         _server.MapPost("/api/v1/ui/actions/drag", HandleDragAsync);
+        _server.MapPost("/api/v1/ui/actions/click", HandleClickAsync);
         _server.MapGet("/api/v1/device/app/theme", HandleThemeGetAsync);
         _server.MapPut("/api/v1/device/app/theme", HandleThemeSetAsync);
         _server.MapGet("/api/v1/invoke/actions", HandleListInvokeActionsAsync);
@@ -228,6 +229,42 @@ public abstract class DevFlowAgentServiceBase : IDisposable
         return result != null
             ? HttpResponse.Json(result)
             : HttpResponse.Error("Drag is not supported by this agent", 501);
+    }
+
+    /// <summary>
+    /// POST /api/v1/ui/actions/click — inject a global-coordinate left-click.
+    /// Body: { "x": number, "y": number, "global": true }
+    /// When global=true, x/y are absolute screen coordinates (no scaling).
+    /// When global=false (default), x/y are window-relative logical points.
+    /// The click is implemented as: MouseMoved → LeftMouseDown → LeftMouseUp via CGEvent on macOS.
+    /// This is preferred over /api/v1/ui/tap (which requires an element ID) for elements
+    /// that do not have x:AutomationProperties.AutomationId set.
+    /// </summary>
+    private async Task<HttpResponse> HandleClickAsync(HttpRequest request)
+    {
+        var payload = request.BodyAs<ClickRequest>();
+        if (payload == null)
+            return HttpResponse.Error("Request must include a JSON body with x and y", 400);
+        if (payload.X == null || payload.Y == null)
+            return HttpResponse.Error("Both x and y are required", 400);
+
+        var result = await TryClickResponseAsync(payload).ConfigureAwait(false);
+        return result != null
+            ? HttpResponse.Json(result)
+            : HttpResponse.Error("Click is not supported by this agent", 501);
+    }
+
+    protected virtual Task<object?> TryClickResponseAsync(ClickRequest request)
+        => Task.FromResult<object?>(null);
+
+    protected sealed class ClickRequest
+    {
+        public double? X { get; set; }
+        public double? Y { get; set; }
+        /// <summary>When true, X/Y are absolute global screen points (same space as CGEvent mouse coords).</summary>
+        public bool Global { get; set; } = true;
+        /// <summary>Number of clicks (1=single, 2=double).</summary>
+        public int ClickCount { get; set; } = 1;
     }
 
     private async Task<HttpResponse> HandleFillAsync(HttpRequest request)
@@ -515,6 +552,9 @@ public abstract class DevFlowAgentServiceBase : IDisposable
 
     private static async Task<(bool success, string? returnValue, string? returnType, string? error)> InvokeMethodAsync(MethodInfo method, object?[] args)
     {
+        // Note: UI-thread marshalling is the responsibility of the [DevFlowAction] method itself.
+        // Methods that need the UI thread should use DispatcherQueue.TryEnqueue internally
+        // (see the DockDiagnostics pattern: RunOnUI helper wraps the call).
         try
         {
             var result = method.Invoke(null, args);

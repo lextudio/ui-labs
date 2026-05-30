@@ -308,31 +308,47 @@ public sealed class UnoVisualTreeWalker : IVisualTreeWalker
 
     private List<object> GetChildren(object element)
     {
-        var children = GetChildrenFromVisualTreeHelper(element).ToList();
-        if (children.Count > 0)
-            return children;
+        // Collect from all discovery paths and deduplicate by reference.
+        // Previously short-circuited after VisualTreeHelper — this missed
+        // extra Panel.Children that the visual tree helper didn't expose yet
+        // (e.g. Uno Grid children that are added dynamically and haven't
+        // completed a layout pass when the tree is captured).
+        var seen = new System.Collections.Generic.HashSet<object>(ReferenceEqualityComparer.Instance);
+        var children = new List<object>();
 
-        var content = GetPropertyValue(element, "Content");
-        if (content != null && content is not string)
-            children.Add(content);
-
-        var items = GetPropertyValue(element, "Items") as IEnumerable;
-        if (items != null)
+        foreach (var c in GetChildrenFromVisualTreeHelper(element))
         {
-            foreach (var item in items)
-            {
-                if (item != null)
-                    children.Add(item);
-            }
+            if (seen.Add(c)) children.Add(c);
         }
 
+        // For Panel types: also walk the Children collection directly.
+        // This catches grid children that VisualTreeHelper may return fewer
+        // of (e.g. when column/row definitions collapse some of them to 0×0).
         var panelChildren = GetPropertyValue(element, "Children") as IEnumerable;
         if (panelChildren != null)
         {
             foreach (var child in panelChildren)
             {
-                if (child != null)
+                if (child != null && seen.Add(child))
                     children.Add(child);
+            }
+        }
+
+        // If still empty, fall back to Content / Items.
+        if (children.Count == 0)
+        {
+            var content = GetPropertyValue(element, "Content");
+            if (content != null && content is not string && seen.Add(content))
+                children.Add(content);
+
+            var items = GetPropertyValue(element, "Items") as IEnumerable;
+            if (items != null)
+            {
+                foreach (var item in items)
+                {
+                    if (item != null && seen.Add(item))
+                        children.Add(item);
+                }
             }
         }
 
