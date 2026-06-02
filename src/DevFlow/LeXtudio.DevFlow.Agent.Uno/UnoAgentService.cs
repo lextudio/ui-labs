@@ -995,89 +995,282 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
             if (webViewCapture != null)
                 return webViewCapture;
 
-            var root = !string.IsNullOrWhiteSpace(elementId)
-                ? _treeWalker.FindElementObjectById(elementId)
-                : GetRootVisual();
-            if (root == null)
+            // Element capture targets a single element; whole-window capture composites
+            // EVERY open window (main + floating child windows) so child windows are visible.
+            if (!string.IsNullOrWhiteSpace(elementId))
             {
-                LogScreenshotFailure("root visual is null.");
-                return null;
-            }
-
-            var actualWidth = GetDoubleProperty(root, "ActualWidth");
-            var actualHeight = GetDoubleProperty(root, "ActualHeight");
-
-            var renderTargetBitmapType = FindType(
-                "Microsoft.UI.Xaml.Media.Imaging.RenderTargetBitmap",
-                "Windows.UI.Xaml.Media.Imaging.RenderTargetBitmap");
-            if (renderTargetBitmapType == null)
-            {
-                LogScreenshotFailure("RenderTargetBitmap type not found.");
-                return null;
-            }
-
-            var renderTargetBitmap = Activator.CreateInstance(renderTargetBitmapType);
-            if (renderTargetBitmap == null)
-            {
-                LogScreenshotFailure("could not create RenderTargetBitmap instance.");
-                return null;
-            }
-
-            var renderAsync = FindRenderAsyncMethod(renderTargetBitmapType, root, actualWidth, actualHeight)
-                ?? renderTargetBitmapType.GetMethod("RenderAsync", new[] { root.GetType() })
-                ?? renderTargetBitmapType.GetMethod("RenderAsync", [typeof(object)])
-                ?? renderTargetBitmapType.GetMethods(BindingFlags.Public | BindingFlags.Instance)
-                    .FirstOrDefault(method => method.Name == "RenderAsync" && method.GetParameters().Length == 1);
-            if (renderAsync == null)
-            {
-                LogScreenshotFailure("RenderAsync method not found.");
-                return null;
-            }
-
-            var renderArgs = CreateRenderAsyncArguments(renderAsync, root, actualWidth, actualHeight);
-            await AwaitAsync(renderAsync.Invoke(renderTargetBitmap, renderArgs)).ConfigureAwait(false);
-
-            var pixelWidth = GetIntProperty(renderTargetBitmap, "PixelWidth");
-            var pixelHeight = GetIntProperty(renderTargetBitmap, "PixelHeight");
-            if (pixelWidth <= 0 || pixelHeight <= 0)
-            {
-                if (OperatingSystem.IsWindows())
+                var element = _treeWalker.FindElementObjectById(elementId);
+                if (element == null)
                 {
-                    var windowCapture = CaptureWindowsWindowScreenshot();
-                    if (windowCapture != null)
-                        return windowCapture;
+                    LogScreenshotFailure("root visual is null.");
+                    return null;
                 }
 
-                LogScreenshotFailure($"invalid size {pixelWidth}x{pixelHeight}.");
-                return null;
+                var single = await RenderObjectToBgraAsync(element).ConfigureAwait(false);
+                if (single == null)
+                {
+                    if (OperatingSystem.IsWindows())
+                    {
+                        var windowCapture = CaptureWindowsWindowScreenshot();
+                        if (windowCapture != null)
+                            return windowCapture;
+                    }
+                    LogScreenshotFailure("element render returned no pixels.");
+                    return null;
+                }
+
+                var encoded = await EncodePngAsync(single.Value.Width, single.Value.Height, single.Value.Pixels).ConfigureAwait(false);
+                if (encoded == null)
+                    LogScreenshotFailure("EncodePngAsync returned null.");
+                return encoded;
             }
 
-            var getPixelsAsync = renderTargetBitmapType.GetMethod("GetPixelsAsync", Type.EmptyTypes);
-            if (getPixelsAsync == null)
+            var composite = await CaptureAllWindowsCompositeAsync().ConfigureAwait(false);
+            if (composite != null)
+                return composite;
+
+            if (OperatingSystem.IsWindows())
             {
-                LogScreenshotFailure("GetPixelsAsync method not found.");
-                return null;
+                var windowCapture = CaptureWindowsWindowScreenshot();
+                if (windowCapture != null)
+                    return windowCapture;
             }
 
-            var buffer = await AwaitAsync(getPixelsAsync.Invoke(renderTargetBitmap, null)).ConfigureAwait(false);
-            var pixels = BufferToByteArray(buffer);
-            if (pixels == null || pixels.Length == 0)
-            {
-                LogScreenshotFailure("pixel buffer conversion returned no data.");
-                return null;
-            }
-
-            var result = await EncodePngAsync(pixelWidth.GetValueOrDefault(), pixelHeight.GetValueOrDefault(), pixels).ConfigureAwait(false);
-            if (result == null)
-                LogScreenshotFailure("EncodePngAsync returned null.");
-
-            return result;
+            LogScreenshotFailure("composite capture returned null.");
+            return null;
         }
         catch (Exception ex)
         {
             LogScreenshotFailure(ex.ToString());
             return null;
         }
+    }
+
+    // Renders any XAML visual to a BGRA8 pixel buffer via RenderTargetBitmap. Returns null
+    // when the visual has no renderable size. Shared by element capture and the multi-window
+    // compositor.
+    private async Task<(int Width, int Height, byte[] Pixels)?> RenderObjectToBgraAsync(object root)
+    {
+        var actualWidth = GetDoubleProperty(root, "ActualWidth");
+        var actualHeight = GetDoubleProperty(root, "ActualHeight");
+
+        var renderTargetBitmapType = FindType(
+            "Microsoft.UI.Xaml.Media.Imaging.RenderTargetBitmap",
+            "Windows.UI.Xaml.Media.Imaging.RenderTargetBitmap");
+        if (renderTargetBitmapType == null)
+        {
+            LogScreenshotFailure("RenderTargetBitmap type not found.");
+            return null;
+        }
+
+        var renderTargetBitmap = Activator.CreateInstance(renderTargetBitmapType);
+        if (renderTargetBitmap == null)
+        {
+            LogScreenshotFailure("could not create RenderTargetBitmap instance.");
+            return null;
+        }
+
+        var renderAsync = FindRenderAsyncMethod(renderTargetBitmapType, root, actualWidth, actualHeight)
+            ?? renderTargetBitmapType.GetMethod("RenderAsync", new[] { root.GetType() })
+            ?? renderTargetBitmapType.GetMethod("RenderAsync", [typeof(object)])
+            ?? renderTargetBitmapType.GetMethods(BindingFlags.Public | BindingFlags.Instance)
+                .FirstOrDefault(method => method.Name == "RenderAsync" && method.GetParameters().Length == 1);
+        if (renderAsync == null)
+        {
+            LogScreenshotFailure("RenderAsync method not found.");
+            return null;
+        }
+
+        var renderArgs = CreateRenderAsyncArguments(renderAsync, root, actualWidth, actualHeight);
+        await AwaitAsync(renderAsync.Invoke(renderTargetBitmap, renderArgs)).ConfigureAwait(false);
+
+        var pixelWidth = GetIntProperty(renderTargetBitmap, "PixelWidth");
+        var pixelHeight = GetIntProperty(renderTargetBitmap, "PixelHeight");
+        if (pixelWidth <= 0 || pixelHeight <= 0)
+            return null;
+
+        var getPixelsAsync = renderTargetBitmapType.GetMethod("GetPixelsAsync", Type.EmptyTypes);
+        if (getPixelsAsync == null)
+        {
+            LogScreenshotFailure("GetPixelsAsync method not found.");
+            return null;
+        }
+
+        var buffer = await AwaitAsync(getPixelsAsync.Invoke(renderTargetBitmap, null)).ConfigureAwait(false);
+        var pixels = BufferToByteArray(buffer);
+        if (pixels == null || pixels.Length == 0)
+        {
+            LogScreenshotFailure("pixel buffer conversion returned no data.");
+            return null;
+        }
+
+        return (pixelWidth.GetValueOrDefault(), pixelHeight.GetValueOrDefault(), pixels);
+    }
+
+    // Captures EVERY open window (main + floating child windows) and composites them into a
+    // single image positioned by each window's screen origin, so child windows appear where
+    // they actually are. Falls back to a cascade offset when a window reports no usable
+    // position (e.g. natively-positioned floating windows on macOS), so they remain visible
+    // instead of stacking exactly on top of the main window.
+    private async Task<byte[]?> CaptureAllWindowsCompositeAsync()
+    {
+        var windows = _treeWalker.GetAllWindows();
+        DragLog($"composite: enumerated {windows.Count} window(s)");
+        if (windows.Count == 0)
+        {
+            LogScreenshotFailure("no windows enumerated.");
+            return null;
+        }
+
+        var mainWindow = TryGetMainWindow();
+        var rendered = new List<(double X, double Y, int W, int H, byte[] Px, bool HasPos, bool IsMain)>();
+
+        foreach (var window in windows)
+        {
+            object? root = _treeWalker.GetWindowContentRoot(window);
+            var isMain = mainWindow != null && ReferenceEquals(window, mainWindow);
+            if (root == null)
+            {
+                DragLog($"composite: skip isMain={isMain} reason=null-root");
+                continue;
+            }
+
+            var rootW = GetDoubleProperty(root, "ActualWidth");
+            var rootH = GetDoubleProperty(root, "ActualHeight");
+            (int Width, int Height, byte[] Pixels)? bgra;
+            try { bgra = await RenderObjectToBgraAsync(root).ConfigureAwait(false); }
+            catch (Exception ex) { DragLog($"composite: render EXCEPTION isMain={isMain}: {ex.Message}"); continue; }
+            if (bgra == null)
+            {
+                DragLog($"composite: skip isMain={isMain} reason=render-null rootSize={rootW:F0}x{rootH:F0} rootType={root.GetType().Name}");
+                continue;
+            }
+
+            var (px, py, hasPos) = TryGetWindowOriginPixels(window);
+            rendered.Add((px, py, bgra.Value.Width, bgra.Value.Height, bgra.Value.Pixels, hasPos, isMain));
+            DragLog($"composite: window isMain={isMain} pos=({px:F0},{py:F0}) hasPos={hasPos} size={bgra.Value.Width}x{bgra.Value.Height}");
+        }
+
+        if (rendered.Count == 0)
+        {
+            LogScreenshotFailure("no windows rendered.");
+            return null;
+        }
+
+        // Single window → return it directly (exact original behavior, no composite overhead).
+        if (rendered.Count == 1)
+            return await EncodePngAsync(rendered[0].W, rendered[0].H, rendered[0].Px).ConfigureAwait(false);
+
+        // Draw order: main window first (bottom), child windows on top.
+        rendered.Sort((a, b) => a.IsMain == b.IsMain ? 0 : (a.IsMain ? -1 : 1));
+
+        // Faithful layout by reported screen position (correct on Windows). But AppWindow.Position
+        // is unreliable for natively-positioned floating windows on macOS, producing a huge,
+        // mostly-empty canvas. Measure the "fill ratio"; if positions look bogus, fall back to a
+        // clean tiled contact-sheet so every child window is fully visible.
+        double minX = rendered.Min(r => r.X);
+        double minY = rendered.Min(r => r.Y);
+        double posMaxX = rendered.Max(r => r.X + r.W);
+        double posMaxY = rendered.Max(r => r.Y + r.H);
+        long posCanvasArea = (long)Math.Ceiling(posMaxX - minX) * (long)Math.Ceiling(posMaxY - minY);
+        long windowsArea = rendered.Sum(r => (long)r.W * r.H);
+        bool allHavePos = rendered.All(r => r.HasPos || r.IsMain);
+        double fillRatio = posCanvasArea > 0 ? (double)windowsArea / posCanvasArea : 0;
+
+        if (allHavePos && fillRatio >= 0.5)
+        {
+            int cw = (int)Math.Ceiling(posMaxX - minX);
+            int ch = (int)Math.Ceiling(posMaxY - minY);
+            DragLog($"composite: faithful layout {cw}x{ch} fill={fillRatio:F2}");
+            var canvas = new byte[cw * ch * 4];
+            foreach (var r in rendered)
+                BlitBgra(canvas, cw, ch, r.Px, r.W, r.H, (int)Math.Round(r.X - minX), (int)Math.Round(r.Y - minY));
+            return await EncodePngAsync(cw, ch, canvas).ConfigureAwait(false);
+        }
+
+        // Tiled contact-sheet fallback: lay windows out left-to-right (main first), top-aligned,
+        // with a gap and an opaque backdrop so transparent window edges read clearly.
+        const int Gap = 24;
+        int tileW = rendered.Sum(r => r.W) + Gap * (rendered.Count + 1);
+        int tileH = rendered.Max(r => r.H) + Gap * 2;
+        DragLog($"composite: tiled layout {tileW}x{tileH} fill={fillRatio:F2} allHavePos={allHavePos}");
+        var tiled = new byte[tileW * tileH * 4];
+        FillBgra(tiled, 0x30, 0x2D, 0x2D, 0xFF); // VS-style dark backdrop #2D2D30 (B,G,R,A)
+        int cursorX = Gap;
+        foreach (var r in rendered)
+        {
+            BlitBgra(tiled, tileW, tileH, r.Px, r.W, r.H, cursorX, Gap);
+            cursorX += r.W + Gap;
+        }
+        return await EncodePngAsync(tileW, tileH, tiled).ConfigureAwait(false);
+    }
+
+    // Fills a BGRA buffer with a solid color.
+    private static void FillBgra(byte[] buffer, byte b, byte g, byte r, byte a)
+    {
+        for (int i = 0; i + 3 < buffer.Length; i += 4)
+        {
+            buffer[i] = b;
+            buffer[i + 1] = g;
+            buffer[i + 2] = r;
+            buffer[i + 3] = a;
+        }
+    }
+
+    // Alpha-composites a source BGRA buffer onto the destination at (offX, offY).
+    private static void BlitBgra(byte[] dst, int dstW, int dstH, byte[] src, int srcW, int srcH, int offX, int offY)
+    {
+        for (int y = 0; y < srcH; y++)
+        {
+            int dy = offY + y;
+            if (dy < 0 || dy >= dstH) continue;
+            for (int x = 0; x < srcW; x++)
+            {
+                int dx = offX + x;
+                if (dx < 0 || dx >= dstW) continue;
+                int si = (y * srcW + x) * 4;
+                int di = (dy * dstW + dx) * 4;
+                if (si + 3 >= src.Length) continue;
+                byte sa = src[si + 3];
+                if (sa == 0) continue; // fully transparent → keep what's underneath
+                if (sa == 255)
+                {
+                    dst[di] = src[si];
+                    dst[di + 1] = src[si + 1];
+                    dst[di + 2] = src[si + 2];
+                    dst[di + 3] = 255;
+                    continue;
+                }
+                // Source-over alpha blend.
+                int ia = 255 - sa;
+                dst[di] = (byte)((src[si] * sa + dst[di] * ia) / 255);
+                dst[di + 1] = (byte)((src[si + 1] * sa + dst[di + 1] * ia) / 255);
+                dst[di + 2] = (byte)((src[si + 2] * sa + dst[di + 2] * ia) / 255);
+                dst[di + 3] = (byte)(sa + dst[di + 3] * ia / 255);
+            }
+        }
+    }
+
+    // Returns a window's content-area screen origin in PIXELS, and whether a real position
+    // was available. Uses AppWindow.Position (physical px). hasPos=false when it cannot be read.
+    private static (double X, double Y, bool HasPos) TryGetWindowOriginPixels(object window)
+    {
+        try
+        {
+            var appWindow = GetPropertyValueAny(window, "AppWindow");
+            var position = appWindow != null ? GetPropertyValueAny(appWindow, "Position") : null;
+            if (position == null)
+                return (0, 0, false);
+            var px = GetInt32Member(position, "X");
+            var py = GetInt32Member(position, "Y");
+            if (px is null || py is null)
+                return (0, 0, false);
+            // (0,0) is treated as "no real position" because Uno reports it for windows whose
+            // OS placement bypassed AppWindow.Move (native floating windows on macOS).
+            var hasPos = px.Value != 0 || py.Value != 0;
+            return (px.Value, py.Value, hasPos);
+        }
+        catch { return (0, 0, false); }
     }
 
     private async Task<byte[]?> TryCaptureWebView2ScreenshotAsync()

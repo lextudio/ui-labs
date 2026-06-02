@@ -727,6 +727,44 @@ public sealed class MewUIAgentService : DevFlowAgentServiceBase
         if (clientSize.Width <= 0 || clientSize.Height <= 0)
             return null;
 
+        // window.Handle is an NSView (content view), not NSWindow.
+        // Call [view window] to get the NSWindow, then windowNumber for the CGWindowID.
+        var nsView = window.Handle;
+        var nsWindow = nsView != 0 ? objc_msgSend_ret(nsView, sel_registerName("window")) : 0;
+        uint cgWindowId = nsWindow != 0
+            ? (uint)objc_msgSend_int(nsWindow, sel_registerName("windowNumber"))
+            : 0u;
+
+        // screencapture -l <windowId> correctly handles Metal/custom-rendered windows
+        // that CGWindowListCreateImage/FromArray return blank for.
+        if (cgWindowId != 0)
+        {
+            var tmp = System.IO.Path.GetTempFileName() + ".png";
+            try
+            {
+                var psi = new System.Diagnostics.ProcessStartInfo("screencapture",
+                    $"-l {cgWindowId} -x \"{tmp}\"")
+                {
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                };
+                using var proc = System.Diagnostics.Process.Start(psi);
+                proc?.WaitForExit(5000);
+                if (System.IO.File.Exists(tmp))
+                {
+                    var bytes = System.IO.File.ReadAllBytes(tmp);
+                    if (bytes.Length > 0)
+                        return bytes;
+                }
+            }
+            finally
+            {
+                if (System.IO.File.Exists(tmp))
+                    System.IO.File.Delete(tmp);
+            }
+        }
+
+        // Fallback: screen region composite (works when window is on top)
         var screenPosition = window.ClientToScreen(new Point(0, 0));
         var bounds = new CGRect(screenPosition.X, screenPosition.Y, clientSize.Width, clientSize.Height);
         var image = CGWindowListCreateImage(bounds, CGWindowListOption.OnScreenOnly, 0, CGWindowImageOption.BestResolution);
@@ -1003,7 +1041,16 @@ public sealed class MewUIAgentService : DevFlowAgentServiceBase
     private static extern IntPtr CGWindowListCreateImage(CGRect screenBounds, CGWindowListOption listOption, uint windowID, CGWindowImageOption imageOption);
 
     [DllImport("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics")]
+    private static extern IntPtr CGWindowListCreateImageFromArray(CGRect screenBounds, IntPtr windowArray, CGWindowImageOption imageOption);
+
+    [DllImport("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics")]
     private static extern void CGImageRelease(IntPtr image);
+
+    [DllImport("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")]
+    private static extern IntPtr CFNumberCreate(IntPtr allocator, CFNumberType theType, ref uint valuePtr);
+
+    [DllImport("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")]
+    private static extern IntPtr CFArrayCreate(IntPtr allocator, [MarshalAs(UnmanagedType.LPArray)] IntPtr[] values, nint numValues, IntPtr callBacks);
 
     private enum CGWindowListOption : uint
     {
@@ -1014,6 +1061,11 @@ public sealed class MewUIAgentService : DevFlowAgentServiceBase
     private enum CGWindowImageOption : uint
     {
         BestResolution = 1 << 2,
+    }
+
+    private enum CFNumberType : int
+    {
+        SInt32 = 3,
     }
 
     private enum CFStringEncoding : uint
@@ -1059,6 +1111,15 @@ public sealed class MewUIAgentService : DevFlowAgentServiceBase
         public int Bottom;
     }
 
+    [DllImport("/usr/lib/libobjc.A.dylib")]
+    private static extern nint sel_registerName(string name);
+
+    [DllImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
+    private static extern nint objc_msgSend_ret(nint receiver, nint selector);
+
+    [DllImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
+    private static extern int objc_msgSend_int(nint receiver, nint selector);
+
     [StructLayout(LayoutKind.Sequential)]
     private readonly struct CGRect
     {
@@ -1074,5 +1135,6 @@ public sealed class MewUIAgentService : DevFlowAgentServiceBase
             Width = width;
             Height = height;
         }
+
     }
 }

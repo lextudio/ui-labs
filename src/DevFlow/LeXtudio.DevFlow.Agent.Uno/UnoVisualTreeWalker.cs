@@ -140,8 +140,34 @@ public sealed class UnoVisualTreeWalker : IVisualTreeWalker
         return _applicationType.GetProperty("Current", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
     }
 
+    // All distinct open windows (main + floating child windows), de-duplicated.
+    public IReadOnlyList<object> GetAllWindows()
+    {
+        var app = GetCurrentApplication();
+        if (app == null)
+            return Array.Empty<object>();
+
+        var list = new List<object>();
+        foreach (var window in GetWindows(app))
+        {
+            if (window != null && !list.Any(w => ReferenceEquals(w, window)))
+                list.Add(window);
+        }
+        return list;
+    }
+
+    // The content root of a window (its Content, or the window itself as a fallback).
+    public object? GetWindowContentRoot(object window) => GetWindowRoot(window);
+
     private IEnumerable<object> GetWindows(object app)
     {
+        // Primary source on Uno: ApplicationHelper.Windows (static) tracks EVERY open window,
+        // including floating child windows. WinUI3 dropped UWP's Application.Windows, so the
+        // per-app instance property below usually finds nothing — this static list is what
+        // surfaces floating windows for multi-window screenshots.
+        foreach (var window in GetWindowsFromApplicationHelper())
+            yield return window;
+
         var windowsProperty = app.GetType().GetProperty("Windows", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
         if (windowsProperty != null)
         {
@@ -162,6 +188,25 @@ public sealed class UnoVisualTreeWalker : IVisualTreeWalker
 
         if (mainWindow != null)
             yield return mainWindow;
+    }
+
+    private IEnumerable<object> GetWindowsFromApplicationHelper()
+    {
+        var helperType = FindType(
+            "Uno.UI.ApplicationHelper",
+            "Microsoft.UI.Xaml.ApplicationHelper",
+            "Windows.UI.Xaml.ApplicationHelper");
+        var windowsValue = helperType?
+            .GetProperty("Windows", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)?
+            .GetValue(null);
+        if (windowsValue is IEnumerable enumerable)
+        {
+            foreach (var window in enumerable)
+            {
+                if (window != null)
+                    yield return window;
+            }
+        }
     }
 
     private object? GetWindowRoot(object window)
