@@ -30,19 +30,21 @@ public sealed class UnoVisualTreeWalker : IVisualTreeWalker
         if (app == null)
             return new List<ElementInfo>();
 
-        var windowRoots = GetWindows(app)
-            .Select(GetWindowRoot)
-            .Where(root => root != null)
-            .Cast<object>()
-            .ToList();
+        var windowRoots = new List<object>();
+        foreach (var root in GetWindows(app).Select(GetWindowRoot).Where(root => root != null).Cast<object>())
+        {
+            if (!windowRoots.Any(existing => ReferenceEquals(existing, root)))
+                windowRoots.Add(root);
+        }
 
         if (windowRoots.Count == 0)
             return new List<ElementInfo>();
 
         var elements = new List<ElementInfo>();
+        var idCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         foreach (var windowRoot in windowRoots)
         {
-            var windowInfo = CreateElementInfo(windowRoot, null, windowRoot);
+            var windowInfo = CreateElementInfo(windowRoot, null, windowRoot, idCounts);
             if (windowInfo != null)
                 elements.Add(windowInfo);
         }
@@ -74,13 +76,19 @@ public sealed class UnoVisualTreeWalker : IVisualTreeWalker
         if (app == null)
             return null;
 
+        var requestedId = SplitOccurrenceId(id, out var requestedOccurrence);
+        var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var roots = new List<object>();
         foreach (var window in GetWindows(app))
         {
             var root = GetWindowRoot(window);
             if (root == null)
                 continue;
+            if (roots.Any(existing => ReferenceEquals(existing, root)))
+                continue;
+            roots.Add(root);
 
-            var found = FindElementObjectById(root, id);
+            var found = FindElementObjectById(root, requestedId, requestedOccurrence, counts);
             if (found != null)
                 return found;
         }
@@ -99,14 +107,25 @@ public sealed class UnoVisualTreeWalker : IVisualTreeWalker
             .FirstOrDefault(root => root != null);
     }
 
-    private object? FindElementObjectById(object element, string id)
+    private object? FindElementObjectById(
+        object element,
+        string id,
+        int requestedOccurrence,
+        Dictionary<string, int> counts)
     {
-        if (string.Equals(GetElementId(element), id, StringComparison.OrdinalIgnoreCase))
-            return element;
+        var elementId = GetElementId(element);
+        if (string.Equals(elementId, id, StringComparison.OrdinalIgnoreCase))
+        {
+            counts.TryGetValue(id, out var count);
+            count++;
+            counts[id] = count;
+            if (count == requestedOccurrence)
+                return element;
+        }
 
         foreach (var child in GetChildren(element))
         {
-            var found = FindElementObjectById(child, id);
+            var found = FindElementObjectById(child, id, requestedOccurrence, counts);
             if (found != null)
                 return found;
         }
@@ -218,7 +237,11 @@ public sealed class UnoVisualTreeWalker : IVisualTreeWalker
         return window;
     }
 
-    private ElementInfo? CreateElementInfo(object element, string? parentId, object? windowRoot = null)
+    private ElementInfo? CreateElementInfo(
+        object element,
+        string? parentId,
+        object? windowRoot,
+        Dictionary<string, int> idCounts)
     {
         if (element == null)
             return null;
@@ -231,14 +254,16 @@ public sealed class UnoVisualTreeWalker : IVisualTreeWalker
         ElementInfo elementInfo;
         try
         {
+            var rawId = SafeGet(() => GetElementId(element)) ?? string.Empty;
+            var elementId = MakeOccurrenceId(rawId, idCounts);
             elementInfo = new ElementInfo
             {
-                Id = SafeGet(() => GetElementId(element)) ?? string.Empty,
+                Id = elementId,
                 ParentId = parentId,
                 Type = element.GetType().Name,
                 FullType = element.GetType().FullName ?? string.Empty,
                 Framework = "uno",
-                AutomationId = SafeGet(() => GetElementId(element)),
+                AutomationId = rawId,
                 Text = SafeGet(() => GetElementText(element)),
                 IsVisible = SafeGet(() => GetBoolProperty(element, "Visibility", true) && GetBoolProperty(element, "IsVisible", true), true),
                 IsEnabled = SafeGet(() => GetBoolProperty(element, "IsEnabled", true), true),
@@ -277,7 +302,7 @@ public sealed class UnoVisualTreeWalker : IVisualTreeWalker
             foreach (var child in children)
             {
                 ElementInfo? childInfo = null;
-                try { childInfo = CreateElementInfo(child, elementInfo.Id, windowRoot); }
+                try { childInfo = CreateElementInfo(child, elementInfo.Id, windowRoot, idCounts); }
                 catch { /* skip the child, keep walking siblings */ }
                 if (childInfo != null)
                     elementInfo.Children.Add(childInfo);
@@ -285,6 +310,33 @@ public sealed class UnoVisualTreeWalker : IVisualTreeWalker
         }
 
         return elementInfo;
+    }
+
+    private static string MakeOccurrenceId(string rawId, Dictionary<string, int> idCounts)
+    {
+        if (string.IsNullOrWhiteSpace(rawId))
+            return string.Empty;
+
+        idCounts.TryGetValue(rawId, out var count);
+        count++;
+        idCounts[rawId] = count;
+        return count == 1 ? rawId : $"{rawId}#{count}";
+    }
+
+    private static string SplitOccurrenceId(string id, out int occurrence)
+    {
+        occurrence = 1;
+        var hashIndex = id.LastIndexOf('#');
+        if (hashIndex <= 0 || hashIndex == id.Length - 1)
+            return id;
+
+        if (int.TryParse(id[(hashIndex + 1)..], out var parsed) && parsed > 0)
+        {
+            occurrence = parsed;
+            return id[..hashIndex];
+        }
+
+        return id;
     }
 
     private static T? SafeGet<T>(Func<T?> getter) where T : class

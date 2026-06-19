@@ -550,7 +550,24 @@ public abstract class DevFlowAgentServiceBase : IDisposable
         return result;
     }
 
-    private static async Task<(bool success, string? returnValue, string? returnType, string? error)> InvokeMethodAsync(MethodInfo method, object?[] args)
+    private sealed record InvokeExceptionInfo(
+        string Type,
+        string Message,
+        string? StackTrace,
+        string? TargetSite,
+        InvokeExceptionInfo? Inner);
+
+    private static InvokeExceptionInfo DescribeException(Exception ex)
+    {
+        return new InvokeExceptionInfo(
+            ex.GetType().FullName ?? ex.GetType().Name,
+            ex.Message,
+            ex.StackTrace,
+            ex.TargetSite?.ToString(),
+            ex.InnerException is null ? null : DescribeException(ex.InnerException));
+    }
+
+    private static async Task<(bool success, string? returnValue, string? returnType, string? error, InvokeExceptionInfo? exception)> InvokeMethodAsync(MethodInfo method, object?[] args)
     {
         // Note: UI-thread marshalling is the responsibility of the [DevFlowAction] method itself.
         // Methods that need the UI thread should use DispatcherQueue.TryEnqueue internally
@@ -564,25 +581,25 @@ public abstract class DevFlowAgentServiceBase : IDisposable
                 if (task.GetType().IsGenericType)
                 {
                     var value = task.GetType().GetProperty("Result")?.GetValue(task);
-                    return (true, value?.ToString(), task.GetType().GetGenericArguments()[0].Name, null);
+                    return (true, value?.ToString(), task.GetType().GetGenericArguments()[0].Name, null, null);
                 }
 
-                return (true, null, "void", null);
+                return (true, null, "void", null, null);
             }
 
             if (method.ReturnType == typeof(void))
-                return (true, null, "void", null);
+                return (true, null, "void", null, null);
 
-            return (true, result?.ToString(), method.ReturnType.Name, null);
+            return (true, result?.ToString(), method.ReturnType.Name, null, null);
         }
         catch (TargetInvocationException tie)
         {
             var inner = tie.InnerException ?? tie;
-            return (false, null, null, $"{inner.GetType().Name}: {inner.Message}");
+            return (false, null, null, $"{inner.GetType().Name}: {inner.Message}", DescribeException(inner));
         }
         catch (Exception ex)
         {
-            return (false, null, null, $"{ex.GetType().Name}: {ex.Message}");
+            return (false, null, null, $"{ex.GetType().Name}: {ex.Message}", DescribeException(ex));
         }
     }
 
@@ -618,14 +635,22 @@ public abstract class DevFlowAgentServiceBase : IDisposable
         {
             var body = request.BodyAs<InvokeActionRequest>();
             var args = ConvertInvokeArgs(action.Method.GetParameters(), body?.Args);
-            var (success, returnValue, returnType, error) = await InvokeMethodAsync(action.Method, args).ConfigureAwait(false);
+            var (success, returnValue, returnType, error, exception) = await InvokeMethodAsync(action.Method, args).ConfigureAwait(false);
             return success
                 ? HttpResponse.Json(new { success = true, action = action.Name, returnValue, returnType })
-                : HttpResponse.Error($"Action '{actionName}' failed: {error}", 400);
+                : HttpResponse.Error(
+                    $"Action '{actionName}' failed: {error}",
+                    400,
+                    reason: "invoke_action_failed",
+                    details: new { action = action.Name, exception });
         }
         catch (Exception ex)
         {
-            return HttpResponse.Error($"Argument error: {ex.Message}", 400);
+            return HttpResponse.Error(
+                $"Argument error: {ex.Message}",
+                400,
+                reason: "invoke_argument_error",
+                details: new { action = actionName, exception = DescribeException(ex) });
         }
     }
 

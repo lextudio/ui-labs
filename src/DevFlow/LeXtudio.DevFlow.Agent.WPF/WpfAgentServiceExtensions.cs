@@ -12,7 +12,11 @@ public static class WpfAgentServiceExtensions
         DevFlowAgentPortResolver.ApplyDefaultPort(options);
 
         var service = new WpfAgentService(options);
-        service.Start();
+
+        // Start the HTTP listener on a thread-pool thread so the caller (which may
+        // be on the WPF UI thread, e.g. inside App() constructor or OnStartup) is
+        // never blocked while the socket is being bound.
+        _ = System.Threading.Tasks.Task.Run(service.Start);
 
         app.Exit += async (_, _) =>
         {
