@@ -107,6 +107,7 @@ public abstract class DevFlowAgentServiceBase : IDisposable
         _server.MapGet("/api/v1/webview/screenshot", HandleWebViewScreenshotAsync);
         _server.MapPost("/api/v1/webview/cdp", HandleWebViewCdpAsync);
         _server.MapPost("/api/v1/ui/tap", HandleTapAsync);
+        _server.MapPost("/api/v1/ui/actions/right-tap", HandleRightTapAsync);
         _server.MapPost("/api/v1/ui/actions/fill", HandleFillAsync);
         _server.MapPost("/api/v1/ui/actions/clear", HandleClearAsync);
         _server.MapPost("/api/v1/ui/actions/focus", HandleFocusAsync);
@@ -208,6 +209,25 @@ public abstract class DevFlowAgentServiceBase : IDisposable
         var result = await TryTapResponseAsync(payload.Id).ConfigureAwait(false);
         return result != null ? HttpResponse.Json(result) : HttpResponse.Error($"Tap target '{payload.Id}' could not be activated", 404);
     }
+
+    /// <summary>
+    /// POST /api/v1/ui/actions/right-tap — right-click an element by id to open its context menu.
+    /// Body: { "id": "&lt;id&gt;" }. Mirrors /api/v1/ui/tap but injects a secondary (right) click.
+    /// </summary>
+    private async Task<HttpResponse> HandleRightTapAsync(HttpRequest request)
+    {
+        var payload = request.BodyAs<TapRequest>();
+        if (payload == null || string.IsNullOrWhiteSpace(payload.Id))
+            return HttpResponse.Error("Request must include a JSON body with an 'id' field", 400);
+
+        var result = await TryRightTapResponseAsync(payload.Id).ConfigureAwait(false);
+        return result != null
+            ? HttpResponse.Json(result)
+            : HttpResponse.Error($"Right-tap target '{payload.Id}' could not be activated", 404);
+    }
+
+    protected virtual Task<object?> TryRightTapResponseAsync(string elementId)
+        => Task.FromResult<object?>(null);
 
     private async Task<HttpResponse> HandleScrollAsync(HttpRequest request)
     {
@@ -331,6 +351,9 @@ public abstract class DevFlowAgentServiceBase : IDisposable
             {
                 case "tap":
                     response = await HandleTapAsync(new HttpRequest { Method = "POST", Body = JsonSerializer.Serialize(new TapRequest { Id = action.ElementId }) }).ConfigureAwait(false);
+                    break;
+                case "right-tap":
+                    response = await HandleRightTapAsync(new HttpRequest { Method = "POST", Body = JsonSerializer.Serialize(new TapRequest { Id = action.ElementId }) }).ConfigureAwait(false);
                     break;
                 case "fill":
                     response = await HandleFillAsync(new HttpRequest { Method = "POST", Body = JsonSerializer.Serialize(new FillRequest { ElementId = action.ElementId, Text = action.Text ?? string.Empty }) }).ConfigureAwait(false);

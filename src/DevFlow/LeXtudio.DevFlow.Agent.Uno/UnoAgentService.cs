@@ -26,6 +26,14 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
         _dispatcherQueue = GetDispatcherQueue();
     }
 
+    /// <summary>
+    /// Registers the host's main <c>Microsoft.UI.Xaml.Window</c> so the agent can find the visual
+    /// tree on WinUI 3 / WindowsAppSDK, which has no global window registry (Window.Current is null
+    /// and Application exposes no window list). Not needed on Uno desktop, where windows are
+    /// discovered automatically. Call once after creating/activating the main window.
+    /// </summary>
+    public static void RegisterWindow(object window) => UnoVisualTreeWalker.RegisteredWindow = window;
+
     protected override string AgentId => "LeXtudio.DevFlow.Agent";
     protected override string AgentName => "LeXtudio.DevFlow.Agent";
     protected override string FrameworkName => "uno";
@@ -35,6 +43,7 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
         elementScreenshots = true,
         selectorScreenshots = false,
         tap = true,
+        rightTap = RuntimeInformation.IsOSPlatform(OSPlatform.Windows),
         scroll = true,
         drag = RuntimeInformation.IsOSPlatform(OSPlatform.OSX),
         structuredErrors = true,
@@ -159,6 +168,49 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
                 () => TryInvokeAutomationPattern(target) ? CreateSuccessResult(SimulationModes.Reflection, elementId) : null,
                 () => TryInvokeOnClick(target) ? CreateSuccessResult(SimulationModes.Reflection, elementId) : null);
         });
+    }
+
+    protected override Task<object?> TryRightTapResponseAsync(string elementId)
+    {
+        return InvokeOnUiThreadAsync<object?>(() =>
+        {
+            var target = _treeWalker.FindElementObjectById(elementId);
+            if (target == null)
+                return null;
+
+            // A right-click only requires a hit-testable, visible element — unlike a left
+            // tap there is no semantic/automation fallback, since opening a context menu is
+            // inherently a pointer gesture. So inject a native secondary click at the element
+            // centre; this drives the real WinUI right-tap pipeline (RightTapped / flyouts).
+            return TryNativeRightTap(target)
+                ? CreateSuccessResult(SimulationModes.Native, elementId)
+                : null;
+        });
+    }
+
+    private static bool TryNativeRightTap(object element)
+    {
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            return false;
+
+        try
+        {
+            var hwnd = ResolveUnoHwnd();
+            if (hwnd == IntPtr.Zero)
+                return false;
+
+            WindowsNativeInput.TryBringToForeground(hwnd);
+
+            var clickPoint = TryGetElementClickPoint(element, hwnd);
+            if (clickPoint == null)
+                return false;
+
+            return WindowsNativeActions.TryRightTap(() => clickPoint);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static readonly string DragLogPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "devflow_drag.log");
@@ -1502,7 +1554,8 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
             "Windows.UI.Xaml.Application");
         var app = appType?.GetProperty("Current", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
         var window = GetPropertyValueAny(app, "MainWindow")
-            ?? GetPropertyValueAny(app, "CurrentWindow");
+            ?? GetPropertyValueAny(app, "CurrentWindow")
+            ?? UnoVisualTreeWalker.RegisteredWindow; // WinUI 3: no Application window list
         if (window == null)
             return null;
 
@@ -1537,7 +1590,10 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
 
         try
         {
-            if (!PrintWindow(hwnd, hdc, 0))
+            // PW_RENDERFULLCONTENT (2) is required to capture WinUI 3 / WindowsAppSDK windows, whose
+            // content is composed via DirectComposition; flags=0 yields a blank (white) frame.
+            const uint PW_RENDERFULLCONTENT = 2;
+            if (!PrintWindow(hwnd, hdc, PW_RENDERFULLCONTENT))
             {
                 var windowDc = GetWindowDC(hwnd);
                 if (windowDc == IntPtr.Zero)

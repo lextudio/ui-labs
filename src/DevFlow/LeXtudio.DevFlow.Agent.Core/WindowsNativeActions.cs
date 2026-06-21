@@ -15,6 +15,19 @@ public static class WindowsNativeActions
             && WindowsNativeInput.TrySendClick(screenPoint.X, screenPoint.Y);
     }
 
+    public static bool TryRightTap<TTarget>(TTarget target, Func<TTarget, WindowsScreenPoint?> pointResolver)
+        => TryRightTap(() => pointResolver(target));
+
+    public static bool TryRightTap(Func<WindowsScreenPoint?> pointResolver)
+    {
+        if (!OperatingSystem.IsWindows())
+            return false;
+
+        var point = pointResolver();
+        return point is WindowsScreenPoint screenPoint
+            && WindowsNativeInput.TrySendRightClick(screenPoint.X, screenPoint.Y);
+    }
+
     public static bool TryTextInput<TTarget>(TTarget target, Func<TTarget, WindowsScreenPoint?> pointResolver, string text, bool replace)
         => TryTextInput(() => pointResolver(target), text, replace);
 

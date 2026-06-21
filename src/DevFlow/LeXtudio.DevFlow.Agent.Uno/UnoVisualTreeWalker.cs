@@ -178,8 +178,17 @@ public sealed class UnoVisualTreeWalker : IVisualTreeWalker
     // The content root of a window (its Content, or the window itself as a fallback).
     public object? GetWindowContentRoot(object window) => GetWindowRoot(window);
 
+    // A window explicitly registered by the host app. WinUI 3 / WindowsAppSDK has no global window
+    // registry (Window.Current is null, Application has no Windows/MainWindow), so a host on that
+    // target must register its window for the agent to find the visual tree. Uno desktop discovers
+    // windows automatically and doesn't need this.
+    internal static object? RegisteredWindow { get; set; }
+
     private IEnumerable<object> GetWindows(object app)
     {
+        if (RegisteredWindow != null)
+            yield return RegisteredWindow;
+
         // Primary source on Uno: ApplicationHelper.Windows (static) tracks EVERY open window,
         // including floating child windows. WinUI3 dropped UWP's Application.Windows, so the
         // per-app instance property below usually finds nothing — this static list is what
