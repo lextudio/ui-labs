@@ -938,6 +938,11 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
         catch { return null; }
     }
 
+    protected override Task<T> DispatchOnUIThreadAsync<T>(Func<T> callback)
+    {
+        return InvokeOnUiThreadAsync(callback);
+    }
+
     private Task<T> InvokeOnUiThreadAsync<T>(Func<T> callback)
     {
         var dispatcherQueue = _dispatcherQueue;

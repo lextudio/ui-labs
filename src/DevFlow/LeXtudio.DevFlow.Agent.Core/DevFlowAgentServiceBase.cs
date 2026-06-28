@@ -590,14 +590,25 @@ public abstract class DevFlowAgentServiceBase : IDisposable
             ex.InnerException is null ? null : DescribeException(ex.InnerException));
     }
 
-    private static async Task<(bool success, string? returnValue, string? returnType, string? error, InvokeExceptionInfo? exception)> InvokeMethodAsync(MethodInfo method, object?[] args)
+    protected virtual Task<T> DispatchOnUIThreadAsync<T>(Func<T> callback)
     {
-        // Note: UI-thread marshalling is the responsibility of the [DevFlowAction] method itself.
-        // Methods that need the UI thread should use DispatcherQueue.TryEnqueue internally
-        // (see the DockDiagnostics pattern: RunOnUI helper wraps the call).
+        return Task.FromResult(callback());
+    }
+
+    private async Task<(bool success, string? returnValue, string? returnType, string? error, InvokeExceptionInfo? exception)> InvokeMethodAsync(MethodInfo method, object?[] args)
+    {
         try
         {
-            var result = method.Invoke(null, args);
+            var useUIThread = method.DeclaringType?.GetCustomAttribute<DevFlowUIThreadAttribute>() != null;
+            object? result;
+            if (useUIThread)
+            {
+                result = await DispatchOnUIThreadAsync(() => method.Invoke(null, args)).ConfigureAwait(false);
+            }
+            else
+            {
+                result = method.Invoke(null, args);
+            }
             if (result is Task task)
             {
                 await task.ConfigureAwait(false);
