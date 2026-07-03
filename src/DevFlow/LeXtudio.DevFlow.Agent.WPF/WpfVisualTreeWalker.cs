@@ -157,12 +157,14 @@ public class WpfVisualTreeWalker : IVisualTreeWalker
         {
             if (element is Window wind)
             {
+                // An unshown/unpositioned WPF Window reports Left/Top as NaN, which
+                // System.Text.Json cannot serialize; Finite() maps those to 0.
                 return new BoundsInfo
                 {
-                    X = wind.Left,
-                    Y = wind.Top,
-                    Width = wind.ActualWidth,
-                    Height = wind.ActualHeight
+                    X = Finite(wind.Left),
+                    Y = Finite(wind.Top),
+                    Width = Finite(wind.ActualWidth),
+                    Height = Finite(wind.ActualHeight)
                 };
             }
 
@@ -175,10 +177,10 @@ public class WpfVisualTreeWalker : IVisualTreeWalker
                     var point = transform.Transform(new System.Windows.Point(0, 0));
                     return new BoundsInfo
                     {
-                        X = point.X,
-                        Y = point.Y,
-                        Width = fe.ActualWidth,
-                        Height = fe.ActualHeight
+                        X = Finite(point.X),
+                        Y = Finite(point.Y),
+                        Width = Finite(fe.ActualWidth),
+                        Height = Finite(fe.ActualHeight)
                     };
                 }
             }
@@ -189,6 +191,10 @@ public class WpfVisualTreeWalker : IVisualTreeWalker
 
         return null;
     }
+
+    // WPF layout doubles are routinely NaN (unset) or Infinity (unconstrained Max*),
+    // neither of which is valid JSON under the default serializer options.
+    private static double Finite(double value) => double.IsFinite(value) ? value : 0d;
 
     private static Dictionary<string, string?> BuildNativeProperties(DependencyObject element, string stableId)
     {

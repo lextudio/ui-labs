@@ -529,6 +529,15 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
         if (window == null)
             return null;
 
+        // Under ProGPU the WPF RenderTargetBitmap/PngBitmapEncoder path is not
+        // available (it needs native milcore wpfgfx). Prefer ProGPU's own CPU
+        // back-buffer capture when the host is present, discovered by reflection so
+        // this agent keeps no hard dependency on ProGPU.Wpf. Tried before the size
+        // guard because ProGPU sizes come from the back buffer, not ActualWidth.
+        var progpuPng = TryCaptureViaProGpu(window);
+        if (progpuPng != null)
+            return progpuPng;
+
         var width = (int)Math.Ceiling(window.ActualWidth);
         var height = (int)Math.Ceiling(window.ActualHeight);
         if (width <= 0 || height <= 0)
@@ -547,6 +556,22 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
         using var ms = new MemoryStream();
         encoder.Save(ms);
         return ms.ToArray();
+    }
+
+    private static byte[]? TryCaptureViaProGpu(Window window)
+    {
+        try
+        {
+            var type = AppDomain.CurrentDomain.GetAssemblies()
+                .FirstOrDefault(a => a.GetName().Name == "ProGPU.Wpf")
+                ?.GetType("System.Windows.Media.ProGPU.ProGpuWpfScreenshot");
+            var method = type?.GetMethod("TryCapturePng", BindingFlags.Public | BindingFlags.Static);
+            return method?.Invoke(null, new object?[] { window }) as byte[];
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private byte[]? CaptureScreenshotOnUiThread(string? elementId, string? selector)
