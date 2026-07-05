@@ -7,12 +7,14 @@ namespace LeXtudio.DevFlow.Agent.Core;
 public abstract class DevFlowAgentServiceBase : IDisposable
 {
     private readonly AgentHttpServer _server;
+    private readonly Lazy<InvokeActionEntry[]> _actionDefinitions;
     private bool _started;
 
     protected DevFlowAgentServiceBase(AgentOptions? options = null)
     {
         Options = options ?? new AgentOptions();
         _server = new AgentHttpServer(Options.Port);
+        _actionDefinitions = new Lazy<InvokeActionEntry[]>(DiscoverActionDefinitions);
         RegisterRoutes();
     }
 
@@ -35,7 +37,7 @@ public abstract class DevFlowAgentServiceBase : IDisposable
     protected abstract string FrameworkName { get; }
     protected abstract Task<List<ElementInfo>> BuildTreeAsync();
     protected abstract Task<ElementInfo?> FindElementAsync(string id);
-    protected abstract Task<List<ElementInfo>> QueryElementsAsync(string? type = null, string? automationId = null, string? text = null);
+    protected abstract Task<List<ElementInfo>> QueryElementsAsync(string? type = null, string? automationId = null, string? text = null, int maxResults = 50, int maxDepth = 24);
     protected abstract Task<byte[]?> CaptureScreenshotAsync(string? elementId = null, string? selector = null);
     protected virtual Task<object?> GetWebViewContextsAsync() => Task.FromResult<object?>(new { contexts = Array.Empty<object>() });
     protected virtual Task<byte[]?> CaptureWebViewScreenshotAsync(string? contextId = null) => Task.FromResult<byte[]?>(null);
@@ -159,12 +161,22 @@ public abstract class DevFlowAgentServiceBase : IDisposable
         request.QueryParams.TryGetValue("type", out var type);
         request.QueryParams.TryGetValue("automationId", out var automationId);
         request.QueryParams.TryGetValue("text", out var text);
+        var maxResults = QueryInt(request, "maxResults", 50, 1, 500);
+        var maxDepth = QueryInt(request, "maxDepth", 24, 1, 96);
 
         if (type == null && automationId == null && text == null)
             return HttpResponse.Error("At least one query parameter required: type, automationId, text", 400);
 
-        var results = await QueryElementsAsync(type, automationId, text).ConfigureAwait(false);
+        var results = await QueryElementsAsync(type, automationId, text, maxResults, maxDepth).ConfigureAwait(false);
         return HttpResponse.Json(results);
+    }
+
+    private static int QueryInt(HttpRequest request, string name, int defaultValue, int min, int max)
+    {
+        if (!request.QueryParams.TryGetValue(name, out var raw) || !int.TryParse(raw, out var value))
+            return defaultValue;
+
+        return Math.Clamp(value, min, max);
     }
 
     private async Task<HttpResponse> HandleScreenshotAsync(HttpRequest request)
@@ -491,6 +503,8 @@ public abstract class DevFlowAgentServiceBase : IDisposable
         public string? Description { get; set; }
         public string DeclaringType { get; set; } = string.Empty;
         public MethodInfo Method { get; set; } = null!;
+        public object? Target { get; set; }
+        public bool RequiresUIThread { get; set; }
     }
 
     private sealed class InvokeActionRequest
@@ -498,7 +512,10 @@ public abstract class DevFlowAgentServiceBase : IDisposable
         public JsonElement[]? Args { get; set; }
     }
 
-    private static InvokeActionEntry[] DiscoverActions()
+    protected virtual Task<IReadOnlyList<object>> GetInvokeActionTargetsAsync()
+        => Task.FromResult<IReadOnlyList<object>>(Array.Empty<object>());
+
+    private static InvokeActionEntry[] DiscoverActionDefinitions()
     {
         var actions = new List<InvokeActionEntry>();
         foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
@@ -522,7 +539,24 @@ public abstract class DevFlowAgentServiceBase : IDisposable
                         Name = attr.Name,
                         Description = attr.Description,
                         DeclaringType = type.FullName ?? type.Name,
-                        Method = method
+                        Method = method,
+                        RequiresUIThread = method.DeclaringType?.GetCustomAttribute<DevFlowUIThreadAttribute>() != null
+                    });
+                }
+
+                foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.Instance))
+                {
+                    var attr = method.GetCustomAttribute<DevFlowActionAttribute>();
+                    if (attr == null)
+                        continue;
+
+                    actions.Add(new InvokeActionEntry
+                    {
+                        Name = attr.Name,
+                        Description = attr.Description,
+                        DeclaringType = type.FullName ?? type.Name,
+                        Method = method,
+                        RequiresUIThread = true
                     });
                 }
             }
@@ -532,6 +566,36 @@ public abstract class DevFlowAgentServiceBase : IDisposable
             .GroupBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
             .Select(g => g.First())
             .ToArray();
+    }
+
+    private InvokeActionEntry[] DiscoverActions()
+    {
+        return _actionDefinitions.Value;
+    }
+
+    private async Task<InvokeActionEntry?> ResolveActionAsync(string actionName)
+    {
+        var definition = Array.Find(DiscoverActions(), a => string.Equals(a.Name, actionName, StringComparison.OrdinalIgnoreCase));
+        if (definition == null || definition.Method.IsStatic)
+            return definition;
+
+        foreach (var target in await GetInvokeActionTargetsAsync().ConfigureAwait(false))
+        {
+            if (!definition.Method.DeclaringType!.IsInstanceOfType(target))
+                continue;
+
+            return new InvokeActionEntry
+            {
+                Name = definition.Name,
+                Description = definition.Description,
+                DeclaringType = definition.DeclaringType,
+                Method = definition.Method,
+                Target = target,
+                RequiresUIThread = definition.RequiresUIThread
+            };
+        }
+
+        return null;
     }
 
     private static object? ConvertInvokeArg(Type targetType, JsonElement argElement)
@@ -595,19 +659,19 @@ public abstract class DevFlowAgentServiceBase : IDisposable
         return Task.FromResult(callback());
     }
 
-    private async Task<(bool success, string? returnValue, string? returnType, string? error, InvokeExceptionInfo? exception)> InvokeMethodAsync(MethodInfo method, object?[] args)
+    private async Task<(bool success, string? returnValue, string? returnType, string? error, InvokeExceptionInfo? exception)> InvokeMethodAsync(InvokeActionEntry action, object?[] args)
     {
         try
         {
-            var useUIThread = method.DeclaringType?.GetCustomAttribute<DevFlowUIThreadAttribute>() != null;
+            var method = action.Method;
             object? result;
-            if (useUIThread)
+            if (action.RequiresUIThread)
             {
-                result = await DispatchOnUIThreadAsync(() => method.Invoke(null, args)).ConfigureAwait(false);
+                result = await DispatchOnUIThreadAsync(() => method.Invoke(action.Target, args)).ConfigureAwait(false);
             }
             else
             {
-                result = method.Invoke(null, args);
+                result = method.Invoke(action.Target, args);
             }
             if (result is Task task)
             {
@@ -637,7 +701,7 @@ public abstract class DevFlowAgentServiceBase : IDisposable
         }
     }
 
-    private Task<HttpResponse> HandleListInvokeActionsAsync(HttpRequest request)
+    private async Task<HttpResponse> HandleListInvokeActionsAsync(HttpRequest request)
     {
         var actions = DiscoverActions();
         var result = actions.Select(a => new
@@ -653,7 +717,7 @@ public abstract class DevFlowAgentServiceBase : IDisposable
             })
         });
 
-        return Task.FromResult(HttpResponse.Json(new { actions = result }));
+        return HttpResponse.Json(new { actions = result });
     }
 
     private async Task<HttpResponse> HandleInvokeActionAsync(HttpRequest request)
@@ -661,7 +725,7 @@ public abstract class DevFlowAgentServiceBase : IDisposable
         if (!request.RouteParams.TryGetValue("name", out var actionName) || string.IsNullOrWhiteSpace(actionName))
             return HttpResponse.Error("Action name required", 400);
 
-        var action = Array.Find(DiscoverActions(), a => string.Equals(a.Name, actionName, StringComparison.OrdinalIgnoreCase));
+        var action = await ResolveActionAsync(actionName).ConfigureAwait(false);
         if (action == null)
             return HttpResponse.Error($"Action '{actionName}' not found. Use GET /api/v1/invoke/actions to list available actions.", 404);
 
@@ -669,7 +733,7 @@ public abstract class DevFlowAgentServiceBase : IDisposable
         {
             var body = request.BodyAs<InvokeActionRequest>();
             var args = ConvertInvokeArgs(action.Method.GetParameters(), body?.Args);
-            var (success, returnValue, returnType, error, exception) = await InvokeMethodAsync(action.Method, args).ConfigureAwait(false);
+            var (success, returnValue, returnType, error, exception) = await InvokeMethodAsync(action, args).ConfigureAwait(false);
             return success
                 ? HttpResponse.Json(new { success = true, action = action.Name, returnValue, returnType })
                 : HttpResponse.Error(

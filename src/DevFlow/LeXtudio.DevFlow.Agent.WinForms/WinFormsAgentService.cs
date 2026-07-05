@@ -49,7 +49,7 @@ public sealed class WinFormsAgentService(AgentOptions? options = null) : DevFlow
         return InvokeOnUiThreadAsync<object?>(() => SendWebViewCdpCommandOnUiThreadAsync(contextId, method, @params));
     }
 
-    protected override Task<List<ElementInfo>> QueryElementsAsync(string? type = null, string? automationId = null, string? text = null)
+    protected override Task<List<ElementInfo>> QueryElementsAsync(string? type = null, string? automationId = null, string? text = null, int maxResults = 50, int maxDepth = 24)
     {
         var all = new List<ElementInfo>();
         foreach (var root in _walker.WalkTree()) Flatten(root, all);

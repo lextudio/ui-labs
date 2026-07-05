@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Threading;
 
 namespace LeXtudio.DevFlow.Agent.Core;
 
@@ -55,6 +56,67 @@ public static class WindowsNativeInput
             return false;
 
         mouse_event(MouseEventLeftDown, 0, 0, 0, UIntPtr.Zero);
+        mouse_event(MouseEventLeftUp, 0, 0, 0, UIntPtr.Zero);
+        return true;
+    }
+
+    public static bool TryMouseClick(int x, int y, int clickCount = 1)
+    {
+        if (!OperatingSystem.IsWindows() || clickCount < 1)
+            return false;
+
+        if (!SetCursorPos(x, y))
+            return false;
+
+        for (int c = 0; c < clickCount; c++)
+        {
+            mouse_event(MouseEventLeftDown, 0, 0, 0, UIntPtr.Zero);
+            Thread.Sleep(50);
+            mouse_event(MouseEventLeftUp, 0, 0, 0, UIntPtr.Zero);
+            if (c < clickCount - 1)
+                Thread.Sleep(80);
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Injects a left-click press → drag → release gesture via the OS input
+    /// queue.  Coordinates are absolute screen pixels (top-left origin).
+    /// Mirrors the macOS <c>MacOSNativeInput.TryMouseDrag</c> implementation.
+    /// </summary>
+    public static bool TryMouseDrag(double fromX, double fromY, double toX, double toY,
+        int steps = 24, int stepDelayMs = 16, int holdAfterDownMs = 200)
+    {
+        if (!OperatingSystem.IsWindows())
+            return false;
+
+        if (steps < 1) steps = 1;
+
+        // Move cursor to start position
+        if (!SetCursorPos((int)Math.Round(fromX), (int)Math.Round(fromY)))
+            return false;
+        Thread.Sleep(stepDelayMs);
+
+        // Press left button
+        mouse_event(MouseEventLeftDown, 0, 0, 0, UIntPtr.Zero);
+        Thread.Sleep(holdAfterDownMs);
+
+        // Interpolate intermediate drag points
+        for (int i = 1; i <= steps; i++)
+        {
+            double t = (double)i / steps;
+            int x = (int)Math.Round(fromX + (toX - fromX) * t);
+            int y = (int)Math.Round(fromY + (toY - fromY) * t);
+            SetCursorPos(x, y);
+            // mouse_event with MOUSEEVENTF_MOVE to generate WM_MOUSEMOVE / WM_MOUSEDRAG
+            // while the button is held.  absolute coordinates (0,0) + MOVE flag
+            // moves relative to last position, so we use SetCursorPos above and
+            // just post the move event so WPF's internal hit-testing picks it up.
+            mouse_event(MouseEventMove, 0, 0, 0, UIntPtr.Zero);
+            Thread.Sleep(stepDelayMs);
+        }
+
+        // Release
         mouse_event(MouseEventLeftUp, 0, 0, 0, UIntPtr.Zero);
         return true;
     }
@@ -203,6 +265,7 @@ public static class WindowsNativeInput
         };
     }
 
+    private const uint MouseEventMove = 0x0001;
     private const uint MouseEventLeftDown = 0x0002;
     private const uint MouseEventLeftUp = 0x0004;
     private const uint MouseEventRightDown = 0x0008;

@@ -19,6 +19,7 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
 {
     private readonly WpfVisualTreeWalker _treeWalker = new();
     private string _themeOverride = "system";
+    private Window? _cachedMainWindow;
 
     public WpfAgentService(AgentOptions? options = null)
         : base(options)
@@ -35,6 +36,7 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
         selectorScreenshots = true,
         tap = true,
         scroll = true,
+        drag = true,
         structuredErrors = true,
         appTheme = true,
         webview = true,
@@ -145,11 +147,8 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
 
     protected override Task<string?> GetApplicationNameAsync()
     {
-        return Application.Current?.Dispatcher.InvokeAsync(() =>
-        {
-            var app = Application.Current;
-            return app?.GetType().Name;
-        }).Task ?? Task.FromResult<string?>(null);
+        var app = Application.Current;
+        return Task.FromResult(app?.GetType().Name);
     }
 
     protected override Task<List<Microsoft.Maui.DevFlow.Agent.Core.ElementInfo>> BuildTreeAsync()
@@ -158,27 +157,39 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
                ?? Task.FromResult(new List<Microsoft.Maui.DevFlow.Agent.Core.ElementInfo>());
     }
 
+    protected override Task<T> DispatchOnUIThreadAsync<T>(Func<T> callback)
+    {
+        return DispatchToApplicationAsync(callback);
+    }
+
+    protected override Task<IReadOnlyList<object>> GetInvokeActionTargetsAsync()
+    {
+        return Application.Current?.Dispatcher.InvokeAsync<IReadOnlyList<object>>(() =>
+        {
+            var targets = new List<object>();
+            if (Application.Current != null)
+            {
+                targets.Add(Application.Current);
+                foreach (Window window in Application.Current.Windows)
+                {
+                    targets.Add(window);
+                }
+            }
+
+            return targets;
+        }).Task ?? Task.FromResult<IReadOnlyList<object>>(Array.Empty<object>());
+    }
+
     protected override Task<Microsoft.Maui.DevFlow.Agent.Core.ElementInfo?> FindElementAsync(string id)
     {
         return Application.Current?.Dispatcher.InvokeAsync(() => _treeWalker.FindElementById(id)).Task
                ?? Task.FromResult<Microsoft.Maui.DevFlow.Agent.Core.ElementInfo?>(null);
     }
 
-    protected override Task<List<ElementInfo>> QueryElementsAsync(string? type = null, string? automationId = null, string? text = null)
+    protected override Task<List<ElementInfo>> QueryElementsAsync(string? type = null, string? automationId = null, string? text = null, int maxResults = 50, int maxDepth = 24)
     {
         return Application.Current?.Dispatcher.InvokeAsync(() =>
-        {
-            var roots = _treeWalker.WalkTree();
-            var all = new List<ElementInfo>();
-            foreach (var root in roots)
-                Flatten(root, all);
-
-            return all.Where(e =>
-                    (string.IsNullOrWhiteSpace(type) || string.Equals(e.Type, type, StringComparison.OrdinalIgnoreCase))
-                    && (string.IsNullOrWhiteSpace(automationId) || string.Equals(e.AutomationId, automationId, StringComparison.OrdinalIgnoreCase))
-                    && (string.IsNullOrWhiteSpace(text) || ((e.Text?.Contains(text, StringComparison.OrdinalIgnoreCase) == true))))
-                .ToList();
-        }).Task ?? Task.FromResult(new List<ElementInfo>());
+            _treeWalker.QueryElements(type, automationId, text, maxResults, maxDepth)).Task ?? Task.FromResult(new List<ElementInfo>());
     }
 
     protected override Task<byte[]?> CaptureScreenshotAsync(string? elementId = null, string? selector = null)
@@ -392,6 +403,357 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
     protected override async Task<object?> TryBackResponseAsync()
         => await TryBackAsync().ConfigureAwait(false) ? CreateSuccessResult(SimulationModes.Semantic) : null;
 
+    protected override async Task<object?> TryDragResponseAsync(DragRequest request)
+    {
+        var resolved = await DispatchToApplicationAsync<ResolvedDrag?>(() =>
+        {
+            if (request.Global && request.FromX.HasValue && request.FromY.HasValue)
+            {
+                double toX = request.ToX ?? (request.FromX.Value + (request.Dx ?? 0));
+                double toY = request.ToY ?? (request.FromY.Value + (request.Dy ?? 0));
+                var steps = request.Steps is > 0 ? request.Steps.Value : 24;
+                return new ResolvedDrag(request.FromX.Value, request.FromY.Value, toX, toY, steps, "native-global", null);
+            }
+
+            if (!TryResolveScreenPoint(request.FromId, request.FromX, request.FromY, out var fromX, out var fromY))
+                return new ResolvedDrag(0, 0, 0, 0, 0, "native", "could not resolve source point (need fromId or fromX/fromY)");
+
+            double targetX, targetY;
+            if (TryResolveScreenPoint(request.ToId, request.ToX, request.ToY, out var tx, out var ty))
+            {
+                targetX = tx; targetY = ty;
+            }
+            else if (request.Dx.HasValue || request.Dy.HasValue)
+            {
+                targetX = fromX + (request.Dx ?? 0);
+                targetY = fromY + (request.Dy ?? 0);
+            }
+            else
+            {
+                return new ResolvedDrag(0, 0, 0, 0, 0, "native", "could not resolve target point (need toId, toX/toY, or dx/dy)");
+            }
+
+            var stepCount = request.Steps is > 0 ? request.Steps.Value : 24;
+            return new ResolvedDrag(fromX, fromY, targetX, targetY, stepCount, "native", null);
+        }).ConfigureAwait(false);
+
+        if (resolved == null)
+            return new { ok = false, reason = "no Application" };
+        if (resolved.Error != null)
+            return new { ok = false, reason = resolved.Error };
+
+        if (OperatingSystem.IsMacOS())
+        {
+            var portableSuccess = await TryPortableWpfMouseDragAsync(resolved.FromX, resolved.FromY, resolved.ToX, resolved.ToY, resolved.Steps).ConfigureAwait(false);
+            if (portableSuccess)
+            {
+                return new
+                {
+                    ok = true,
+                    mode = "portable-wpf",
+                    from = new { x = resolved.FromX, y = resolved.FromY },
+                    to = new { x = resolved.ToX, y = resolved.ToY },
+                    steps = resolved.Steps
+                };
+            }
+        }
+
+        var success = await Task.Run(() => TryNativeMouseDrag(resolved.FromX, resolved.FromY, resolved.ToX, resolved.ToY, resolved.Steps)).ConfigureAwait(false);
+        return new
+        {
+            ok = success,
+            mode = resolved.Mode,
+            from = new { x = resolved.FromX, y = resolved.FromY },
+            to = new { x = resolved.ToX, y = resolved.ToY },
+            steps = resolved.Steps,
+            note = BuildNativeMouseNote(success)
+        };
+    }
+
+    protected override async Task<object?> TryClickResponseAsync(ClickRequest request)
+    {
+        var resolved = await DispatchToApplicationAsync<ResolvedClick?>(() =>
+        {
+            double x, y;
+            if (request.Global)
+            {
+                x = request.X!.Value;
+                y = request.Y!.Value;
+            }
+            else if (TryResolveScreenPoint(null, request.X, request.Y, out var sx, out var sy))
+            {
+                x = sx; y = sy;
+            }
+            else
+            {
+                return new ResolvedClick(0, 0, request.Global ? "native-global" : "native", request.ClickCount, "could not resolve click coordinates");
+            }
+
+            return new ResolvedClick(x, y, request.Global ? "native-global" : "native", request.ClickCount, null);
+        }).ConfigureAwait(false);
+
+        if (resolved == null)
+            return new { ok = false, reason = "no Application" };
+        if (resolved.Error != null)
+            return new { ok = false, reason = resolved.Error };
+
+        var ok = await Task.Run(() => TryNativeMouseClick(resolved.X, resolved.Y, resolved.ClickCount)).ConfigureAwait(false);
+        return new { ok, mode = resolved.Mode, x = resolved.X, y = resolved.Y, note = BuildNativeMouseNote(ok) };
+    }
+
+    private sealed record ResolvedDrag(double FromX, double FromY, double ToX, double ToY, int Steps, string Mode, string? Error);
+    private sealed record ResolvedClick(double X, double Y, string Mode, int ClickCount, string? Error);
+
+    private async Task<bool> TryPortableWpfMouseDragAsync(double fromX, double fromY, double toX, double toY, int steps)
+    {
+        if (steps < 1)
+            steps = 1;
+
+        var dragWindow = await ResolvePortableWpfInputWindowAsync(fromX, fromY).ConfigureAwait(false);
+        if (dragWindow == null)
+            return false;
+
+        if (!await TryProcessPortableWpfMouseInputAsync(dragWindow, 3, fromX, fromY, 0).ConfigureAwait(false))
+            return false;
+        await Task.Delay(16).ConfigureAwait(false);
+
+        if (!await TryProcessPortableWpfMouseInputAsync(dragWindow, 4, fromX, fromY, 1).ConfigureAwait(false))
+            return false;
+        await Task.Delay(200).ConfigureAwait(false);
+
+        for (var i = 1; i <= steps; i++)
+        {
+            var t = (double)i / steps;
+            var x = fromX + (toX - fromX) * t;
+            var y = fromY + (toY - fromY) * t;
+            if (!await TryProcessPortableWpfMouseInputAsync(dragWindow, 3, x, y, 0).ConfigureAwait(false))
+                return false;
+            await Task.Delay(16).ConfigureAwait(false);
+        }
+
+        return await TryProcessPortableWpfMouseInputAsync(dragWindow, 5, toX, toY, 1).ConfigureAwait(false);
+    }
+
+    private Task<Window?> ResolvePortableWpfInputWindowAsync(double screenX, double screenY)
+    {
+        return DispatchToApplicationAsync(() =>
+        {
+            var app = Application.Current;
+            if (app == null)
+                return null;
+
+            foreach (Window window in app.Windows.OfType<Window>().Reverse())
+            {
+                if (!window.IsVisible)
+                    continue;
+
+                var point = window.PointFromScreen(new System.Windows.Point(screenX, screenY));
+                if (point.X >= 0 && point.Y >= 0 && point.X <= window.ActualWidth && point.Y <= window.ActualHeight)
+                    return window;
+            }
+
+            return app.MainWindow ?? app.Windows.OfType<Window>().FirstOrDefault(w => w.IsVisible);
+        });
+    }
+
+    private Task<bool> TryProcessPortableWpfMouseInputAsync(Window window, int kind, double screenX, double screenY, int button)
+    {
+        return DispatchToApplicationAsync(() =>
+        {
+            if (!window.IsVisible)
+                return false;
+
+            var rootPoint = window.PointFromScreen(new System.Windows.Point(screenX, screenY));
+            return TryProcessPortableWpfMouseInput(window, kind, rootPoint.X, rootPoint.Y, button);
+        });
+    }
+
+    private static bool TryProcessPortableWpfMouseInput(Window window, int kind, double x, double y, int button)
+    {
+        try
+        {
+            var serviceType = typeof(Window).Assembly.GetType("System.Windows.PortableWindowActivationService");
+            var inputType = typeof(Window).Assembly.GetType("System.Windows.PortableInputEventArgs");
+            var kindType = typeof(Window).Assembly.GetType("System.Windows.PortableInputEventKind");
+            var buttonType = typeof(Window).Assembly.GetType("System.Windows.PortableMouseButton");
+            var modifiersType = typeof(Window).Assembly.GetType("System.Windows.PortableInputModifiers");
+            var processInput = serviceType?.GetMethod(
+                "ProcessInput",
+                BindingFlags.NonPublic | BindingFlags.Static,
+                binder: null,
+                types: [typeof(Window), inputType!],
+                modifiers: null);
+            var ctor = inputType?.GetConstructor(
+                BindingFlags.NonPublic | BindingFlags.Instance,
+                binder: null,
+                types:
+                [
+                    kindType!,
+                    typeof(string),
+                    typeof(int),
+                    typeof(char?),
+                    typeof(double),
+                    typeof(double),
+                    typeof(double),
+                    typeof(double),
+                    buttonType!,
+                    modifiersType!,
+                ],
+                modifiers: null);
+            if (processInput == null || ctor == null || kindType == null || buttonType == null || modifiersType == null)
+                return false;
+
+            var input = ctor.Invoke(
+            [
+                Enum.ToObject(kindType, kind),
+                null,
+                0,
+                null,
+                x,
+                y,
+                0d,
+                0d,
+                Enum.ToObject(buttonType, button),
+                Enum.ToObject(modifiersType, 0),
+            ]);
+
+            processInput.Invoke(null, [window, input]);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private Task<T> DispatchToApplicationAsync<T>(Func<T> callback)
+    {
+        var app = Application.Current;
+        if (app == null)
+            return Task.FromResult(callback());
+
+        if (app.Dispatcher.CheckAccess())
+        {
+            CacheMainWindow(app);
+            return Task.FromResult(callback());
+        }
+
+        var operation = app.Dispatcher.InvokeAsync(callback);
+        TryWakeProGpuHost(_cachedMainWindow ?? TryGetMainWindowUnsafe(app));
+        return operation.Task;
+    }
+
+    private void CacheMainWindow(Application? app)
+    {
+        if (app == null)
+            return;
+
+        try
+        {
+            _cachedMainWindow = app.MainWindow;
+        }
+        catch
+        {
+        }
+    }
+
+    private void TryWakeProGpuHost(Window? window)
+    {
+        if (window == null)
+            return;
+
+        try
+        {
+            var type = Type.GetType("System.Windows.Media.ProGPU.ProGpuWpfDiagnostics, ProGPU.Wpf");
+            var renderMethod = type?.GetMethod("TryRequestRender", BindingFlags.Public | BindingFlags.Static);
+            var wakeMethod = type?.GetMethod("TryWakeNativeLoop", BindingFlags.Public | BindingFlags.Static);
+            renderMethod?.Invoke(null, new object?[] { window });
+            wakeMethod?.Invoke(null, new object?[] { window });
+        }
+        catch
+        {
+        }
+    }
+
+    private static Window? TryGetMainWindowUnsafe(Application app)
+    {
+        try
+        {
+            var field = typeof(Application).GetField("_mainWindow", BindingFlags.Instance | BindingFlags.NonPublic);
+            return field?.GetValue(app) as Window;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static bool TryNativeMouseDrag(double fromX, double fromY, double toX, double toY, int steps)
+    {
+        if (OperatingSystem.IsWindows())
+            return WindowsNativeInput.TryMouseDrag(fromX, fromY, toX, toY, steps);
+
+        if (OperatingSystem.IsMacOS())
+            return MacOSNativeInput.TryMouseDrag(fromX, fromY, toX, toY, steps);
+
+        return false;
+    }
+
+    private static bool TryNativeMouseClick(double x, double y, int clickCount)
+    {
+        if (OperatingSystem.IsWindows())
+            return WindowsNativeInput.TryMouseClick((int)Math.Round(x), (int)Math.Round(y), clickCount);
+
+        if (OperatingSystem.IsMacOS())
+            return MacOSNativeInput.TryMouseClick(x, y, clickCount);
+
+        return false;
+    }
+
+    private static string? BuildNativeMouseNote(bool ok)
+    {
+        if (ok)
+            return null;
+
+        if (OperatingSystem.IsMacOS())
+            return "CGEventPost may require Accessibility (TCC) permission for the host process.";
+
+        if (!OperatingSystem.IsWindows())
+            return "native mouse injection is supported on Windows and macOS only.";
+
+        return null;
+    }
+
+    private bool TryResolveScreenPoint(string? elementId, double? winX, double? winY, out double x, out double y)
+    {
+        x = 0; y = 0;
+
+        if (winX.HasValue && winY.HasValue && string.IsNullOrWhiteSpace(elementId))
+        {
+            var window = Application.Current?.MainWindow;
+            if (window == null) return false;
+            var screenPt = window.PointToScreen(new System.Windows.Point(winX.Value, winY.Value));
+            x = screenPt.X; y = screenPt.Y;
+            return true;
+        }
+
+        if (!string.IsNullOrWhiteSpace(elementId))
+        {
+            var element = _treeWalker.FindElementById(elementId);
+            if (element == null) return false;
+            var target = _treeWalker.ResolveElementByStableId(element.Id);
+            if (target is not System.Windows.FrameworkElement fe) return false;
+            if (!fe.IsVisible || fe.ActualWidth <= 0 || fe.ActualHeight <= 0) return false;
+
+            var center = new System.Windows.Point(fe.ActualWidth / 2d, fe.ActualHeight / 2d);
+            var screenPt = fe.PointToScreen(center);
+            x = screenPt.X; y = screenPt.Y;
+            return true;
+        }
+
+        return false;
+    }
+
     private DependencyObject? ResolveElementObject(string elementId)
     {
         var element = _treeWalker.FindElementById(elementId);
@@ -402,15 +764,6 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
     {
         textBox.Text = text;
         return true;
-    }
-
-    private static void Flatten(ElementInfo element, List<ElementInfo> list)
-    {
-        list.Add(element);
-        if (element.Children == null)
-            return;
-        foreach (var child in element.Children)
-            Flatten(child, list);
     }
 
     private static bool SetPassword(PasswordBox passwordBox, string text)

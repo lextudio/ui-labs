@@ -147,7 +147,7 @@ public sealed class MewUIAgentService : DevFlowAgentServiceBase
         return Task.FromResult(result);
     }
 
-    protected override Task<List<ElementInfo>> QueryElementsAsync(string? type = null, string? automationId = null, string? text = null)
+    protected override Task<List<ElementInfo>> QueryElementsAsync(string? type = null, string? automationId = null, string? text = null, int maxResults = 50, int maxDepth = 24)
     {
         if (!Application.IsRunning)
             return Task.FromResult(new List<ElementInfo>());

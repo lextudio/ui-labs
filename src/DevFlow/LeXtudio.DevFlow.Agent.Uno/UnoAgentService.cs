@@ -108,7 +108,7 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
         return InvokeOnUiThreadAsync(() => _treeWalker.FindElementById(id));
     }
 
-    protected override Task<List<ElementInfo>> QueryElementsAsync(string? type = null, string? automationId = null, string? text = null)
+    protected override Task<List<ElementInfo>> QueryElementsAsync(string? type = null, string? automationId = null, string? text = null, int maxResults = 50, int maxDepth = 24)
     {
         return InvokeOnUiThreadAsync(() =>
         {

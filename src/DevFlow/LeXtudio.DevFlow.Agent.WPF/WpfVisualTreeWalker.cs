@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Documents;
 using System.Windows.Media;
 using System.Windows.Media.Media3D;
 using Microsoft.Maui.DevFlow.Agent.Core;
@@ -11,12 +12,18 @@ namespace LeXtudio.DevFlow.Agent.WPF;
 
 public class WpfVisualTreeWalker : IVisualTreeWalker
 {
+    private const int MaxDepth = 48;
+    private const int MaxNodes = 1000;
     private readonly ConditionalWeakTable<DependencyObject, string> _stableIds = new();
     private readonly Dictionary<string, DependencyObject> _elementsByStableId = new(StringComparer.Ordinal);
+    private readonly HashSet<DependencyObject> _visited = new(ReferenceEqualityComparer.Instance);
+    private int _nodeCount;
 
     public List<ElementInfo> WalkTree()
     {
         _elementsByStableId.Clear();
+        _visited.Clear();
+        _nodeCount = 0;
 
         var app = Application.Current;
         if (app == null)
@@ -25,9 +32,32 @@ public class WpfVisualTreeWalker : IVisualTreeWalker
         var roots = new List<ElementInfo>();
         foreach (Window window in app.Windows.OfType<Window>())
         {
-            roots.Add(BuildElementInfo(window, null));
+            var info = BuildElementInfo(window, null, depth: 0);
+            if (info != null)
+                roots.Add(info);
         }
         return roots;
+    }
+
+    public List<ElementInfo> QueryElements(string? type = null, string? automationId = null, string? text = null, int maxResults = 50, int maxDepth = 24)
+    {
+        _elementsByStableId.Clear();
+        _visited.Clear();
+        _nodeCount = 0;
+
+        var app = Application.Current;
+        if (app == null)
+            return new List<ElementInfo>();
+
+        var results = new List<ElementInfo>();
+        foreach (Window window in app.Windows.OfType<Window>())
+        {
+            QueryElement(window, parentId: null, depth: 0, type, automationId, text, results, maxResults, maxDepth);
+            if (results.Count >= maxResults || _nodeCount >= MaxNodes)
+                break;
+        }
+
+        return results;
     }
 
     public ElementInfo? FindElementById(string id)
@@ -72,8 +102,12 @@ public class WpfVisualTreeWalker : IVisualTreeWalker
         return null;
     }
 
-    private ElementInfo BuildElementInfo(DependencyObject element, string? parentId)
+    private ElementInfo? BuildElementInfo(DependencyObject element, string? parentId, int depth)
     {
+        if (depth > MaxDepth || _nodeCount >= MaxNodes || !_visited.Add(element))
+            return null;
+
+        _nodeCount++;
         var id = GetStableId(element);
         _elementsByStableId[id] = element;
 
@@ -91,10 +125,81 @@ public class WpfVisualTreeWalker : IVisualTreeWalker
             Bounds = ResolveBounds(element),
             NativeProperties = BuildNativeProperties(element, id),
             FrameworkProperties = BuildFrameworkProperties(element),
-            Children = GetChildren(element).Select(child => BuildElementInfo(child, id)).ToList()
+            Children = GetChildren(element)
+                .Select(child => BuildElementInfo(child, id, depth + 1))
+                .Where(child => child != null)
+                .Cast<ElementInfo>()
+                .ToList()
         };
 
         return info;
+    }
+
+    private void QueryElement(
+        DependencyObject element,
+        string? parentId,
+        int depth,
+        string? type,
+        string? automationId,
+        string? text,
+        List<ElementInfo> results,
+        int maxResults,
+        int maxDepth)
+    {
+        if (depth > Math.Min(MaxDepth, maxDepth) || _nodeCount >= MaxNodes || results.Count >= maxResults || !_visited.Add(element))
+            return;
+
+        _nodeCount++;
+        var id = GetStableId(element);
+        _elementsByStableId[id] = element;
+
+        var elementType = element.GetType();
+        var textValue = GetText(element);
+        var automationIdValue = GetAutomationId(element);
+        if (MatchesQuery(elementType, automationIdValue, textValue, type, automationId, text))
+        {
+            results.Add(new ElementInfo
+            {
+                Id = id,
+                ParentId = parentId,
+                Type = elementType.Name,
+                FullType = elementType.FullName ?? elementType.Name,
+                Framework = "wpf",
+                AutomationId = automationIdValue,
+                Text = textValue,
+                IsVisible = IsElementVisible(element),
+                IsEnabled = GetIsEnabled(element),
+                Bounds = ResolveBounds(element),
+                NativeProperties = BuildNativeProperties(element, id),
+                Children = new List<ElementInfo>()
+            });
+
+            if (results.Count >= maxResults)
+                return;
+        }
+
+        foreach (var child in GetChildren(element))
+            QueryElement(child, id, depth + 1, type, automationId, text, results, maxResults, maxDepth);
+    }
+
+    private static bool MatchesQuery(
+        Type elementType,
+        string? automationIdValue,
+        string? textValue,
+        string? type,
+        string? automationId,
+        string? text)
+    {
+        return (string.IsNullOrWhiteSpace(type) || TypeMatches(elementType, type))
+            && (string.IsNullOrWhiteSpace(automationId) || string.Equals(automationIdValue, automationId, StringComparison.OrdinalIgnoreCase))
+            && (string.IsNullOrWhiteSpace(text) || textValue?.Contains(text, StringComparison.OrdinalIgnoreCase) == true);
+    }
+
+    private static bool TypeMatches(Type elementType, string type)
+    {
+        return string.Equals(elementType.Name, type, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(elementType.FullName, type, StringComparison.OrdinalIgnoreCase)
+            || (elementType.FullName?.EndsWith("." + type, StringComparison.OrdinalIgnoreCase) == true);
     }
 
     private string GetStableId(DependencyObject element)
@@ -279,32 +384,60 @@ public class WpfVisualTreeWalker : IVisualTreeWalker
         if (element == null)
             yield break;
 
+        if (IsAutomationLeaf(element))
+            yield break;
+
+        var seen = new HashSet<DependencyObject>(ReferenceEqualityComparer.Instance);
+
         if (element is Visual || element is Visual3D)
         {
             var visualChildrenCount = VisualTreeHelper.GetChildrenCount(element);
             for (var i = 0; i < visualChildrenCount; i++)
             {
-                yield return VisualTreeHelper.GetChild(element, i);
+                var child = VisualTreeHelper.GetChild(element, i);
+                if (seen.Add(child))
+                    yield return child;
             }
         }
 
         if (element is ContentControl contentControl && contentControl.Content is DependencyObject content)
         {
-            yield return content;
+            if (seen.Add(content))
+                yield return content;
         }
 
         if (element is ItemsControl itemsControl)
         {
             foreach (var item in itemsControl.Items)
             {
-                if (item is DependencyObject itemElement)
+                if (item is DependencyObject itemElement && seen.Add(itemElement))
                     yield return itemElement;
             }
         }
 
         foreach (var child in LogicalTreeHelper.GetChildren(element).OfType<DependencyObject>())
         {
-            yield return child;
+            if (seen.Add(child))
+                yield return child;
         }
+    }
+
+    private static bool IsAutomationLeaf(DependencyObject element)
+    {
+        return element is TextBlock
+            or TextBox
+            or PasswordBox
+            or Image
+            or System.Windows.Shapes.Shape
+            or Adorner;
+    }
+
+    private sealed class ReferenceEqualityComparer : IEqualityComparer<DependencyObject>
+    {
+        public static ReferenceEqualityComparer Instance { get; } = new();
+
+        public bool Equals(DependencyObject? x, DependencyObject? y) => ReferenceEquals(x, y);
+
+        public int GetHashCode(DependencyObject obj) => RuntimeHelpers.GetHashCode(obj);
     }
 }
