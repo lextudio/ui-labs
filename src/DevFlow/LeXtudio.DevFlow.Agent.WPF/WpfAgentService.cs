@@ -501,6 +501,75 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
         return new { ok, mode = resolved.Mode, x = resolved.X, y = resolved.Y, note = BuildNativeMouseNote(ok) };
     }
 
+    protected override async Task<object?> TryMoveResponseAsync(MoveRequest request)
+    {
+        if (!string.IsNullOrWhiteSpace(request.ElementId))
+        {
+            var portable = await DispatchToApplicationAsync(() =>
+            {
+                var target = ResolveElementObject(request.ElementId) as FrameworkElement;
+                if (target == null)
+                    return false;
+                target.UpdateLayout();
+                return target.IsVisible && target.ActualWidth > 0 && target.ActualHeight > 0 &&
+                    TryProcessPortableWpfMouseMove(target);
+            }).ConfigureAwait(false);
+            if (portable)
+                return new { ok = true, mode = "portable", elementId = request.ElementId };
+        }
+
+        var resolved = await DispatchToApplicationAsync<(bool Ok, double X, double Y)>(() =>
+        {
+            var ok = TryResolveScreenPoint(request.ElementId, request.X, request.Y, out var x, out var y);
+            return (ok, x, y);
+        }).ConfigureAwait(false);
+
+        if (!resolved.Ok)
+            return null;
+
+        var ok = await Task.Run(() => TryNativeMouseMove(resolved.X, resolved.Y)).ConfigureAwait(false);
+        return new { ok, mode = "native", x = resolved.X, y = resolved.Y, note = BuildNativeMouseNote(ok) };
+    }
+
+    private static bool TryProcessPortableWpfMouseMove(FrameworkElement element)
+    {
+        try
+        {
+            var source = PresentationSource.FromVisual(element);
+            if (source?.RootVisual is not Visual root)
+                return false;
+
+            var center = new Point(element.ActualWidth / 2d, element.ActualHeight / 2d);
+            var rootPoint = element.TransformToAncestor(root).Transform(center);
+            var assembly = typeof(Window).Assembly;
+            var serviceType = assembly.GetType("System.Windows.PortableWindowActivationService");
+            var inputType = assembly.GetType("System.Windows.PortableInputEventArgs");
+            var kindType = assembly.GetType("System.Windows.PortableInputEventKind");
+            var buttonType = assembly.GetType("System.Windows.PortableMouseButton");
+            var modifiersType = assembly.GetType("System.Windows.PortableInputModifiers");
+            var processInput = serviceType?.GetMethod(
+                "ProcessInputForSource", BindingFlags.NonPublic | BindingFlags.Static);
+            var ctor = inputType?.GetConstructor(
+                BindingFlags.NonPublic | BindingFlags.Instance,
+                binder: null,
+                types: [kindType!, typeof(string), typeof(int), typeof(char?), typeof(double),
+                    typeof(double), typeof(double), typeof(double), buttonType!, modifiersType!],
+                modifiers: null);
+            if (processInput == null || ctor == null || kindType == null || buttonType == null || modifiersType == null)
+                return false;
+
+            var input = ctor.Invoke([
+                Enum.ToObject(kindType, 3), null, 0, null, rootPoint.X, rootPoint.Y,
+                0d, 0d, Enum.ToObject(buttonType, 0), Enum.ToObject(modifiersType, 0)]);
+            processInput.Invoke(null, [source, input]);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private sealed record ResolvedDrag(double FromX, double FromY, double ToX, double ToY, int Steps, string Mode, string? Error);
     private sealed record ResolvedClick(double X, double Y, string Mode, int ClickCount, string? Error);
 
@@ -706,6 +775,14 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
 
         if (OperatingSystem.IsMacOS())
             return MacOSNativeInput.TryMouseClick(x, y, clickCount);
+
+        return false;
+    }
+
+    private static bool TryNativeMouseMove(double x, double y)
+    {
+        if (OperatingSystem.IsMacOS())
+            return MacOSNativeInput.TryMouseMove(x, y);
 
         return false;
     }

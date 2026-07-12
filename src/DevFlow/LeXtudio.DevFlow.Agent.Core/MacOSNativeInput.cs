@@ -184,6 +184,20 @@ public static class MacOSNativeInput
     }
 
     [SupportedOSPlatform("macos")]
+    public static bool TryMouseMove(double x, double y)
+    {
+        var source = CGEventSourceCreate(kCGEventSourceStatePrivate);
+        try
+        {
+            return PostMouse(kCGEventMouseMoved, x, y, source);
+        }
+        finally
+        {
+            if (source != IntPtr.Zero) CFRelease(source);
+        }
+    }
+
+    [SupportedOSPlatform("macos")]
     public static bool TryMouseDrag(double fromX, double fromY, double toX, double toY,
         int steps = 24, int stepDelayMs = 16, int holdAfterDownMs = 200)
     {

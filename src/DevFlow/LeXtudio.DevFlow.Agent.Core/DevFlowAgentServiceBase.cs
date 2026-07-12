@@ -7,14 +7,21 @@ namespace LeXtudio.DevFlow.Agent.Core;
 public abstract class DevFlowAgentServiceBase : IDisposable
 {
     private readonly AgentHttpServer _server;
-    private readonly Lazy<InvokeActionEntry[]> _actionDefinitions;
     private bool _started;
+
+    // Actions are discovered by reflecting over AppDomain.CurrentDomain.GetAssemblies(), but many
+    // hosts (e.g. SharpDevelop's addin tree) load assemblies lazily well after startup - the first
+    // ever action invocation used to permanently cache the discovery result via a Lazy<T>, so any
+    // action whose declaring assembly loaded after that first call was never found for the rest of
+    // the process's lifetime. Re-discovering only when the assembly count changes keeps the common
+    // case (nothing new loaded) as cheap as the old cache while staying correct as addins load.
+    private InvokeActionEntry[] _cachedActionDefinitions = Array.Empty<InvokeActionEntry>();
+    private int _cachedAssemblyCount = -1;
 
     protected DevFlowAgentServiceBase(AgentOptions? options = null)
     {
         Options = options ?? new AgentOptions();
         _server = new AgentHttpServer(Options.Port);
-        _actionDefinitions = new Lazy<InvokeActionEntry[]>(DiscoverActionDefinitions);
         RegisterRoutes();
     }
 
@@ -118,6 +125,7 @@ public abstract class DevFlowAgentServiceBase : IDisposable
         _server.MapPost("/api/v1/ui/actions/batch", HandleBatchAsync);
         _server.MapPost("/api/v1/ui/actions/scroll", HandleScrollAsync);
         _server.MapPost("/api/v1/ui/actions/drag", HandleDragAsync);
+        _server.MapPost("/api/v1/ui/actions/move", HandleMoveAsync);
         _server.MapPost("/api/v1/ui/actions/click", HandleClickAsync);
         _server.MapGet("/api/v1/device/app/theme", HandleThemeGetAsync);
         _server.MapPut("/api/v1/device/app/theme", HandleThemeSetAsync);
@@ -261,6 +269,30 @@ public abstract class DevFlowAgentServiceBase : IDisposable
         return result != null
             ? HttpResponse.Json(result)
             : HttpResponse.Error("Drag is not supported by this agent", 501);
+    }
+
+    private async Task<HttpResponse> HandleMoveAsync(HttpRequest request)
+    {
+        var payload = request.BodyAs<MoveRequest>();
+        if (payload == null || (string.IsNullOrWhiteSpace(payload.ElementId) &&
+            (!payload.X.HasValue || !payload.Y.HasValue)))
+            return HttpResponse.Error("elementId or both x and y are required", 400);
+
+        var result = await TryMoveResponseAsync(payload).ConfigureAwait(false);
+        return result != null
+            ? HttpResponse.Json(result)
+            : HttpResponse.Error("Mouse move is not supported by this agent", 501);
+    }
+
+    protected virtual Task<object?> TryMoveResponseAsync(MoveRequest request)
+        => Task.FromResult<object?>(null);
+
+    protected sealed class MoveRequest
+    {
+        public string? ElementId { get; set; }
+        public double? X { get; set; }
+        public double? Y { get; set; }
+        public bool Global { get; set; } = true;
     }
 
     /// <summary>
@@ -570,7 +602,13 @@ public abstract class DevFlowAgentServiceBase : IDisposable
 
     private InvokeActionEntry[] DiscoverActions()
     {
-        return _actionDefinitions.Value;
+        int currentAssemblyCount = AppDomain.CurrentDomain.GetAssemblies().Length;
+        if (currentAssemblyCount != _cachedAssemblyCount)
+        {
+            _cachedActionDefinitions = DiscoverActionDefinitions();
+            _cachedAssemblyCount = currentAssemblyCount;
+        }
+        return _cachedActionDefinitions;
     }
 
     private async Task<InvokeActionEntry?> ResolveActionAsync(string actionName)

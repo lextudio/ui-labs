@@ -15,6 +15,7 @@ dotnet add package LeXtudio.DevFlow.Agent.WPF
 - WPF visual tree inspection
 - live screenshot capture from the application window
 - mouse/tap action support for WPF elements
+- menu and popup diagnostics through DevFlow invoke actions
 - integration with the shared DevFlow HTTP API
 
 ## Usage
@@ -33,6 +34,18 @@ public partial class App : Application
     }
 }
 ```
+
+## Menu and popup diagnostics
+
+The WPF agent exposes a `wpf.menu-popup-diagnostics` invoke action for diagnosing popup placement, DPI conversion, monitor selection, mouse hit-testing, and LibreWPF menu logs from a running application:
+
+```bash
+curl -X POST http://127.0.0.1:5252/api/v1/invoke/actions/wpf.menu-popup-diagnostics \
+  -H 'Content-Type: application/json' \
+  -d '{"args":[300,32]}'
+```
+
+The action returns a JSON snapshot string in `returnValue`. The optional arguments are `maxLogLines` and `maxVisualDepth`.
 
 ## Getting Started
 
