@@ -6,7 +6,7 @@ using System.IO;
 
 namespace LeXtudio.DevFlow.Agent.Core;
 
-internal static class CliclickInput
+public static class CliclickInput
 {
     private static readonly Lazy<string?> _path = new(ResolvePath);
 

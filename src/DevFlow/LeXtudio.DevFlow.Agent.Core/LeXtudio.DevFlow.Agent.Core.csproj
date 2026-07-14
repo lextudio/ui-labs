@@ -10,7 +10,7 @@
     <PackageIcon>company_logo_512.png</PackageIcon>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <GitVersion_NoFetchEnabled>true</GitVersion_NoFetchEnabled>
-    <GitVersionTaskEnabled>false</GitVersionTaskEnabled>
+    <GitVersionTargetFramework>net10.0</GitVersionTargetFramework>
   </PropertyGroup>
   <ItemGroup>
     <None Include="..\..\..\images\company_logo_512.png" Pack="true" PackagePath="\" Visible="false" />

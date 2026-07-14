@@ -1,26 +1,13 @@
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <Target Name="_ReadMauiDevFlowConfig" BeforeTargets="_SetMauiDevFlowPort"
-          Condition="'$(MauiDevFlowPort)' == '' AND Exists('$(MSBuildProjectDirectory)/.mauidevflow')">
-    <PropertyGroup>
-      <_MauiDevFlowConfigContent>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/.mauidevflow'))</_MauiDevFlowConfigContent>
-      <_MauiDevFlowConfigPort>$([System.Text.RegularExpressions.Regex]::Match($(_MauiDevFlowConfigContent), '"port"\s*:\s*(\d+)').Groups[1].Value)</_MauiDevFlowConfigPort>
-      <MauiDevFlowPort Condition="'$(_MauiDevFlowConfigPort)' != ''">$(_MauiDevFlowConfigPort)</MauiDevFlowPort>
-    </PropertyGroup>
-  </Target>
+  <PropertyGroup>
+    <_DotnetHostPath Condition="'$(_DotnetHostPath)' == ''">$([System.Environment]::GetEnvironmentVariable('DOTNET_HOST_PATH'))</_DotnetHostPath>
+    <_DotnetHostPath Condition="'$(_DotnetHostPath)' == ''">dotnet</_DotnetHostPath>
+  </PropertyGroup>
 
-  <Target Name="_SetMauiDevFlowPort" BeforeTargets="PrepareForBuild;CoreCompile">
+  <Target Name="_PatchRunGitVersion" BeforeTargets="RunGitVersion">
     <PropertyGroup>
-      <_MauiDevFlowPortFile>$(IntermediateOutputPath)Microsoft.Maui.DevFlowPort.g.cs</_MauiDevFlowPortFile>
-      <_MauiDevFlowMetadata></_MauiDevFlowMetadata>
-      <_MauiDevFlowMetadata Condition="'$(MauiDevFlowPort)' != ''">$(_MauiDevFlowMetadata)[assembly: System.Reflection.AssemblyMetadataAttribute("Microsoft.Maui.DevFlowPort", "$(MauiDevFlowPort)")]
-</_MauiDevFlowMetadata>
+      <_GitVersionFullCommand>$(GitVersionFileExe)</_GitVersionFullCommand>
+      <GitVersionFileExe Condition="'$(_DotnetHostPath)' != 'dotnet'">$(_DotnetHostPath)$(GitVersionFileExe.Substring(6))</GitVersionFileExe>
     </PropertyGroup>
-    <WriteLinesToFile File="$(_MauiDevFlowPortFile)"
-                     Lines="$(_MauiDevFlowMetadata)"
-                     Overwrite="true"
-                     WriteOnlyWhenDifferent="true" />
-    <ItemGroup>
-      <Compile Include="$(_MauiDevFlowPortFile)" />
-    </ItemGroup>
   </Target>
 </Project>

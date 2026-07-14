@@ -114,13 +114,14 @@ public class WpfAgentIntegrationTests
         var csproj = Directory.GetFiles(projectDir, "*.csproj").FirstOrDefault()
             ?? throw new InvalidOperationException($"No csproj found in {projectDir}");
 
-        var psi = new ProcessStartInfo("dotnet", $"run --project \"{csproj}\" -c Debug --no-build")
+        var psi = new ProcessStartInfo("dotnet", $"run --project \"{csproj}\" -c Debug")
         {
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true
         };
+        psi.Environment["DEVFLOW_AGENT_PORT"] = port.ToString();
 
         var process = new Process { StartInfo = psi };
         process.Start();

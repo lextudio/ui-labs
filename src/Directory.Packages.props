@@ -21,7 +21,7 @@
     <PackageVersion Include="NUnit" Version="4.5.1" />
     <PackageVersion Include="NUnitLite" Version="4.5.1" />
     <PackageVersion Include="NUnit3TestAdapter" Version="6.2.0" />
-    <PackageVersion Include="GitVersion.MsBuild" Version="5.12.0" />
+    <PackageVersion Include="GitVersion.MsBuild" Version="6.7.0" />
     <PackageVersion Include="LeXtudio.TextBox" Version="0.2.11" />
     <PackageVersion Include="TextMateSharp" Version="2.0.3" />
     <PackageVersion Include="TextMateSharp.Grammars" Version="2.0.3" />
