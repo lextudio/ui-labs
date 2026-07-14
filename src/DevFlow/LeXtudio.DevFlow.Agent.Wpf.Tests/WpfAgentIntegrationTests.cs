@@ -109,7 +109,7 @@ public class WpfAgentIntegrationTests
     {
         var projectDir = Path.GetFullPath(Path.Combine(
             AppContext.BaseDirectory, "..", "..", "..", "..", "..",
-            "WpfDevFlowTestApp"));
+            "DevFlow", "WpfDevFlowTestApp"));
 
         var csproj = Directory.GetFiles(projectDir, "*.csproj").FirstOrDefault()
             ?? throw new InvalidOperationException($"No csproj found in {projectDir}");
