@@ -442,7 +442,29 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
         if (resolved.Error != null)
             return new { ok = false, reason = resolved.Error };
 
-        if (OperatingSystem.IsMacOS())
+        // Prefer real OS-level events via cliclick when available: they drive the genuine native input
+        // path (cross-window capture, overlay windows, GLFW routing) that the portable ProcessInput
+        // injector bypasses, so DevFlow tests reproduce what a real user hits.
+        if (CliclickInput.IsAvailable)
+        {
+            var clickDragOk = await Task.Run(() =>
+                CliclickInput.TryDrag(resolved.FromX, resolved.FromY, resolved.ToX, resolved.ToY, resolved.Steps)).ConfigureAwait(false);
+            if (clickDragOk)
+            {
+                return new
+                {
+                    ok = true,
+                    mode = "cliclick",
+                    from = new { x = resolved.FromX, y = resolved.FromY },
+                    to = new { x = resolved.ToX, y = resolved.ToY },
+                    steps = resolved.Steps
+                };
+            }
+        }
+
+        // Global coordinates are Quartz screen coordinates and must stay on the native path.
+        // The portable WPF injector expects coordinates resolved against a WPF window.
+        if (OperatingSystem.IsMacOS() && !request.Global)
         {
             var portableSuccess = await TryPortableWpfMouseDragAsync(resolved.FromX, resolved.FromY, resolved.ToX, resolved.ToY, resolved.Steps).ConfigureAwait(false);
             if (portableSuccess)
@@ -497,12 +519,37 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
         if (resolved.Error != null)
             return new { ok = false, reason = resolved.Error };
 
+        if (CliclickInput.IsAvailable)
+        {
+            var clickOk = await Task.Run(() => CliclickInput.TryClick(resolved.X, resolved.Y, resolved.ClickCount)).ConfigureAwait(false);
+            if (clickOk)
+                return new { ok = true, mode = "cliclick", x = resolved.X, y = resolved.Y };
+        }
+
         var ok = await Task.Run(() => TryNativeMouseClick(resolved.X, resolved.Y, resolved.ClickCount)).ConfigureAwait(false);
         return new { ok, mode = resolved.Mode, x = resolved.X, y = resolved.Y, note = BuildNativeMouseNote(ok) };
     }
 
     protected override async Task<object?> TryMoveResponseAsync(MoveRequest request)
     {
+        // Prefer real OS-level cursor movement via cliclick when available (drives the genuine native
+        // path); fall back to the portable synthetic move otherwise.
+        if (CliclickInput.IsAvailable)
+        {
+            var resolvedMove = await DispatchToApplicationAsync<(bool Ok, double X, double Y)>(() =>
+            {
+                var ok = TryResolveScreenPoint(request.ElementId, request.X, request.Y, out var x, out var y);
+                return (ok, x, y);
+            }).ConfigureAwait(false);
+
+            if (resolvedMove.Ok)
+            {
+                var moveOk = await Task.Run(() => CliclickInput.TryMove(resolvedMove.X, resolvedMove.Y)).ConfigureAwait(false);
+                if (moveOk)
+                    return new { ok = true, mode = "cliclick", x = resolvedMove.X, y = resolvedMove.Y };
+            }
+        }
+
         if (!string.IsNullOrWhiteSpace(request.ElementId))
         {
             var portable = await DispatchToApplicationAsync(() =>
