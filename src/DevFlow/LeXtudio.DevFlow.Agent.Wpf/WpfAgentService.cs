@@ -13,13 +13,12 @@ using System.Windows.Media.Imaging;
 using Microsoft.Maui.DevFlow.Agent.Core;
 using LeXtudio.DevFlow.Agent.Core;
 
-namespace LeXtudio.DevFlow.Agent.WPF;
+namespace LeXtudio.DevFlow.Agent.Wpf;
 
 public sealed class WpfAgentService : DevFlowAgentServiceBase
 {
     private readonly WpfVisualTreeWalker _treeWalker = new();
     private string _themeOverride = "system";
-    private Window? _cachedMainWindow;
 
     public WpfAgentService(AgentOptions? options = null)
         : base(options)
@@ -147,8 +146,11 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
 
     protected override Task<string?> GetApplicationNameAsync()
     {
-        var app = Application.Current;
-        return Task.FromResult(app?.GetType().Name);
+        return Application.Current?.Dispatcher.InvokeAsync(() =>
+        {
+            var app = Application.Current;
+            return app?.GetType().Name;
+        }).Task ?? Task.FromResult<string?>(null);
     }
 
     protected override Task<List<Microsoft.Maui.DevFlow.Agent.Core.ElementInfo>> BuildTreeAsync()
@@ -157,6 +159,7 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
                ?? Task.FromResult(new List<Microsoft.Maui.DevFlow.Agent.Core.ElementInfo>());
     }
 
+#if LIBREWPF
     protected override Task<T> DispatchOnUIThreadAsync<T>(Func<T> callback)
     {
         return DispatchToApplicationAsync(callback);
@@ -179,6 +182,7 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
             return targets;
         }).Task ?? Task.FromResult<IReadOnlyList<object>>(Array.Empty<object>());
     }
+#endif
 
     protected override Task<Microsoft.Maui.DevFlow.Agent.Core.ElementInfo?> FindElementAsync(string id)
     {
@@ -189,7 +193,19 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
     protected override Task<List<ElementInfo>> QueryElementsAsync(string? type = null, string? automationId = null, string? text = null, int maxResults = 50, int maxDepth = 24)
     {
         return Application.Current?.Dispatcher.InvokeAsync(() =>
-            _treeWalker.QueryElements(type, automationId, text, maxResults, maxDepth)).Task ?? Task.FromResult(new List<ElementInfo>());
+        {
+            var roots = _treeWalker.WalkTree();
+            var all = new List<ElementInfo>();
+            foreach (var root in roots)
+                Flatten(root, all);
+
+            return all.Where(e =>
+                    (string.IsNullOrWhiteSpace(type) || string.Equals(e.Type, type, StringComparison.OrdinalIgnoreCase))
+                    && (string.IsNullOrWhiteSpace(automationId) || string.Equals(e.AutomationId, automationId, StringComparison.OrdinalIgnoreCase))
+                    && (string.IsNullOrWhiteSpace(text) || ((e.Text?.Contains(text, StringComparison.OrdinalIgnoreCase) == true))))
+                .Take(maxResults)
+                .ToList();
+        }).Task ?? Task.FromResult(new List<ElementInfo>());
     }
 
     protected override Task<byte[]?> CaptureScreenshotAsync(string? elementId = null, string? selector = null)
@@ -403,6 +419,7 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
     protected override async Task<object?> TryBackResponseAsync()
         => await TryBackAsync().ConfigureAwait(false) ? CreateSuccessResult(SimulationModes.Semantic) : null;
 
+#if LIBREWPF
     protected override async Task<object?> TryDragResponseAsync(DragRequest request)
     {
         var resolved = await DispatchToApplicationAsync<ResolvedDrag?>(() =>
@@ -442,9 +459,6 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
         if (resolved.Error != null)
             return new { ok = false, reason = resolved.Error };
 
-        // Prefer real OS-level events via cliclick when available: they drive the genuine native input
-        // path (cross-window capture, overlay windows, GLFW routing) that the portable ProcessInput
-        // injector bypasses, so DevFlow tests reproduce what a real user hits.
         if (CliclickInput.IsAvailable)
         {
             var clickDragOk = await Task.Run(() =>
@@ -462,8 +476,6 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
             }
         }
 
-        // Global coordinates are Quartz screen coordinates and must stay on the native path.
-        // The portable WPF injector expects coordinates resolved against a WPF window.
         if (OperatingSystem.IsMacOS() && !request.Global)
         {
             var portableSuccess = await TryPortableWpfMouseDragAsync(resolved.FromX, resolved.FromY, resolved.ToX, resolved.ToY, resolved.Steps).ConfigureAwait(false);
@@ -530,10 +542,41 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
         return new { ok, mode = resolved.Mode, x = resolved.X, y = resolved.Y, note = BuildNativeMouseNote(ok) };
     }
 
+    protected override async Task<object?> TryPressResponseAsync(ClickRequest request)
+    {
+        if (!CliclickInput.IsAvailable)
+            return new { ok = false, reason = "cliclick is required for decomposed press/drag-move/release and is not installed" };
+
+        var x = request.X!.Value;
+        var y = request.Y!.Value;
+        var ok = await Task.Run(() => CliclickInput.TryPressDown(x, y)).ConfigureAwait(false);
+        return new { ok, mode = "cliclick", x, y };
+    }
+
+    protected override async Task<object?> TryDragMoveResponseAsync(ClickRequest request)
+    {
+        if (!CliclickInput.IsAvailable)
+            return new { ok = false, reason = "cliclick is required for decomposed press/drag-move/release and is not installed" };
+
+        var x = request.X!.Value;
+        var y = request.Y!.Value;
+        var ok = await Task.Run(() => CliclickInput.TryDragMoveTo(x, y)).ConfigureAwait(false);
+        return new { ok, mode = "cliclick", x, y };
+    }
+
+    protected override async Task<object?> TryReleaseResponseAsync(ClickRequest request)
+    {
+        if (!CliclickInput.IsAvailable)
+            return new { ok = false, reason = "cliclick is required for decomposed press/drag-move/release and is not installed" };
+
+        var x = request.X!.Value;
+        var y = request.Y!.Value;
+        var ok = await Task.Run(() => CliclickInput.TryRelease(x, y)).ConfigureAwait(false);
+        return new { ok, mode = "cliclick", x, y };
+    }
+
     protected override async Task<object?> TryMoveResponseAsync(MoveRequest request)
     {
-        // Prefer real OS-level cursor movement via cliclick when available (drives the genuine native
-        // path); fall back to the portable synthetic move otherwise.
         if (CliclickInput.IsAvailable)
         {
             var resolvedMove = await DispatchToApplicationAsync<(bool Ok, double X, double Y)>(() =>
@@ -791,6 +834,8 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
         }
     }
 
+    private Window? _cachedMainWindow;
+
     private static Window? TryGetMainWindowUnsafe(Application app)
     {
         try
@@ -877,6 +922,7 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
 
         return false;
     }
+#endif
 
     private DependencyObject? ResolveElementObject(string elementId)
     {
@@ -888,6 +934,15 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
     {
         textBox.Text = text;
         return true;
+    }
+
+    private static void Flatten(ElementInfo element, List<ElementInfo> list)
+    {
+        list.Add(element);
+        if (element.Children == null)
+            return;
+        foreach (var child in element.Children)
+            Flatten(child, list);
     }
 
     private static bool SetPassword(PasswordBox passwordBox, string text)
@@ -1006,19 +1061,16 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
         if (window == null)
             return null;
 
-        // Under ProGPU the WPF RenderTargetBitmap/PngBitmapEncoder path is not
-        // available (it needs native milcore wpfgfx). Prefer ProGPU's own CPU
-        // back-buffer capture when the host is present, discovered by reflection so
-        // this agent keeps no hard dependency on ProGPU.Wpf. Tried before the size
-        // guard because ProGPU sizes come from the back buffer, not ActualWidth.
-        var progpuPng = TryCaptureViaProGpu(window);
-        if (progpuPng != null)
-            return progpuPng;
-
         var width = (int)Math.Ceiling(window.ActualWidth);
         var height = (int)Math.Ceiling(window.ActualHeight);
         if (width <= 0 || height <= 0)
             return null;
+
+#if LIBREWPF
+        var progpuPng = TryCaptureViaProGpu(window);
+        if (progpuPng != null)
+            return progpuPng;
+#endif
 
         var source = PresentationSource.FromVisual(window);
         var dpi = 96.0;
@@ -1035,6 +1087,7 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
         return ms.ToArray();
     }
 
+#if LIBREWPF
     private static byte[]? TryCaptureViaProGpu(Window window)
     {
         try
@@ -1050,6 +1103,7 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
             return null;
         }
     }
+#endif
 
     private byte[]? CaptureScreenshotOnUiThread(string? elementId, string? selector)
     {

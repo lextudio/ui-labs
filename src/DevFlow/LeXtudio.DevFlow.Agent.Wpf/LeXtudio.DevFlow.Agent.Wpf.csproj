@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>LeXtudio.DevFlow.Agent.Wpf</AssemblyName>
+    <RootNamespace>LeXtudio.DevFlow.Agent.Wpf</RootNamespace>
+    <IsPackable>true</IsPackable>
+    <PackageId>LeXtudio.DevFlow.Agent.Wpf</PackageId>
+    <PackageIcon>company_logo_512.png</PackageIcon>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\..\images\company_logo_512.png" Pack="true" PackagePath="\" Visible="false" />
+    <None Include="README.md" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LeXtudio.DevFlow.Agent.Core\LeXtudio.DevFlow.Agent.Core.csproj" />
+  </ItemGroup>
+
+</Project>

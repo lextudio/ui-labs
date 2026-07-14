@@ -127,6 +127,9 @@ public abstract class DevFlowAgentServiceBase : IDisposable
         _server.MapPost("/api/v1/ui/actions/drag", HandleDragAsync);
         _server.MapPost("/api/v1/ui/actions/move", HandleMoveAsync);
         _server.MapPost("/api/v1/ui/actions/click", HandleClickAsync);
+        _server.MapPost("/api/v1/ui/actions/press", HandlePressAsync);
+        _server.MapPost("/api/v1/ui/actions/drag-move", HandleDragMoveAsync);
+        _server.MapPost("/api/v1/ui/actions/release", HandleReleaseAsync);
         _server.MapGet("/api/v1/device/app/theme", HandleThemeGetAsync);
         _server.MapPut("/api/v1/device/app/theme", HandleThemeSetAsync);
         _server.MapGet("/api/v1/invoke/actions", HandleListInvokeActionsAsync);
@@ -319,6 +322,67 @@ public abstract class DevFlowAgentServiceBase : IDisposable
     }
 
     protected virtual Task<object?> TryClickResponseAsync(ClickRequest request)
+        => Task.FromResult<object?>(null);
+
+    /// <summary>
+    /// POST /api/v1/ui/actions/press — press and HOLD a mouse button at global screen coordinates
+    /// (does not release). Body: { "x": number, "y": number }. Pair with /actions/drag-move (repeat as
+    /// needed to traverse multiple points while held) and /actions/release. Exists so a caller can
+    /// inspect live UI state (e.g. which drop-target indicators are currently showing) BETWEEN steps of
+    /// a drag gesture, which a single monolithic /actions/drag call cannot do.
+    /// </summary>
+    private async Task<HttpResponse> HandlePressAsync(HttpRequest request)
+    {
+        var payload = request.BodyAs<ClickRequest>();
+        if (payload == null || payload.X == null || payload.Y == null)
+            return HttpResponse.Error("Both x and y are required", 400);
+
+        var result = await TryPressResponseAsync(payload).ConfigureAwait(false);
+        return result != null
+            ? HttpResponse.Json(result)
+            : HttpResponse.Error("Press is not supported by this agent", 501);
+    }
+
+    protected virtual Task<object?> TryPressResponseAsync(ClickRequest request)
+        => Task.FromResult<object?>(null);
+
+    /// <summary>
+    /// POST /api/v1/ui/actions/drag-move — move the pointer to global screen coordinates WHILE a
+    /// button pressed via /actions/press is still held (a real "dragged" move, distinct from
+    /// /actions/move's plain hover move). Body: { "x": number, "y": number }.
+    /// </summary>
+    private async Task<HttpResponse> HandleDragMoveAsync(HttpRequest request)
+    {
+        var payload = request.BodyAs<ClickRequest>();
+        if (payload == null || payload.X == null || payload.Y == null)
+            return HttpResponse.Error("Both x and y are required", 400);
+
+        var result = await TryDragMoveResponseAsync(payload).ConfigureAwait(false);
+        return result != null
+            ? HttpResponse.Json(result)
+            : HttpResponse.Error("Drag-move is not supported by this agent", 501);
+    }
+
+    protected virtual Task<object?> TryDragMoveResponseAsync(ClickRequest request)
+        => Task.FromResult<object?>(null);
+
+    /// <summary>
+    /// POST /api/v1/ui/actions/release — release a mouse button previously held via /actions/press, at
+    /// global screen coordinates. Body: { "x": number, "y": number }.
+    /// </summary>
+    private async Task<HttpResponse> HandleReleaseAsync(HttpRequest request)
+    {
+        var payload = request.BodyAs<ClickRequest>();
+        if (payload == null || payload.X == null || payload.Y == null)
+            return HttpResponse.Error("Both x and y are required", 400);
+
+        var result = await TryReleaseResponseAsync(payload).ConfigureAwait(false);
+        return result != null
+            ? HttpResponse.Json(result)
+            : HttpResponse.Error("Release is not supported by this agent", 501);
+    }
+
+    protected virtual Task<object?> TryReleaseResponseAsync(ClickRequest request)
         => Task.FromResult<object?>(null);
 
     protected sealed class ClickRequest

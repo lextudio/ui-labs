@@ -1,0 +1,37 @@
+<Window x:Class="LibreWpfDevFlowTestApp.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        Title="LibreWPF DevFlow Test App"
+        Width="480"
+        Height="320"
+        WindowStartupLocation="CenterScreen">
+    <Grid Margin="16">
+        <ScrollViewer Name="MainScrollViewer" AutomationProperties.AutomationId="MainScrollViewer">
+            <StackPanel>
+                <TextBlock Text="LibreWPF DevFlow Sample App" FontSize="24" FontWeight="Bold" Margin="0,0,0,12" />
+                <TextBlock Text="This app is instrumented with DevFlow on port 5500." TextWrapping="Wrap" Margin="0,0,0,12" />
+                <Button Name="ActionButton" AutomationProperties.AutomationId="ActionButton" Width="180" Height="40" Content="Tap Me" Click="ActionButton_Click" Margin="0,0,0,12" />
+                <TextBlock Name="ResponseText" AutomationProperties.AutomationId="ResponseText" Text="Press the button or call DevFlow endpoints." TextWrapping="Wrap" Margin="0,0,0,12" />
+
+                <TextBlock Text="Scroll to see the hidden footer content." FontWeight="SemiBold" Margin="0,0,0,12" />
+                <TextBlock Text="This content is intentionally long to force vertical scrolling in the sample app." TextWrapping="Wrap" Margin="0,0,0,12" />
+                <TextBlock Text="Keep scrolling..." />
+                <TextBlock Text="Keep scrolling..." />
+                <TextBlock Text="Keep scrolling..." />
+                <TextBlock Text="Keep scrolling..." />
+                <TextBlock Text="Keep scrolling..." />
+                <TextBlock Text="Keep scrolling..." />
+                <TextBlock Text="Keep scrolling..." />
+                <TextBlock Text="Keep scrolling..." />
+                <TextBlock Name="ScrollTargetText" AutomationProperties.AutomationId="ScrollTargetText" Text="Scroll target is here!" FontWeight="Bold" Margin="0,12,0,0" />
+                <TextBlock Text="WebView test surface:" FontWeight="SemiBold" Margin="0,12,0,8" />
+                <Border BorderBrush="Gray" BorderThickness="1">
+                    <wv2:WebView2 Name="WebViewHost"
+                                  AutomationProperties.AutomationId="WebViewHost"
+                                  Height="180" />
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Window>

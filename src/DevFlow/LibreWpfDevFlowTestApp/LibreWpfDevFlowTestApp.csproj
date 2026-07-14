@@ -1,15 +1,16 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="LibreWPF.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <AssemblyName>WpfDevFlowTestApp</AssemblyName>
-    <RootNamespace>WpfDevFlowTestApp</RootNamespace>
+    <AssemblyName>LibreWpfDevFlowTestApp</AssemblyName>
+    <RootNamespace>LibreWpfDevFlowTestApp</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\LeXtudio.DevFlow.Agent.Wpf\LeXtudio.DevFlow.Agent.Wpf.csproj" />
+    <ProjectReference Include="..\LeXtudio.DevFlow.Agent.LibreWpf\LeXtudio.DevFlow.Agent.LibreWpf.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" />

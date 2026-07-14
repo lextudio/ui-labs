@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>LeXtudio.LibreWpf.Cli</RootNamespace>
+    <PackageId>LeXtudio.LibreWpf.Cli</PackageId>
+    <IsPackable>true</IsPackable>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>dotnet-librewpf</ToolCommandName>
+    <Description>CLI and global tool for LeXtudio LibreWPF DevFlow workflows.</Description>
+    <PackageTags>librewpf;devflow;cli;tool;automation</PackageTags>
+    <PackageIcon>company_logo_512.png</PackageIcon>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Include="..\..\..\..\images\company_logo_512.png" Pack="true" PackagePath="\" Visible="false" />
+    <None Include="README.md" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../../src/DevFlow/LeXtudio.DevFlow.Driver/LeXtudio.DevFlow.Driver.csproj" />
+  </ItemGroup>
+</Project>

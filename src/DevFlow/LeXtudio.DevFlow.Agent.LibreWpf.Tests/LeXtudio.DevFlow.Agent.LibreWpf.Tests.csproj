@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
+    <UseMSBuildTestInfrastructure>true</UseMSBuildTestInfrastructure>
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+    <IsPackable>false</IsPackable>
+    <AssemblyName>LeXtudio.DevFlow.Agent.LibreWpf.Tests</AssemblyName>
+    <RootNamespace>LeXtudio.DevFlow.Agent.LibreWpf.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit.v3.mtp-v2" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <ProjectReference Include="..\LeXtudio.DevFlow.Agent.LibreWpf\LeXtudio.DevFlow.Agent.LibreWpf.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\LeXtudio.DevFlow.Agent.Wpf.Tests\**\*.cs" Link="Shared\%(Filename)%(Extension)" Exclude="..\LeXtudio.DevFlow.Agent.Wpf.Tests\obj\**\*.cs" />
+  </ItemGroup>
+
+</Project>

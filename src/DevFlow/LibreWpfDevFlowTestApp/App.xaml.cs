@@ -4,7 +4,7 @@ using Microsoft.Maui.DevFlow.Agent.Core;
 using LeXtudio.DevFlow.Agent.Core;
 using LeXtudio.DevFlow.Agent.Wpf;
 
-namespace WpfDevFlowTestApp;
+namespace LibreWpfDevFlowTestApp;
 
 public partial class App : Application
 {

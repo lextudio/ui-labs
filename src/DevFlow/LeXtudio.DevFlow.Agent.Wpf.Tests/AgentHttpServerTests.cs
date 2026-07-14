@@ -5,7 +5,7 @@ using System.Text.Json;
 using Microsoft.Maui.DevFlow.Agent.Core;
 using Xunit;
 
-namespace LeXtudio.DevFlow.Agent.WPF.Tests;
+namespace LeXtudio.DevFlow.Agent.Wpf.Tests;
 
 public class AgentHttpServerTests
 {

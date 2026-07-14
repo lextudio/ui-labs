@@ -57,6 +57,16 @@ namespace LeXtudio.DevFlow.Agent.WPF
 
         public static bool TryMove(double x, double y) => Run($"m:{Pt(x)},{Pt(y)}");
 
+        // Decomposed press/drag-move/release: each is a SEPARATE cliclick process invocation, relying
+        // on the OS (not cliclick) to remember the physically-held button between calls - this lets a
+        // caller inspect live app state BETWEEN steps of a drag (e.g. which drop-target indicators are
+        // currently showing), which a single monolithic press-move...-release invocation cannot do.
+        public static bool TryPressDown(double x, double y) => Run($"m:{Pt(x)},{Pt(y)}", $"dd:{Pt(x)},{Pt(y)}");
+
+        public static bool TryDragMoveTo(double x, double y) => Run($"dm:{Pt(x)},{Pt(y)}");
+
+        public static bool TryRelease(double x, double y) => Run($"du:{Pt(x)},{Pt(y)}");
+
         public static bool TryClick(double x, double y, int clickCount)
         {
             var commands = new List<string> { $"m:{Pt(x)},{Pt(y)}" };
