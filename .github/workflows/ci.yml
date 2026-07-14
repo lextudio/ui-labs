@@ -36,13 +36,17 @@ jobs:
       - name: Restore CLI unit tests
         run: |
           dotnet restore src/Cli/src/LeXtudio.Wpf.Cli.UnitTests/LeXtudio.Wpf.Cli.UnitTests.csproj
+          dotnet restore src/Cli/src/LeXtudio.LibreWpf.Cli.UnitTests/LeXtudio.LibreWpf.Cli.UnitTests.csproj
           dotnet restore src/Cli/src/LeXtudio.WinForms.Cli.UnitTests/LeXtudio.WinForms.Cli.UnitTests.csproj
           dotnet restore src/Cli/src/LeXtudio.MewUI.Cli.UnitTests/LeXtudio.MewUI.Cli.UnitTests.csproj
           dotnet restore src/Cli/src/LeXtudio.Uno.Cli.UnitTests/LeXtudio.Uno.Cli.UnitTests.csproj
           dotnet restore src/Cli/src/LeXtudio.Jalium.Cli.UnitTests/LeXtudio.Jalium.Cli.UnitTests.csproj
 
       - name: Restore WPF agent tests
-        run: dotnet restore src/DevFlow/LeXtudio.DevFlow.Agent.WPF.Tests/LeXtudio.DevFlow.Agent.WPF.Tests.csproj
+        run: dotnet restore src/DevFlow/LeXtudio.DevFlow.Agent.Wpf.Tests/LeXtudio.DevFlow.Agent.Wpf.Tests.csproj
+
+      - name: Restore LibreWPF agent tests
+        run: dotnet restore src/DevFlow/LeXtudio.DevFlow.Agent.LibreWpf.Tests/LeXtudio.DevFlow.Agent.LibreWpf.Tests.csproj
 
       - name: Restore WinForms agent tests
         run: dotnet restore src/DevFlow/LeXtudio.DevFlow.Agent.WinForms.Tests/LeXtudio.DevFlow.Agent.WinForms.Tests.csproj
@@ -63,7 +67,10 @@ jobs:
         run: dotnet test src/DevFlow/LeXtudio.DevFlow.Agent.MewUI.Tests/LeXtudio.DevFlow.Agent.MewUI.Tests.csproj --configuration Release --no-restore
 
       - name: Run WPF agent tests
-        run: dotnet test src/DevFlow/LeXtudio.DevFlow.Agent.WPF.Tests/LeXtudio.DevFlow.Agent.WPF.Tests.csproj --configuration Release --no-restore
+        run: dotnet test src/DevFlow/LeXtudio.DevFlow.Agent.Wpf.Tests/LeXtudio.DevFlow.Agent.Wpf.Tests.csproj --configuration Release --no-restore
+
+      - name: Run LibreWPF agent tests
+        run: dotnet test src/DevFlow/LeXtudio.DevFlow.Agent.LibreWpf.Tests/LeXtudio.DevFlow.Agent.LibreWpf.Tests.csproj --configuration Release --no-restore
 
       - name: Run WinForms agent tests
         run: dotnet test src/DevFlow/LeXtudio.DevFlow.Agent.WinForms.Tests/LeXtudio.DevFlow.Agent.WinForms.Tests.csproj --configuration Release --no-restore
@@ -74,6 +81,7 @@ jobs:
       - name: Run CLI unit tests
         run: |
           dotnet test src/Cli/src/LeXtudio.Wpf.Cli.UnitTests/LeXtudio.Wpf.Cli.UnitTests.csproj --configuration Release --no-restore
+          dotnet test src/Cli/src/LeXtudio.LibreWpf.Cli.UnitTests/LeXtudio.LibreWpf.Cli.UnitTests.csproj --configuration Release --no-restore
           dotnet test src/Cli/src/LeXtudio.WinForms.Cli.UnitTests/LeXtudio.WinForms.Cli.UnitTests.csproj --configuration Release --no-restore
           dotnet test src/Cli/src/LeXtudio.MewUI.Cli.UnitTests/LeXtudio.MewUI.Cli.UnitTests.csproj --configuration Release --no-restore
           dotnet test src/Cli/src/LeXtudio.Uno.Cli.UnitTests/LeXtudio.Uno.Cli.UnitTests.csproj --configuration Release --no-restore
