@@ -31,7 +31,9 @@ Core commands:
 - `package`
 - `diagnostics`
 - `env`
-- `devflow` (`status`, `screenshot`, `tap`)
+- `commands` — list available commands in machine-readable JSON form
+- `batch` — execute newline-delimited JSON command batches from stdin
+- `devflow` (`status`, `screenshot`, `tap`, `extensions`, `inspector`, `broker`, `network`, `ui`, `alert`)
 
 ## 3. Scaffold a new MewUI app
 
@@ -114,7 +116,29 @@ Tap an element:
 dotnet mewlex devflow tap --id <element-id>
 ```
 
-## 8. Output modes for automation
+## 8. DevFlow: extensions, inspector, broker, network, ui, alert
+
+```powershell
+dotnet mewlex devflow extensions list
+dotnet mewlex devflow extensions call mewui.echo --arg "hello"
+
+dotnet mewlex devflow inspector --port 9223 --inspector-port 9300
+
+dotnet mewlex devflow broker start
+dotnet mewlex devflow broker list
+
+dotnet mewlex devflow network list
+dotnet mewlex devflow network detail --id <request-id>
+
+dotnet mewlex devflow ui query --selector "Button:visible"
+dotnet mewlex devflow ui hit-test --x 100 --y 50
+dotnet mewlex devflow ui assert --selector "Button#Submit" --exists true
+
+dotnet mewlex devflow alert detect
+dotnet mewlex devflow alert dismiss --button OK
+```
+
+## 9. Output modes for automation
 
 Global options:
 
@@ -130,7 +154,7 @@ dotnet mewlex --json devflow status
 dotnet mewlex --dry-run package .\src\MyMewApp\MyMewApp.csproj
 ```
 
-## 9. Expected behavior and exit codes
+## 10. Expected behavior and exit codes
 
 - Success returns exit code `0`.
 - Unknown command/invalid options return non-zero.

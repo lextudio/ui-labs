@@ -1,23 +1,23 @@
-# WPF CLI Guide (`dotnet wpflex`)
+# LibreWPF CLI Guide (`dotnet librewpf`)
 
-This guide explains how to use the WPF CLI for project workflows and DevFlow agent operations.
+This guide explains how to use the LibreWPF CLI for project workflows and DevFlow agent operations. It mirrors the WPF CLI (`dotnet wpflex`) since LibreWPF shares the WPF agent and visual tree walker via linked source.
 
 ## 1. Install
 
 ```powershell
-dotnet tool install -g LeXtudio.Wpf.Cli
+dotnet tool install -g LeXtudio.LibreWpf.Cli
 ```
 
 If already installed:
 
 ```powershell
-dotnet tool update -g LeXtudio.Wpf.Cli
+dotnet tool update -g LeXtudio.LibreWpf.Cli
 ```
 
 ## 2. Check available commands
 
 ```powershell
-dotnet wpflex --help
+dotnet librewpf --help
 ```
 
 Core commands:
@@ -35,16 +35,16 @@ Core commands:
 - `batch` — execute newline-delimited JSON command batches from stdin
 - `devflow` (`status`, `screenshot`, `tap`, `webview`, `extensions`, `inspector`, `broker`, `network`, `ui`, `alert`)
 
-## 3. Scaffold a new WPF app
+## 3. Scaffold a new LibreWPF app
 
 ```powershell
-dotnet wpflex new MyWpfApp
+dotnet librewpf new MyApp
 ```
 
 What happens:
 
-- Creates folder `MyWpfApp`
-- Generates `MyWpfApp.csproj`
+- Creates folder `MyApp`
+- Generates `MyApp.csproj`
 - Generates `Program.cs`
 
 ## 4. Build and run projects
@@ -52,15 +52,15 @@ What happens:
 From a solution/project folder:
 
 ```powershell
-dotnet wpflex build
-dotnet wpflex run
+dotnet librewpf build
+dotnet librewpf run
 ```
 
 Target a specific project:
 
 ```powershell
-dotnet wpflex build .\src\MyWpfApp\MyWpfApp.csproj
-dotnet wpflex run .\src\MyWpfApp\MyWpfApp.csproj
+dotnet librewpf build .\src\MyApp\MyApp.csproj
+dotnet librewpf run .\src\MyApp\MyApp.csproj
 ```
 
 Common build options:
@@ -75,13 +75,13 @@ Common build options:
 Publish:
 
 ```powershell
-dotnet wpflex publish .\src\MyWpfApp\MyWpfApp.csproj -c Release
+dotnet librewpf publish .\src\MyApp\MyApp.csproj -c Release
 ```
 
 Package (publishes first, then zips output as `publish.zip` in current directory):
 
 ```powershell
-dotnet wpflex package .\src\MyWpfApp\MyWpfApp.csproj -c Release
+dotnet librewpf package .\src\MyApp\MyApp.csproj -c Release
 ```
 
 ## 6. Environment and diagnostics
@@ -89,37 +89,37 @@ dotnet wpflex package .\src\MyWpfApp\MyWpfApp.csproj -c Release
 Validate CLI environment:
 
 ```powershell
-dotnet wpflex doctor
+dotnet librewpf doctor
 ```
 
 Show runtime + SDK environment:
 
 ```powershell
-dotnet wpflex env
-dotnet wpflex diagnostics
+dotnet librewpf env
+dotnet librewpf diagnostics
 ```
 
-## 7. Use WPF CLI with DevFlow
+## 7. Use LibreWPF CLI with DevFlow
 
 Assumes your app is running with DevFlow agent enabled (default `localhost:9223`).
 
 Check agent status:
 
 ```powershell
-dotnet wpflex devflow status
-dotnet wpflex devflow status --host localhost --port 9223
+dotnet librewpf devflow status
+dotnet librewpf devflow status --host localhost --port 9223
 ```
 
 Capture screenshot:
 
 ```powershell
-dotnet wpflex devflow screenshot --output wpf-shot.png
+dotnet librewpf devflow screenshot --output librewpf-shot.png
 ```
 
 Tap a UI element by DevFlow element id:
 
 ```powershell
-dotnet wpflex devflow tap --id <element-id>
+dotnet librewpf devflow tap --id <element-id>
 ```
 
 ## 8. DevFlow: extensions, inspector, broker, network, ui, alert
@@ -127,48 +127,47 @@ dotnet wpflex devflow tap --id <element-id>
 Discover and invoke `[DevFlowAction]`-annotated methods in the running app:
 
 ```powershell
-dotnet wpflex devflow extensions list
-dotnet wpflex devflow extensions describe --name wpf.echo
-dotnet wpflex devflow extensions call wpf.echo --arg "hello"
+dotnet librewpf devflow extensions list
+dotnet librewpf devflow extensions describe --name wpf.echo
+dotnet librewpf devflow extensions call wpf.echo --arg "hello"
 ```
 
 Start the browser-based live UI inspector (open the printed URL in a browser):
 
 ```powershell
-dotnet wpflex devflow inspector --port 9223 --inspector-port 9300
+dotnet librewpf devflow inspector --port 9223 --inspector-port 9300
 ```
 
 Manage the multi-agent broker daemon (useful when several DevFlow-enabled apps are running at once):
 
 ```powershell
-dotnet wpflex devflow broker start
-dotnet wpflex devflow broker status
-dotnet wpflex devflow broker list
-dotnet wpflex devflow broker stop
+dotnet librewpf devflow broker start
+dotnet librewpf devflow broker status
+dotnet librewpf devflow broker list
+dotnet librewpf devflow broker stop
 ```
 
 Inspect HTTP traffic captured from apps that construct their `HttpClient` via `DevFlowHttp.CreateClient()`:
 
 ```powershell
-dotnet wpflex devflow network list
-dotnet wpflex devflow network detail --id <request-id>
-dotnet wpflex devflow network clear
+dotnet librewpf devflow network list
+dotnet librewpf devflow network detail --id <request-id>
+dotnet librewpf devflow network clear
 ```
 
 Query the live tree with CSS selectors, hit-test a point, or assert on selector matches:
 
 ```powershell
-dotnet wpflex devflow ui query --selector "Button:visible"
-dotnet wpflex devflow ui hit-test --x 223 --y 108
-dotnet wpflex devflow ui assert --selector "Button#Submit" --exists true
-dotnet wpflex devflow ui assert --selector "TextBlock" --text-contains "Tap Me"
+dotnet librewpf devflow ui query --selector "Button:visible"
+dotnet librewpf devflow ui hit-test --x 223 --y 108
+dotnet librewpf devflow ui assert --selector "Button#Submit" --exists true
 ```
 
 Detect and dismiss native dialog boxes (`MessageBox`):
 
 ```powershell
-dotnet wpflex devflow alert detect
-dotnet wpflex devflow alert dismiss --button OK
+dotnet librewpf devflow alert detect
+dotnet librewpf devflow alert dismiss --button OK
 ```
 
 ## 9. Output modes for automation
@@ -183,8 +182,8 @@ Global options (can appear before command):
 Example:
 
 ```powershell
-dotnet wpflex --json devflow status
-dotnet wpflex --dry-run package .\src\MyWpfApp\MyWpfApp.csproj
+dotnet librewpf --json devflow status
+dotnet librewpf --dry-run package .\src\MyApp\MyApp.csproj
 ```
 
 ## 10. Expected behavior and exit codes

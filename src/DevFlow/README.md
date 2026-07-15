@@ -1,8 +1,8 @@
 # Desktop DevFlow
 
-A Windows desktop DevFlow product designed for classic WPF and WinForms applications, with additional Uno and MewUI coverage.
+A Windows desktop DevFlow product designed for classic WPF and WinForms applications, with additional Uno, MewUI, LibreWPF, and Jalium coverage.
 
-This folder contains the shared DevFlow runtime packages for WPF, WinForms, WinUI 3, Uno Platform, and MewUI applications.
+This folder contains the shared DevFlow runtime packages for WPF, WinForms, WinUI 3, Uno Platform, MewUI, LibreWPF, and Jalium applications.
 
 Each package has its own package-specific README for the most relevant installation and usage guidance:
 
@@ -11,7 +11,11 @@ Each package has its own package-specific README for the most relevant installat
 - `LeXtudio.DevFlow.Agent.WinForms/README.md`
 - `LeXtudio.DevFlow.Agent.Uno/README.md`
 - `LeXtudio.DevFlow.Agent.MewUI/README.md`
+- `LeXtudio.DevFlow.Agent.LibreWpf/README.md`
+- `LeXtudio.DevFlow.Agent.Jalium/README.md`
 - `LeXtudio.DevFlow.Driver/README.md`
+- `LeXtudio.DevFlow.Inspector/README.md`
+- `LeXtudio.DevFlow.Broker/README.md`
 
 ## NuGet packages
 
@@ -19,6 +23,9 @@ Each package has its own package-specific README for the most relevant installat
 [![LeXtudio.DevFlow.Agent.WPF](https://img.shields.io/nuget/v/LeXtudio.DevFlow.Agent.WPF.svg)](https://www.nuget.org/packages/LeXtudio.DevFlow.Agent.WPF)
 [![LeXtudio.DevFlow.Agent.WinForms](https://img.shields.io/nuget/v/LeXtudio.DevFlow.Agent.WinForms.svg)](https://www.nuget.org/packages/LeXtudio.DevFlow.Agent.WinForms)
 [![LeXtudio.DevFlow.Agent.Uno](https://img.shields.io/nuget/v/LeXtudio.DevFlow.Agent.Uno.svg)](https://www.nuget.org/packages/LeXtudio.DevFlow.Agent.Uno)
+[![LeXtudio.DevFlow.Agent.MewUI](https://img.shields.io/nuget/v/LeXtudio.DevFlow.Agent.MewUI.svg)](https://www.nuget.org/packages/LeXtudio.DevFlow.Agent.MewUI)
+[![LeXtudio.DevFlow.Agent.LibreWpf](https://img.shields.io/nuget/v/LeXtudio.DevFlow.Agent.LibreWpf.svg)](https://www.nuget.org/packages/LeXtudio.DevFlow.Agent.LibreWpf)
+[![LeXtudio.DevFlow.Agent.Jalium](https://img.shields.io/nuget/v/LeXtudio.DevFlow.Agent.Jalium.svg)](https://www.nuget.org/packages/LeXtudio.DevFlow.Agent.Jalium)
 [![LeXtudio.DevFlow.Driver](https://img.shields.io/nuget/v/LeXtudio.DevFlow.Driver.svg)](https://www.nuget.org/packages/LeXtudio.DevFlow.Driver)
 
 Install the runtime package for your UI stack:
@@ -38,14 +45,29 @@ dotnet add package LeXtudio.DevFlow.Agent.Uno
 dotnet add package LeXtudio.DevFlow.Driver
 ```
 
+```powershell
+dotnet add package LeXtudio.DevFlow.Agent.LibreWpf
+dotnet add package LeXtudio.DevFlow.Driver
+```
+
+```powershell
+dotnet add package LeXtudio.DevFlow.Agent.Jalium
+dotnet add package LeXtudio.DevFlow.Driver
+```
+
 ## What is included
 
-- `LeXtudio.DevFlow.Agent.Core` — UI-stack-agnostic DevFlow HTTP server, DTOs, and shared agent plumbing
+- `LeXtudio.DevFlow.Agent.Core` — UI-stack-agnostic DevFlow HTTP server, DTOs, CSS selector/query engine, network traffic capture, and Win32 alert detection
 - `LeXtudio.DevFlow.Agent.WPF` — WPF-specific visual tree walker, screenshot capture, and UI interaction support
 - `LeXtudio.DevFlow.Agent.WinForms` — WinForms-specific control tree walker, screenshot capture, and UI interaction support
 - `LeXtudio.DevFlow.Agent.Uno` — Uno Platform and WinUI 3 registration and visual tree support
 - `LeXtudio.DevFlow.Agent.MewUI` — MewUI runtime support via NuGet-deployed Aprillz.MewUI packages
+- `LeXtudio.DevFlow.Agent.LibreWpf` — LibreWPF runtime support, sharing the WPF visual tree walker via linked source
+- `LeXtudio.DevFlow.Agent.Jalium` — Jalium runtime support via Jalium.UI.Controls
 - `LeXtudio.DevFlow.Driver` — HTTP client for querying a running DevFlow agent
+- `LeXtudio.DevFlow.Inspector` — browser-based live UI inspector server, hosted by each CLI's `devflow inspector` command
+- `LeXtudio.DevFlow.Broker` — multi-agent broker daemon for discovery/registration, hosted by each CLI's `devflow broker` command
+- `LeXtudio.DevFlow.Analyzers` — Roslyn analyzer validating `[DevFlowAction]` method signatures at compile time
 
 ## Build
 
@@ -93,6 +115,30 @@ context.AddWinFormsDevFlowAgent(new AgentOptions { Port = 9223 });
 Application.Run(context);
 ```
 
+LibreWPF apps register the agent the same way as WPF — `LeXtudio.DevFlow.Agent.LibreWpf` shares the WPF agent service via linked source, so the API lives under the `LeXtudio.DevFlow.Agent.Wpf` namespace:
+
+```csharp
+using LeXtudio.DevFlow.Agent.Wpf;
+
+public partial class App : Application
+{
+    protected override void OnStartup(StartupEventArgs e)
+    {
+        base.OnStartup(e);
+        this.AddWpfDevFlowAgent();
+    }
+}
+```
+
+Jalium apps register the agent during startup:
+
+```csharp
+using LeXtudio.DevFlow.Agent.Jalium;
+using Microsoft.Maui.DevFlow.Agent.Core;
+
+Application.Current!.AddJaliumDevFlowAgent(new AgentOptions { Port = 9223 });
+```
+
 ## Web API
 
 By default, the sample apps start the agent on port `9223`.
@@ -103,6 +149,10 @@ You can override the port at build time with `dotnet build -p:MauiDevFlowPort=95
 | `GET /api/v1/agent/status` | Read agent status. |
 | `GET /api/v1/ui/tree` | Read the live UI tree. |
 | `GET /api/v1/ui/element?id=<id>` | Read one UI element by id. |
+| `GET /api/v1/ui/elements?type=&automationId=&text=` | Query elements by type, automation id, or text. |
+| `GET /api/v1/ui/query-selector?selector=<css>` | Query elements with a CSS selector (type, class, attribute, `:visible`/`:enabled`/`:focused`, combinators). |
+| `GET /api/v1/ui/hit-test?x=&y=` | Return the ancestor chain (and topmost match) at a point. |
+| `POST /api/v1/ui/assert` | Assert selector match count/existence/text with body `{ "selector": "...", "exists": true, "count": 1, "textEquals": "...", "textContains": "..." }`. |
 | `GET /api/v1/ui/screenshot` | Capture a screenshot. |
 | `GET /api/v1/ui/screenshot?id=<id>` | Capture a screenshot for one element/control. |
 | `GET /api/v1/ui/screenshot?selector=%23<id>` | Capture a screenshot using a selector. |
@@ -115,6 +165,16 @@ You can override the port at build time with `dotnet build -p:MauiDevFlowPort=95
 | `POST /api/v1/ui/actions/focus` | Focus an element with body `{ "elementId": "<element-id>" }`. |
 | `POST /api/v1/ui/actions/key` | Send key/text input with body `{ "elementId": "<element-id>", "text": "A" }`. |
 | `POST /api/v1/ui/actions/scroll` | Scroll an element with body `{ "id": "<element-id>", "deltaX": 0, "deltaY": 600 }`. |
+| `GET /api/v1/invoke/actions` | List discovered `[DevFlowAction]` methods with their parameters. |
+| `POST /api/v1/invoke/actions/{name}` | Invoke a `[DevFlowAction]` method with body `{ "args": [...] }`. |
+| `GET /api/v1/network/list?count=&host=&method=&status=` | List captured HTTP requests (apps opt in via `DevFlowHttp.CreateClient()`). |
+| `GET /api/v1/network/detail?id=<id>` | Full detail (headers/body) for one captured request. |
+| `POST /api/v1/network/clear` | Clear the captured network log. |
+| `GET /api/v1/alert/detect` | Detect a native dialog box (Win32 `#32770` class) and return its message/buttons. |
+| `POST /api/v1/alert/dismiss` | Dismiss a detected dialog with body `{ "buttonLabel": "OK" }` (omit to click the first button). |
+| `GET /api/v1/device/app/theme` / `PUT /api/v1/device/app/theme` | Get or set the app theme. |
+
+Each CLI's `devflow` subcommand wraps this API — see [Core Commands / DevFlow Commands](../Cli/README.md) for the command-line surface, plus the standalone `LeXtudio.DevFlow.Inspector` (`devflow inspector`) and `LeXtudio.DevFlow.Broker` (`devflow broker`) packages for the browser inspector and multi-agent daemon.
 
 ## WinForms support
 
@@ -137,12 +197,30 @@ You can override the port at build time with `dotnet build -p:MauiDevFlowPort=95
 - `MewUIDevFlowTestApp` is a reference sample project demonstrating how to start a MewUI app and host the DevFlow HTTP agent.
 - Register DevFlow during your app startup with `Application.Current.AddMewUIDevFlowAgent()`.
 
+## LibreWPF support preview
+
+- `LeXtudio.DevFlow.Agent.LibreWpf` is the LibreWPF DevFlow runtime package. It shares the WPF visual tree walker and agent service via linked source rather than duplicating it.
+- `LibreWpfDevFlowTestApp` is a reference sample project demonstrating a process-local DevFlow HTTP agent in a LibreWPF app.
+- `LeXtudio.DevFlow.Agent.LibreWpf.Tests` mirrors the WPF integration test coverage.
+
+## Jalium support preview
+
+- `LeXtudio.DevFlow.Agent.Jalium` is the Jalium DevFlow runtime package, built on `Jalium.UI.Controls`.
+- `JaliumDevFlowTestApp` is a reference sample project demonstrating how to start a Jalium app and host the DevFlow HTTP agent.
+- `LeXtudio.DevFlow.Agent.Jalium.Tests` covers the same status/tree/query/screenshot/interaction surface as the other agents.
+
 ## Reuse strategy
 
-The DevFlow projects reuse source from `external/maui-labs/src/DevFlow/Microsoft.Maui.DevFlow.Agent.Core` where it makes sense. Those files are consumed as linked source files in `LeXtudio.DevFlow.Agent.Core`.
+The DevFlow projects reuse source from `external/maui-labs` where it makes sense, consumed as linked (`<Compile Include>`) source files rather than copy-pasted:
+
+- `LeXtudio.DevFlow.Agent.Core` links `AgentHttpServer.cs`, `AgentOptions.cs`, `AgentExtension.cs`, `DevFlowActionAttribute.cs`, `ElementInfo.cs`, `BrokerRegistration.cs` from `Microsoft.Maui.DevFlow.Agent.Core`, plus the framework-agnostic network capture (`Network/*.cs`) and CSS selector engine (`Css/*.cs`, backed by the `Fizzler` package).
+- `LeXtudio.DevFlow.Driver` links the full upstream `AgentClient.cs` and its DTOs from `Microsoft.Maui.DevFlow.Driver`, coexisting with a smaller hand-written `LeXtudio.DevFlow.Driver.AgentClient` used by the CLIs — both talk to the same linked `AgentHttpServer.cs`, so no adaptation is needed.
+- `LeXtudio.DevFlow.Inspector` links `InspectorServer.cs`, `HtmlRenderer.cs`, and `LocalOriginValidator.cs` (plus embedded `devflow.css`/`devflow.js`/`inspector.html`) from `Microsoft.Maui.Cli`'s Web Inspector.
+- `LeXtudio.DevFlow.Broker` links `BrokerServer.cs`, `BrokerClient.cs`, `AgentRegistration.cs`, `BrokerPaths.cs` from `Microsoft.Maui.Cli`'s broker daemon, with a small original `CliJson` helper replacing upstream's AOT source-gen JSON context (which pulls in mobile/Android-specific types we don't need).
+- Some features could not be linked because upstream ties them to MAUI-specific APIs or a monolithic MAUI-coupled service class — for those (the `ui` query/hit-test/assert routes, network route wiring, and Win32 alert detection), the wiring lives directly in `LeXtudio.DevFlow.Agent.Core/DevFlowAgentServiceBase.cs` as original code operating over the shared `ElementInfo` model, so it still works uniformly across every framework.
 
 ## Notes
 
-- The Desktop DevFlow product is focused on WPF, WinForms, WinUI 3, Uno Platform, and MewUI, not MAUI.
+- The Desktop DevFlow product is focused on WPF, WinForms, WinUI 3, Uno Platform, MewUI, LibreWPF, and Jalium, not MAUI.
 - `WpfDevFlow.sln` is the local desktop solution for this product.
 - `DevFlow.slnf` is an external MAUI DevFlow wrapper that now also references the local WinForms projects used by this product.

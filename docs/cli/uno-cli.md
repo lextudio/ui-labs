@@ -31,7 +31,9 @@ Core commands:
 - `package`
 - `diagnostics`
 - `env`
-- `devflow` (`status`, `screenshot`, `tap`)
+- `commands` — list available commands in machine-readable JSON form
+- `batch` — execute newline-delimited JSON command batches from stdin
+- `devflow` (`status`, `screenshot`, `tap`, `webview`, `extensions`, `inspector`, `broker`, `network`, `ui`, `alert`)
 
 ## 3. Scaffold a new Uno app
 
@@ -118,7 +120,29 @@ Tap an element by DevFlow element id:
 dotnet unolex devflow tap --id <element-id>
 ```
 
-## 8. Output modes for automation
+## 8. DevFlow: extensions, inspector, broker, network, ui, alert
+
+```powershell
+dotnet unolex devflow extensions list
+dotnet unolex devflow extensions call uno.echo --arg "hello"
+
+dotnet unolex devflow inspector --port 9223 --inspector-port 9300
+
+dotnet unolex devflow broker start
+dotnet unolex devflow broker list
+
+dotnet unolex devflow network list
+dotnet unolex devflow network detail --id <request-id>
+
+dotnet unolex devflow ui query --selector "Button:visible"
+dotnet unolex devflow ui hit-test --x 100 --y 50
+dotnet unolex devflow ui assert --selector "Button#Submit" --exists true
+
+dotnet unolex devflow alert detect
+dotnet unolex devflow alert dismiss --button OK
+```
+
+## 9. Output modes for automation
 
 Global options:
 
@@ -134,7 +158,7 @@ dotnet unolex --json devflow status
 dotnet unolex --dry-run package .\src\MyUnoApp\MyUnoApp.csproj
 ```
 
-## 9. Expected behavior and exit codes
+## 10. Expected behavior and exit codes
 
 - Success returns exit code `0`.
 - Unknown command/invalid options return non-zero.

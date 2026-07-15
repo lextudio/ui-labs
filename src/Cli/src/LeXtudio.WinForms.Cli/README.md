@@ -50,6 +50,8 @@ dotnet winflex run
 | `dotnet winflex package` | Package WinForms outputs for distribution. |
 | `dotnet winflex diagnostics` | Run WinForms-specific diagnostics and validation checks. |
 | `dotnet winflex env` | Inspect installed SDKs, tooling, and environment status. |
+| `dotnet winflex commands` | List available commands in machine-readable JSON form. |
+| `dotnet winflex batch` | Execute newline-delimited JSON command batches from stdin. |
 
 ## DevFlow Commands
 
@@ -70,6 +72,17 @@ Use `--json` for scripting:
 ```powershell
 dotnet winflex --json devflow status
 ```
+
+Beyond `status`/`screenshot`/`tap`/`webview`, the CLI also exposes:
+
+| Command | Description |
+|---------|-------------|
+| `devflow extensions list\|describe\|call` | Discover and invoke `[DevFlowAction]`-annotated methods in the running app. |
+| `devflow inspector` | Start a browser-based live UI inspector proxying the running agent. |
+| `devflow broker start\|stop\|status\|list` | Manage the multi-agent broker daemon. |
+| `devflow network list\|detail\|clear` | Inspect HTTP traffic captured from apps using `DevFlowHttp.CreateClient()`. |
+| `devflow ui query\|hit-test\|assert` | Query the live tree with CSS selectors, hit-test a point, or assert on selector matches. |
+| `devflow alert detect\|dismiss` | Detect and dismiss native dialog boxes. |
 
 ## Output and Automation
 

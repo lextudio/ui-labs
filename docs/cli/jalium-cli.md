@@ -31,7 +31,9 @@ Core commands:
 - `package`
 - `diagnostics`
 - `env`
-- `devflow` (`status`, `screenshot`, `tap`)
+- `commands` — list available commands in machine-readable JSON form
+- `batch` — execute newline-delimited JSON command batches from stdin
+- `devflow` (`status`, `screenshot`, `tap`, `extensions`, `inspector`, `broker`, `network`, `ui`, `alert`)
 
 ## 3. Scaffold a new Jalium app
 
@@ -114,7 +116,29 @@ Tap an element:
 dotnet jalex devflow tap --id <element-id>
 ```
 
-## 8. Output modes for automation
+## 8. DevFlow: extensions, inspector, broker, network, ui, alert
+
+```powershell
+dotnet jalex devflow extensions list
+dotnet jalex devflow extensions call jalium.echo --arg "hello"
+
+dotnet jalex devflow inspector --port 9223 --inspector-port 9300
+
+dotnet jalex devflow broker start
+dotnet jalex devflow broker list
+
+dotnet jalex devflow network list
+dotnet jalex devflow network detail --id <request-id>
+
+dotnet jalex devflow ui query --selector "Button:visible"
+dotnet jalex devflow ui hit-test --x 100 --y 50
+dotnet jalex devflow ui assert --selector "Button#Submit" --exists true
+
+dotnet jalex devflow alert detect
+dotnet jalex devflow alert dismiss --button OK
+```
+
+## 9. Output modes for automation
 
 Global options:
 
@@ -130,7 +154,7 @@ dotnet jalex --json devflow status
 dotnet jalex --dry-run package .\src\MyJaliumApp\MyJaliumApp.csproj
 ```
 
-## 9. Expected behavior and exit codes
+## 10. Expected behavior and exit codes
 
 - Success returns exit code `0`.
 - Unknown command/invalid options return non-zero.

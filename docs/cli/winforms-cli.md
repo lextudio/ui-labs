@@ -31,7 +31,9 @@ Core commands:
 - `package`
 - `diagnostics`
 - `env`
-- `devflow` (`status`, `screenshot`, `tap`)
+- `commands` — list available commands in machine-readable JSON form
+- `batch` — execute newline-delimited JSON command batches from stdin
+- `devflow` (`status`, `screenshot`, `tap`, `webview`, `extensions`, `inspector`, `broker`, `network`, `ui`, `alert`)
 
 ## 3. Scaffold a new WinForms app
 
@@ -120,7 +122,29 @@ Tap a UI element by DevFlow element id:
 dotnet winflex devflow tap --id <element-id>
 ```
 
-## 8. Output modes for automation
+## 8. DevFlow: extensions, inspector, broker, network, ui, alert
+
+```powershell
+dotnet winflex devflow extensions list
+dotnet winflex devflow extensions call winforms.echo --arg "hello"
+
+dotnet winflex devflow inspector --port 9223 --inspector-port 9300
+
+dotnet winflex devflow broker start
+dotnet winflex devflow broker list
+
+dotnet winflex devflow network list
+dotnet winflex devflow network detail --id <request-id>
+
+dotnet winflex devflow ui query --selector "Button:visible"
+dotnet winflex devflow ui hit-test --x 100 --y 50
+dotnet winflex devflow ui assert --selector "Button#Submit" --exists true
+
+dotnet winflex devflow alert detect
+dotnet winflex devflow alert dismiss --button OK
+```
+
+## 9. Output modes for automation
 
 Global options (can appear before command):
 
@@ -136,7 +160,7 @@ dotnet winflex --json devflow status
 dotnet winflex --dry-run package .\src\MyWinFormsApp\MyWinFormsApp.csproj
 ```
 
-## 9. Expected behavior and exit codes
+## 10. Expected behavior and exit codes
 
 - Success returns exit code `0`.
 - Unknown command/invalid options return non-zero.

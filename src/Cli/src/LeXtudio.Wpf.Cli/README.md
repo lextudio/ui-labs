@@ -49,6 +49,8 @@ dotnet wpflex run
 | `dotnet wpflex package` | Package WPF outputs for distribution. |
 | `dotnet wpflex diagnostics` | Run WPF-specific diagnostics and validation checks. |
 | `dotnet wpflex env` | Inspect installed SDKs, tooling, and environment status. |
+| `dotnet wpflex commands` | List available commands in machine-readable JSON form. |
+| `dotnet wpflex batch` | Execute newline-delimited JSON command batches from stdin. |
 
 ## DevFlow Commands
 
@@ -62,6 +64,30 @@ Use `--json` for scripting:
 
 ```powershell
 dotnet wpflex --json devflow status
+```
+
+Beyond `status`/`screenshot`/`tap`/`webview`, the CLI also exposes:
+
+| Command | Description |
+|---------|-------------|
+| `devflow extensions list\|describe\|call` | Discover and invoke `[DevFlowAction]`-annotated methods in the running app. |
+| `devflow inspector` | Start a browser-based live UI inspector proxying the running agent (`http://localhost:9300` by default). |
+| `devflow broker start\|stop\|status\|list` | Manage the multi-agent broker daemon for discovering and targeting a specific running app. |
+| `devflow network list\|detail\|clear` | Inspect HTTP traffic captured from apps that construct their `HttpClient` via `DevFlowHttp.CreateClient()`. |
+| `devflow ui query\|hit-test\|assert` | Query the live tree with CSS selectors, hit-test a point, or assert on selector matches. |
+| `devflow alert detect\|dismiss` | Detect and dismiss native dialog boxes (`MessageBox`). |
+
+Examples:
+
+```powershell
+dotnet wpflex devflow extensions call wpf.echo --arg "hello"
+dotnet wpflex devflow inspector --port 9223 --inspector-port 9300
+dotnet wpflex devflow broker start
+dotnet wpflex devflow network list --port 9223
+dotnet wpflex devflow ui query --selector "Button:visible" --port 9223
+dotnet wpflex devflow ui assert --selector "Button#Submit" --exists true
+dotnet wpflex devflow alert detect
+dotnet wpflex devflow alert dismiss --button OK
 ```
 
 ## Output and Automation

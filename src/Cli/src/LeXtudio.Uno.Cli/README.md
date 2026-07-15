@@ -49,6 +49,8 @@ dotnet unolex run
 | `dotnet unolex package` | Package Uno output artifacts. |
 | `dotnet unolex diagnostics` | Run Uno diagnostics and validation. |
 | `dotnet unolex env` | Inspect installed SDKs and tooling. |
+| `dotnet unolex commands` | List available commands in machine-readable JSON form. |
+| `dotnet unolex batch` | Execute newline-delimited JSON command batches from stdin. |
 | `dotnet unolex devflow` | Query a running Uno DevFlow agent. |
 
 ## DevFlow Commands
@@ -62,6 +64,17 @@ Capture a screenshot:
 ```powershell
 dotnet unolex devflow screenshot --host localhost --port 9223 --output screenshot.png
 ```
+
+Beyond `status`/`screenshot`/`tap`/`webview`, the CLI also exposes:
+
+| Command | Description |
+|---------|-------------|
+| `devflow extensions list\|describe\|call` | Discover and invoke `[DevFlowAction]`-annotated methods in the running app. |
+| `devflow inspector` | Start a browser-based live UI inspector proxying the running agent. |
+| `devflow broker start\|stop\|status\|list` | Manage the multi-agent broker daemon. |
+| `devflow network list\|detail\|clear` | Inspect HTTP traffic captured from apps using `DevFlowHttp.CreateClient()`. |
+| `devflow ui query\|hit-test\|assert` | Query the live tree with CSS selectors, hit-test a point, or assert on selector matches. |
+| `devflow alert detect\|dismiss` | Detect and dismiss native dialog boxes. |
 
 ## Output and Automation
 
