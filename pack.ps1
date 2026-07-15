@@ -23,6 +23,11 @@ $BuildRoot = Join-Path $RepoRoot ".build_out"
 $PackageStaging = Join-Path $RepoRoot ".pkg_staging"
 
 function Find-MSBuild {
+    $dotnetCommand = Get-Command dotnet -ErrorAction SilentlyContinue
+    if ($dotnetCommand -and [Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture -eq [Runtime.InteropServices.Architecture]::Arm64) {
+        return $dotnetCommand.Path
+    }
+
     $programFilesX86 = [Environment]::GetEnvironmentVariable("ProgramFiles(x86)")
     $vswhere = if ($programFilesX86) {
         Join-Path $programFilesX86 "Microsoft Visual Studio\Installer\vswhere.exe"
@@ -189,8 +194,8 @@ function Invoke-PackProject([string]$MSBuild, [string]$ProjectPath) {
     Reset-Directory $projectOutput
     $unoSdkExtrasTasksAssembly = Resolve-UnoSdkExtrasTasksAssembly $ProjectPath
 
+    $msbuildFileName = [IO.Path]::GetFileNameWithoutExtension($MSBuild)
     $arguments = @(
-        $ProjectPath,
         "/restore",
         "/t:Pack",
         "/p:Configuration=$Configuration",
@@ -199,6 +204,11 @@ function Invoke-PackProject([string]$MSBuild, [string]$ProjectPath) {
         "/v:minimal",
         "/nologo"
     )
+    if ($msbuildFileName -ieq "dotnet") {
+        $arguments = @("msbuild", $ProjectPath) + $arguments
+    } else {
+        $arguments = @($ProjectPath) + $arguments
+    }
 
     if ($unoSdkExtrasTasksAssembly) {
         $arguments += "/p:UnoSdkExtrasTasksAssembly=$unoSdkExtrasTasksAssembly"
