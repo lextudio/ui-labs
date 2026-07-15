@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>LeXtudio.DevFlow.Inspector</AssemblyName>
+    <RootNamespace>LeXtudio.DevFlow.Inspector</RootNamespace>
+    <IsPackable>true</IsPackable>
+    <PackageId>LeXtudio.DevFlow.Inspector</PackageId>
+    <Description>Browser-based live UI inspector for running DevFlow agents.</Description>
+    <PackageTags>devflow;inspector;automation</PackageTags>
+    <PackageIcon>company_logo_512.png</PackageIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\..\images\company_logo_512.png" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LeXtudio.DevFlow.Driver\LeXtudio.DevFlow.Driver.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\..\external\maui-labs\src\Cli\Microsoft.Maui.Cli\DevFlow\Inspector\InspectorServer.cs">
+      <Link>Upstream\InspectorServer.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\Cli\Microsoft.Maui.Cli\DevFlow\Inspector\HtmlRenderer.cs">
+      <Link>Upstream\HtmlRenderer.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\Cli\Microsoft.Maui.Cli\DevFlow\Inspector\LocalOriginValidator.cs">
+      <Link>Upstream\LocalOriginValidator.cs</Link>
+    </Compile>
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\..\external\maui-labs\src\Cli\Microsoft.Maui.Cli\DevFlow\Inspector\Web\**\*" LogicalName="Microsoft.Maui.Cli.DevFlow.Inspector.Web.%(Filename)%(Extension)">
+      <Link>Upstream\Web\%(Filename)%(Extension)</Link>
+    </EmbeddedResource>
+  </ItemGroup>
+</Project>

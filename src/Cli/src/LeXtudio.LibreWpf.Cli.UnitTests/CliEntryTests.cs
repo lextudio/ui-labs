@@ -95,6 +95,7 @@ public class CliEntryTests
     public void Main_DryRun_DoesNotCreateFiles()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
         try
         {
             var originalDir = Environment.CurrentDirectory;

@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Text.Json;
 
 namespace LeXtudio.LibreWpf.Cli
 {
@@ -83,6 +85,8 @@ namespace LeXtudio.LibreWpf.Cli
                 "diagnostics" => CommandHandlers.RunDiagnostics(tokens, options),
                 "env" => CommandHandlers.RunEnv(tokens, options),
                 "devflow" => CommandHandlers.RunDevFlow(tokens, options),
+                "commands" => RunCommandsSchema(),
+                "batch" => RunBatch(),
                 "help" => ShowHelpAndReturn(),
                 _ => UnknownCommand(command)
             };
@@ -92,6 +96,88 @@ namespace LeXtudio.LibreWpf.Cli
         {
             ShowHelp();
             return 0;
+        }
+
+        private static int RunCommandsSchema()
+        {
+            var commands = new[]
+            {
+                new { name = "doctor", description = "Validate the LibreWPF development environment" },
+                new { name = "version", description = "Display CLI and environment version information" },
+                new { name = "new", description = "Scaffold a new LibreWPF app or library" },
+                new { name = "build", description = "Build a LibreWPF project with LibreWPF-aware defaults" },
+                new { name = "run", description = "Run a LibreWPF application" },
+                new { name = "publish", description = "Publish a LibreWPF application for deployment" },
+                new { name = "package", description = "Package LibreWPF output artifacts" },
+                new { name = "diagnostics", description = "Run LibreWPF-specific diagnostics and validation" },
+                new { name = "env", description = "Inspect installed SDKs and tooling" },
+                new { name = "devflow", description = "Query a running LibreWPF DevFlow agent and inspect runtime state" },
+                new { name = "commands", description = "List available commands in machine-readable form" },
+                new { name = "batch", description = "Execute newline-delimited JSON command batches from stdin" },
+            };
+
+            Console.WriteLine(JsonSerializer.Serialize(new { commands }, new JsonSerializerOptions { WriteIndented = true }));
+            return 0;
+        }
+
+        private static readonly JsonSerializerOptions BatchJsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+
+        private static int RunBatch()
+        {
+            string? line;
+            while ((line = Console.In.ReadLine()) != null)
+            {
+                if (string.IsNullOrWhiteSpace(line))
+                    continue;
+
+                Console.Out.WriteLine(JsonSerializer.Serialize(ExecuteBatchLine(line), BatchJsonOptions));
+            }
+
+            return 0;
+        }
+
+        private static BatchResult ExecuteBatchLine(string line)
+        {
+            string[] argsArray;
+            try
+            {
+                argsArray = JsonSerializer.Deserialize<string[]>(line) ?? Array.Empty<string>();
+            }
+            catch (JsonException ex)
+            {
+                return new BatchResult { Input = line, ExitCode = 1, Output = string.Empty, Error = $"Invalid batch line: {ex.Message}" };
+            }
+
+            var tokens = new Queue<string>(argsArray);
+            var lineOptions = ParseGlobalOptions(tokens);
+            var originalOut = Console.Out;
+            var writer = new StringWriter();
+            int exitCode;
+            try
+            {
+                Console.SetOut(writer);
+                exitCode = tokens.Count == 0
+                    ? 1
+                    : RunCommand(tokens.Dequeue().ToLowerInvariant(), tokens, lineOptions);
+            }
+            catch (Exception ex)
+            {
+                return new BatchResult { Input = line, ExitCode = 1, Output = writer.ToString(), Error = ex.Message };
+            }
+            finally
+            {
+                Console.SetOut(originalOut);
+            }
+
+            return new BatchResult { Input = line, ExitCode = exitCode, Output = writer.ToString() };
+        }
+
+        private sealed record BatchResult
+        {
+            public string? Input { get; init; }
+            public int ExitCode { get; init; }
+            public string Output { get; init; } = string.Empty;
+            public string? Error { get; init; }
         }
 
         private static int UnknownCommand(string command)
@@ -131,6 +217,8 @@ namespace LeXtudio.LibreWpf.Cli
             Console.WriteLine("    webview    WebView operations");
             Console.WriteLine("      contexts List WebView contexts");
             Console.WriteLine("      screenshot Capture WebView screenshot");
+            Console.WriteLine("  commands     List available commands in machine-readable form");
+            Console.WriteLine("  batch        Execute newline-delimited JSON command batches from stdin");
         }
     }
 }

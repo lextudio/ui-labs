@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>LeXtudio.DevFlow.Broker</AssemblyName>
+    <RootNamespace>LeXtudio.DevFlow.Broker</RootNamespace>
+    <IsPackable>true</IsPackable>
+    <PackageId>LeXtudio.DevFlow.Broker</PackageId>
+    <Description>Broker daemon that manages DevFlow agent registration and port assignment across multiple running apps.</Description>
+    <PackageTags>devflow;broker;automation</PackageTags>
+    <PackageIcon>company_logo_512.png</PackageIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\..\images\company_logo_512.png" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LeXtudio.DevFlow.Driver\LeXtudio.DevFlow.Driver.csproj" />
+    <ProjectReference Include="..\LeXtudio.DevFlow.Inspector\LeXtudio.DevFlow.Inspector.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\..\external\maui-labs\src\Cli\Microsoft.Maui.Cli\DevFlow\Broker\BrokerServer.cs">
+      <Link>Upstream\BrokerServer.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\Cli\Microsoft.Maui.Cli\DevFlow\Broker\BrokerClient.cs">
+      <Link>Upstream\BrokerClient.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\Cli\Microsoft.Maui.Cli\DevFlow\Broker\AgentRegistration.cs">
+      <Link>Upstream\AgentRegistration.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\Cli\Microsoft.Maui.Cli\DevFlow\Broker\BrokerPaths.cs">
+      <Link>Upstream\BrokerPaths.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\Cli\Microsoft.Maui.Cli\DevFlow\Inspector\LocalOriginValidator.cs">
+      <Link>Upstream\LocalOriginValidator.cs</Link>
+    </Compile>
+  </ItemGroup>
+</Project>

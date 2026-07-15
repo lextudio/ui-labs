@@ -7,7 +7,10 @@ using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using LeXtudio.DevFlow.Driver;
+using Microsoft.Maui.Cli.DevFlow.Broker;
+using Microsoft.Maui.Cli.DevFlow.Inspector;
 
 namespace LeXtudio.Uno.Cli
 {
@@ -143,7 +146,7 @@ namespace LeXtudio.Uno.Cli
         {
             if (tokens.Count == 0)
             {
-                return WriteResult("devflow", "Usage: dotnet unolex devflow <status|screenshot|tap|webview> [options]", options);
+                return WriteResult("devflow", "Usage: dotnet unolex devflow <status|screenshot|tap|webview|extensions|inspector|broker|network|ui|alert> [options]", options);
             }
 
             var subcommand = tokens.Dequeue().ToLowerInvariant();
@@ -153,9 +156,15 @@ namespace LeXtudio.Uno.Cli
                 "screenshot" => RunDevFlowScreenshot(tokens, options),
                 "tap" => RunDevFlowTap(tokens, options),
                 "webview" => RunDevFlowWebView(tokens, options),
-                "help" => WriteResult("devflow", "Usage: dotnet unolex devflow <status|screenshot|tap|webview> [options]", options),
-                "--help" => WriteResult("devflow", "Usage: dotnet unolex devflow <status|screenshot|tap|webview> [options]", options),
-                "-h" => WriteResult("devflow", "Usage: dotnet unolex devflow <status|screenshot|tap|webview> [options]", options),
+                "extensions" => RunDevFlowExtensions(tokens, options),
+                "inspector" => RunDevFlowInspector(tokens, options),
+                "broker" => RunDevFlowBroker(tokens, options),
+                "network" => RunDevFlowNetwork(tokens, options),
+                "ui" => RunDevFlowUi(tokens, options),
+                "alert" => RunDevFlowAlert(tokens, options),
+                "help" => WriteResult("devflow", "Usage: dotnet unolex devflow <status|screenshot|tap|webview|extensions|inspector|broker|network|ui|alert> [options]", options),
+                "--help" => WriteResult("devflow", "Usage: dotnet unolex devflow <status|screenshot|tap|webview|extensions|inspector|broker|network|ui|alert> [options]", options),
+                "-h" => WriteResult("devflow", "Usage: dotnet unolex devflow <status|screenshot|tap|webview|extensions|inspector|broker|network|ui|alert> [options]", options),
                 _ => UnknownDevFlowSubcommand(subcommand)
             };
         }
@@ -264,6 +273,7 @@ namespace LeXtudio.Uno.Cli
             {
                 "contexts" => RunDevFlowWebViewContexts(tokens, options),
                 "screenshot" => RunDevFlowWebViewScreenshot(tokens, options),
+                "cdp" => RunDevFlowWebViewCdp(tokens, options),
                 _ => WriteResult("devflow", "Usage: dotnet unolex devflow webview <contexts|screenshot> [options]", options)
             };
         }
@@ -271,11 +281,11 @@ namespace LeXtudio.Uno.Cli
         private static int RunDevFlowWebViewContexts(Queue<string> tokens, OutputOptions options)
         {
             ParseDevFlowOptions(tokens, out var host, out var port, out _);
-            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
-            var url = new Uri($"http://{host}:{port}/api/v1/webview/contexts");
+            using var client = new AgentClient(host, port);
             try
             {
-                var json = http.GetStringAsync(url).GetAwaiter().GetResult();
+                var jsonElement = client.GetWebViewContextsAsync().GetAwaiter().GetResult();
+                var json = JsonSerializer.Serialize(jsonElement, new JsonSerializerOptions { WriteIndented = true });
                 if (options.Json)
                 {
                     Console.WriteLine(json);
@@ -307,19 +317,513 @@ namespace LeXtudio.Uno.Cli
             }
 
             outputFile ??= "uno-devflow-webview-screenshot.png";
-            var path = $"/api/v1/webview/screenshot{(string.IsNullOrWhiteSpace(context) ? string.Empty : "?context=" + Uri.EscapeDataString(context))}";
-            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
             try
             {
-                using var response = http.GetAsync(new Uri($"http://{host}:{port}{path}")).GetAwaiter().GetResult();
-                response.EnsureSuccessStatusCode();
-                var bytes = response.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult();
+                using var client = new AgentClient(host, port);
+                var bytes = client.GetWebViewScreenshotAsync(context).GetAwaiter().GetResult();
+                if (bytes == null || bytes.Length == 0)
+                    return WriteResult("devflow", "Failed to capture webview screenshot: no data returned", options);
                 File.WriteAllBytes(outputFile, bytes);
                 return WriteResult("devflow", $"Saved webview screenshot to {outputFile}", options);
             }
             catch (Exception ex)
             {
                 return WriteResult("devflow", $"Failed to capture webview screenshot: {ex.Message}", options);
+            }
+        }
+
+        private static int RunDevFlowWebViewCdp(Queue<string> tokens, OutputOptions options)
+        {
+            ParseDevFlowOptions(tokens, out var host, out var port, out _);
+            string? context = null;
+            string? method = null;
+            string? expression = null;
+            while (tokens.Count > 0)
+            {
+                var token = tokens.Dequeue();
+                if (token == "--context" && tokens.Count > 0) context = tokens.Dequeue();
+                else if (token == "--method" && tokens.Count > 0) method = tokens.Dequeue();
+                else if (token == "--expression" && tokens.Count > 0) expression = tokens.Dequeue();
+            }
+
+            method ??= "Runtime.evaluate";
+            try
+            {
+                using var client = new AgentClient(host, port);
+                JsonElement? parameters = null;
+                if (!string.IsNullOrWhiteSpace(expression))
+                {
+                    parameters = JsonSerializer.Deserialize<JsonElement>($"{{\"expression\":{JsonSerializer.Serialize(expression)}}}");
+                }
+                var result = client.SendWebViewCdpCommandAsync(method, parameters, context).GetAwaiter().GetResult();
+                Console.WriteLine(JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true }));
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                return WriteResult("devflow", $"Failed to execute webview CDP command: {ex.Message}", options);
+            }
+        }
+
+        private static int RunDevFlowExtensions(Queue<string> tokens, OutputOptions options)
+        {
+            if (tokens.Count == 0)
+                return WriteResult("devflow", "Usage: dotnet unolex devflow extensions <list|describe|call> [options]", options);
+
+            var sub = tokens.Dequeue().ToLowerInvariant();
+            return sub switch
+            {
+                "list" => RunDevFlowExtensionsList(tokens, options),
+                "describe" => RunDevFlowExtensionsDescribe(tokens, options),
+                "call" => RunDevFlowExtensionsCall(tokens, options),
+                _ => WriteResult("devflow", "Usage: dotnet unolex devflow extensions <list|describe|call> [options]", options)
+            };
+        }
+
+        private static int RunDevFlowExtensionsList(Queue<string> tokens, OutputOptions options)
+        {
+            ParseExtensionsOptions(tokens, out var host, out var port, out _, out _);
+            using var client = new AgentClient(host, port);
+            try
+            {
+                var result = client.ListExtensionsAsync().GetAwaiter().GetResult();
+                Console.WriteLine(JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true }));
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                return WriteResult("devflow", $"Failed to list extensions: {ex.Message}", options);
+            }
+        }
+
+        private static int RunDevFlowExtensionsDescribe(Queue<string> tokens, OutputOptions options)
+        {
+            ParseExtensionsOptions(tokens, out var host, out var port, out var name, out _);
+            if (string.IsNullOrEmpty(name))
+                return WriteResult("devflow", "Missing action name for devflow extensions describe.", options);
+
+            using var client = new AgentClient(host, port);
+            try
+            {
+                var result = client.ListExtensionsAsync().GetAwaiter().GetResult();
+                if (result.HasValue && result.Value.TryGetProperty("actions", out var list))
+                {
+                    foreach (var action in list.EnumerateArray())
+                    {
+                        if (action.TryGetProperty("name", out var n) && string.Equals(n.GetString(), name, StringComparison.OrdinalIgnoreCase))
+                        {
+                            Console.WriteLine(JsonSerializer.Serialize(action, new JsonSerializerOptions { WriteIndented = true }));
+                            return 0;
+                        }
+                    }
+                }
+
+                return WriteResult("devflow", $"Extension '{name}' not found.", options);
+            }
+            catch (Exception ex)
+            {
+                return WriteResult("devflow", $"Failed to describe extension: {ex.Message}", options);
+            }
+        }
+
+        private static int RunDevFlowExtensionsCall(Queue<string> tokens, OutputOptions options)
+        {
+            ParseExtensionsOptions(tokens, out var host, out var port, out var name, out var args);
+            if (string.IsNullOrEmpty(name))
+                return WriteResult("devflow", "Missing action name for devflow extensions call.", options);
+
+            using var client = new AgentClient(host, port);
+            try
+            {
+                var (success, result) = client.CallExtensionAsync(name, args.Count > 0 ? args.ToArray() : null).GetAwaiter().GetResult();
+                Console.WriteLine(JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true }));
+                return success ? 0 : 1;
+            }
+            catch (Exception ex)
+            {
+                return WriteResult("devflow", $"Failed to call extension '{name}': {ex.Message}", options);
+            }
+        }
+
+        private static void ParseExtensionsOptions(Queue<string> tokens, out string host, out int port, out string? name, out List<JsonElement> args)
+        {
+            host = "localhost";
+            port = 5500;
+            name = null;
+            args = new List<JsonElement>();
+
+            while (tokens.Count > 0)
+            {
+                var token = tokens.Dequeue();
+                if (token == "--host" && tokens.Count > 0) { host = tokens.Dequeue(); continue; }
+                if (token == "--port" && tokens.Count > 0 && int.TryParse(tokens.Dequeue(), out var parsedPort)) { port = parsedPort; continue; }
+                if (token == "--name" && tokens.Count > 0) { name = tokens.Dequeue(); continue; }
+                if (token == "--arg" && tokens.Count > 0) { args.Add(JsonSerializer.SerializeToElement(tokens.Dequeue())); continue; }
+                if (!token.StartsWith("--") && name == null) { name = token; continue; }
+
+                Console.Error.WriteLine($"Unknown option: {token}");
+            }
+        }
+
+        private static int RunDevFlowInspector(Queue<string> tokens, OutputOptions options)
+        {
+            ParseInspectorOptions(tokens, out var host, out var port, out var inspectorPort);
+
+            using var server = new InspectorServer(inspectorPort, host, port);
+            try
+            {
+                server.Start();
+            }
+            catch (Exception ex)
+            {
+                return WriteResult("devflow", $"Failed to start inspector: {ex.Message}", options);
+            }
+
+            Console.WriteLine($"DevFlow Web Inspector running at http://localhost:{inspectorPort}/ (proxying agent at {host}:{port})");
+            Console.WriteLine("Press Ctrl+C to stop.");
+
+            using var exitEvent = new ManualResetEventSlim(false);
+            Console.CancelKeyPress += (_, e) => { e.Cancel = true; exitEvent.Set(); };
+            exitEvent.Wait();
+
+            server.StopAsync().GetAwaiter().GetResult();
+            return 0;
+        }
+
+        private static void ParseInspectorOptions(Queue<string> tokens, out string host, out int port, out int inspectorPort)
+        {
+            host = "localhost";
+            port = 5500;
+            inspectorPort = 9300;
+
+            while (tokens.Count > 0)
+            {
+                var token = tokens.Dequeue();
+                if (token == "--host" && tokens.Count > 0) { host = tokens.Dequeue(); continue; }
+                if (token == "--port" && tokens.Count > 0 && int.TryParse(tokens.Dequeue(), out var parsedPort)) { port = parsedPort; continue; }
+                if (token == "--inspector-port" && tokens.Count > 0 && int.TryParse(tokens.Dequeue(), out var parsedInspectorPort)) { inspectorPort = parsedInspectorPort; continue; }
+
+                Console.Error.WriteLine($"Unknown option: {token}");
+            }
+        }
+
+        private static int RunDevFlowBroker(Queue<string> tokens, OutputOptions options)
+        {
+            if (tokens.Count == 0)
+                return WriteResult("devflow", "Usage: dotnet unolex devflow broker <start|stop|status|list> [options]", options);
+
+            var sub = tokens.Dequeue().ToLowerInvariant();
+            return sub switch
+            {
+                "start" => RunDevFlowBrokerStart(tokens, options),
+                "stop" => RunDevFlowBrokerStop(options),
+                "status" => RunDevFlowBrokerStatus(options),
+                "list" => RunDevFlowBrokerList(options),
+                _ => WriteResult("devflow", "Usage: dotnet unolex devflow broker <start|stop|status|list> [options]", options)
+            };
+        }
+
+        private static int RunDevFlowBrokerStart(Queue<string> tokens, OutputOptions options)
+        {
+            var foreground = tokens.Count > 0 && tokens.Peek() == "--foreground";
+            if (foreground) tokens.Dequeue();
+
+            if (foreground)
+            {
+                using var cts = new CancellationTokenSource();
+                Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
+                using var server = new BrokerServer(log: Console.WriteLine);
+                server.RunAsync(cts.Token).GetAwaiter().GetResult();
+                return 0;
+            }
+
+            var port = BrokerClient.EnsureBrokerRunningAsync().GetAwaiter().GetResult();
+            return port.HasValue
+                ? WriteResult("devflow", $"Broker running on port {port.Value}", options)
+                : WriteResult("devflow", "Failed to start broker. Run with --foreground for diagnostics.", options);
+        }
+
+        private static int RunDevFlowBrokerStop(OutputOptions options)
+        {
+            var success = BrokerClient.ShutdownBrokerAsync().GetAwaiter().GetResult();
+            return WriteResult("devflow", success ? "Broker shutdown requested" : "Broker is not running", options);
+        }
+
+        private static int RunDevFlowBrokerStatus(OutputOptions options)
+        {
+            var port = BrokerClient.ReadBrokerPortPublic() ?? BrokerServer.DefaultPort;
+            try
+            {
+                using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
+                var response = http.GetStringAsync($"http://localhost:{port}/api/health").GetAwaiter().GetResult();
+                using var doc = JsonDocument.Parse(response);
+                var agents = doc.RootElement.GetProperty("agents").GetInt32();
+                return WriteResult("devflow", $"Broker: running on port {port} ({agents} agent(s) connected)", options);
+            }
+            catch
+            {
+                return WriteResult("devflow", "Broker: not running", options);
+            }
+        }
+
+        private static int RunDevFlowBrokerList(OutputOptions options)
+        {
+            var port = BrokerClient.ReadBrokerPortPublic() ?? BrokerServer.DefaultPort;
+            var agents = BrokerClient.ListAgents(port);
+            if (agents == null || agents.Length == 0)
+                return WriteResult("devflow", "No agents connected.", options);
+
+            Console.WriteLine(JsonSerializer.Serialize(agents, new JsonSerializerOptions { WriteIndented = true }));
+            return 0;
+        }
+
+        private static int RunDevFlowNetwork(Queue<string> tokens, OutputOptions options)
+        {
+            if (tokens.Count == 0)
+                return WriteResult("devflow", "Usage: dotnet unolex devflow network <list|detail|clear> [options]", options);
+
+            var sub = tokens.Dequeue().ToLowerInvariant();
+            return sub switch
+            {
+                "list" => RunDevFlowNetworkList(tokens, options),
+                "detail" => RunDevFlowNetworkDetail(tokens, options),
+                "clear" => RunDevFlowNetworkClear(tokens, options),
+                _ => WriteResult("devflow", "Usage: dotnet unolex devflow network <list|detail|clear> [options]", options)
+            };
+        }
+
+        private static int RunDevFlowNetworkList(Queue<string> tokens, OutputOptions options)
+        {
+            ParseDevFlowOptions(tokens, out var host, out var port, out _);
+            try
+            {
+                using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+                var response = http.GetStringAsync($"http://{host}:{port}/api/v1/network/list").GetAwaiter().GetResult();
+                Console.WriteLine(JsonSerializer.Serialize(JsonDocument.Parse(response).RootElement, new JsonSerializerOptions { WriteIndented = true }));
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                return WriteResult("devflow", $"Failed to list network requests: {ex.Message}", options);
+            }
+        }
+
+        private static int RunDevFlowNetworkDetail(Queue<string> tokens, OutputOptions options)
+        {
+            string? id = null;
+            var remaining = new Queue<string>();
+            while (tokens.Count > 0)
+            {
+                var token = tokens.Dequeue();
+                if (token == "--id" && tokens.Count > 0) { id = tokens.Dequeue(); continue; }
+                remaining.Enqueue(token);
+            }
+
+            ParseDevFlowOptions(remaining, out var host, out var port, out _);
+
+            if (string.IsNullOrEmpty(id))
+                return WriteResult("devflow", "Missing --id <requestId> for devflow network detail.", options);
+
+            try
+            {
+                using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+                var response = http.GetStringAsync($"http://{host}:{port}/api/v1/network/detail?id={Uri.EscapeDataString(id)}").GetAwaiter().GetResult();
+                Console.WriteLine(JsonSerializer.Serialize(JsonDocument.Parse(response).RootElement, new JsonSerializerOptions { WriteIndented = true }));
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                return WriteResult("devflow", $"Failed to get network request detail: {ex.Message}", options);
+            }
+        }
+
+        private static int RunDevFlowNetworkClear(Queue<string> tokens, OutputOptions options)
+        {
+            ParseDevFlowOptions(tokens, out var host, out var port, out _);
+            try
+            {
+                using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+                using var response = http.PostAsync($"http://{host}:{port}/api/v1/network/clear", new StringContent(string.Empty)).GetAwaiter().GetResult();
+                return WriteResult("devflow", response.IsSuccessStatusCode ? "Network log cleared." : "Failed to clear network log.", options);
+            }
+            catch (Exception ex)
+            {
+                return WriteResult("devflow", $"Failed to clear network log: {ex.Message}", options);
+            }
+        }
+
+        private static int RunDevFlowUi(Queue<string> tokens, OutputOptions options)
+        {
+            if (tokens.Count == 0)
+                return WriteResult("devflow", "Usage: dotnet unolex devflow ui <query|hit-test|assert> [options]", options);
+
+            var sub = tokens.Dequeue().ToLowerInvariant();
+            return sub switch
+            {
+                "query" => RunDevFlowUiQuery(tokens, options),
+                "hit-test" => RunDevFlowUiHitTest(tokens, options),
+                "assert" => RunDevFlowUiAssert(tokens, options),
+                _ => WriteResult("devflow", "Usage: dotnet unolex devflow ui <query|hit-test|assert> [options]", options)
+            };
+        }
+
+        private static int RunDevFlowUiQuery(Queue<string> tokens, OutputOptions options)
+        {
+            string? selector = null;
+            var remaining = new Queue<string>();
+            while (tokens.Count > 0)
+            {
+                var token = tokens.Dequeue();
+                if (token == "--selector" && tokens.Count > 0) { selector = tokens.Dequeue(); continue; }
+                remaining.Enqueue(token);
+            }
+
+            ParseDevFlowOptions(remaining, out var host, out var port, out _);
+
+            if (string.IsNullOrEmpty(selector))
+                return WriteResult("devflow", "Missing --selector <cssSelector> for devflow ui query.", options);
+
+            try
+            {
+                using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+                var response = http.GetStringAsync($"http://{host}:{port}/api/v1/ui/query-selector?selector={Uri.EscapeDataString(selector)}").GetAwaiter().GetResult();
+                Console.WriteLine(JsonSerializer.Serialize(JsonDocument.Parse(response).RootElement, new JsonSerializerOptions { WriteIndented = true }));
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                return WriteResult("devflow", $"Failed to query elements: {ex.Message}", options);
+            }
+        }
+
+        private static int RunDevFlowUiHitTest(Queue<string> tokens, OutputOptions options)
+        {
+            double? x = null;
+            double? y = null;
+            var remaining = new Queue<string>();
+            while (tokens.Count > 0)
+            {
+                var token = tokens.Dequeue();
+                if (token == "--x" && tokens.Count > 0 && double.TryParse(tokens.Dequeue(), out var parsedX)) { x = parsedX; continue; }
+                if (token == "--y" && tokens.Count > 0 && double.TryParse(tokens.Dequeue(), out var parsedY)) { y = parsedY; continue; }
+                remaining.Enqueue(token);
+            }
+
+            ParseDevFlowOptions(remaining, out var host, out var port, out _);
+
+            if (x == null || y == null)
+                return WriteResult("devflow", "Missing --x <x> --y <y> for devflow ui hit-test.", options);
+
+            try
+            {
+                using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+                var response = http.GetStringAsync($"http://{host}:{port}/api/v1/ui/hit-test?x={x}&y={y}").GetAwaiter().GetResult();
+                Console.WriteLine(JsonSerializer.Serialize(JsonDocument.Parse(response).RootElement, new JsonSerializerOptions { WriteIndented = true }));
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                return WriteResult("devflow", $"Failed to hit-test: {ex.Message}", options);
+            }
+        }
+
+        private static int RunDevFlowUiAssert(Queue<string> tokens, OutputOptions options)
+        {
+            string? selector = null;
+            bool? exists = null;
+            int? count = null;
+            string? textEquals = null;
+            string? textContains = null;
+            var remaining = new Queue<string>();
+            while (tokens.Count > 0)
+            {
+                var token = tokens.Dequeue();
+                if (token == "--selector" && tokens.Count > 0) { selector = tokens.Dequeue(); continue; }
+                if (token == "--exists" && tokens.Count > 0 && bool.TryParse(tokens.Dequeue(), out var parsedExists)) { exists = parsedExists; continue; }
+                if (token == "--count" && tokens.Count > 0 && int.TryParse(tokens.Dequeue(), out var parsedCount)) { count = parsedCount; continue; }
+                if (token == "--text-equals" && tokens.Count > 0) { textEquals = tokens.Dequeue(); continue; }
+                if (token == "--text-contains" && tokens.Count > 0) { textContains = tokens.Dequeue(); continue; }
+                remaining.Enqueue(token);
+            }
+
+            ParseDevFlowOptions(remaining, out var host, out var port, out _);
+
+            if (string.IsNullOrEmpty(selector))
+                return WriteResult("devflow", "Missing --selector <cssSelector> for devflow ui assert.", options);
+
+            try
+            {
+                using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+                var payload = JsonSerializer.Serialize(new { selector, exists, count, textEquals, textContains },
+                    new JsonSerializerOptions { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull });
+                using var content = new StringContent(payload, System.Text.Encoding.UTF8, "application/json");
+                using var response = http.PostAsync($"http://{host}:{port}/api/v1/ui/assert", content).GetAwaiter().GetResult();
+                var body = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+                Console.WriteLine(JsonSerializer.Serialize(JsonDocument.Parse(body).RootElement, new JsonSerializerOptions { WriteIndented = true }));
+                return response.IsSuccessStatusCode ? 0 : 1;
+            }
+            catch (Exception ex)
+            {
+                return WriteResult("devflow", $"Failed to assert: {ex.Message}", options);
+            }
+        }
+
+        private static int RunDevFlowAlert(Queue<string> tokens, OutputOptions options)
+        {
+            if (tokens.Count == 0)
+                return WriteResult("devflow", "Usage: dotnet unolex devflow alert <detect|dismiss> [options]", options);
+
+            var sub = tokens.Dequeue().ToLowerInvariant();
+            return sub switch
+            {
+                "detect" => RunDevFlowAlertDetect(tokens, options),
+                "dismiss" => RunDevFlowAlertDismiss(tokens, options),
+                _ => WriteResult("devflow", "Usage: dotnet unolex devflow alert <detect|dismiss> [options]", options)
+            };
+        }
+
+        private static int RunDevFlowAlertDetect(Queue<string> tokens, OutputOptions options)
+        {
+            ParseDevFlowOptions(tokens, out var host, out var port, out _);
+            try
+            {
+                using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+                var response = http.GetStringAsync($"http://{host}:{port}/api/v1/alert/detect").GetAwaiter().GetResult();
+                Console.WriteLine(JsonSerializer.Serialize(JsonDocument.Parse(response).RootElement, new JsonSerializerOptions { WriteIndented = true }));
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                return WriteResult("devflow", $"Failed to detect alert: {ex.Message}", options);
+            }
+        }
+
+        private static int RunDevFlowAlertDismiss(Queue<string> tokens, OutputOptions options)
+        {
+            string? buttonLabel = null;
+            var remaining = new Queue<string>();
+            while (tokens.Count > 0)
+            {
+                var token = tokens.Dequeue();
+                if (token == "--button" && tokens.Count > 0) { buttonLabel = tokens.Dequeue(); continue; }
+                remaining.Enqueue(token);
+            }
+
+            ParseDevFlowOptions(remaining, out var host, out var port, out _);
+
+            try
+            {
+                using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+                var payload = JsonSerializer.Serialize(new { buttonLabel },
+                    new JsonSerializerOptions { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull });
+                using var content = new StringContent(payload, System.Text.Encoding.UTF8, "application/json");
+                using var response = http.PostAsync($"http://{host}:{port}/api/v1/alert/dismiss", content).GetAwaiter().GetResult();
+                var body = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+                return WriteResult("devflow", response.IsSuccessStatusCode ? "Alert dismissed." : $"Failed to dismiss alert: {body}", options);
+            }
+            catch (Exception ex)
+            {
+                return WriteResult("devflow", $"Failed to dismiss alert: {ex.Message}", options);
             }
         }
 

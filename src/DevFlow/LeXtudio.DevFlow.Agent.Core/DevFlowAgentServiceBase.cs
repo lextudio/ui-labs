@@ -1,12 +1,15 @@
 using System.Reflection;
 using System.Text.Json;
 using Microsoft.Maui.DevFlow.Agent.Core;
+using Microsoft.Maui.DevFlow.Agent.Core.Css;
+using Microsoft.Maui.DevFlow.Agent.Core.Network;
 
 namespace LeXtudio.DevFlow.Agent.Core;
 
 public abstract class DevFlowAgentServiceBase : IDisposable
 {
     private readonly AgentHttpServer _server;
+    private readonly NetworkRequestStore _networkStore = new();
     private bool _started;
 
     // Actions are discovered by reflecting over AppDomain.CurrentDomain.GetAssemblies(), but many
@@ -22,8 +25,16 @@ public abstract class DevFlowAgentServiceBase : IDisposable
     {
         Options = options ?? new AgentOptions();
         _server = new AgentHttpServer(Options.Port);
+        DevFlowHttp.SetStore(_networkStore);
         RegisterRoutes();
     }
+
+    /// <summary>
+    /// Shared store for HTTP traffic captured via <see cref="DevFlowHttp.CreateClient"/>
+    /// or <see cref="DevFlowHttpHandler"/>. Apps opt in per-HttpClient; nothing is
+    /// captured until an app constructs a client through one of those.
+    /// </summary>
+    protected NetworkRequestStore NetworkStore => _networkStore;
 
     protected AgentOptions Options { get; }
 
@@ -134,6 +145,189 @@ public abstract class DevFlowAgentServiceBase : IDisposable
         _server.MapPut("/api/v1/device/app/theme", HandleThemeSetAsync);
         _server.MapGet("/api/v1/invoke/actions", HandleListInvokeActionsAsync);
         _server.MapPost("/api/v1/invoke/actions/{name}", HandleInvokeActionAsync);
+        _server.MapGet("/api/v1/network/list", HandleNetworkListAsync);
+        _server.MapGet("/api/v1/network/detail", HandleNetworkDetailAsync);
+        _server.MapPost("/api/v1/network/clear", HandleNetworkClearAsync);
+        _server.MapGet("/api/v1/ui/query-selector", HandleQuerySelectorAsync);
+        _server.MapGet("/api/v1/ui/hit-test", HandleHitTestAsync);
+        _server.MapPost("/api/v1/ui/assert", HandleAssertAsync);
+        _server.MapGet("/api/v1/alert/detect", HandleAlertDetectAsync);
+        _server.MapPost("/api/v1/alert/dismiss", HandleAlertDismissAsync);
+    }
+
+    private Task<HttpResponse> HandleAlertDetectAsync(HttpRequest request)
+    {
+        var alert = WindowsAlertDetector.Detect();
+        return Task.FromResult(alert != null
+            ? HttpResponse.Json(new { present = true, message = alert.Message, buttons = alert.Buttons.Select(b => b.Text) })
+            : HttpResponse.Json(new { present = false }));
+    }
+
+    private Task<HttpResponse> HandleAlertDismissAsync(HttpRequest request)
+    {
+        var body = request.BodyAs<AlertDismissRequest>();
+        var dismissed = WindowsAlertDetector.Dismiss(body?.ButtonLabel);
+        return Task.FromResult(dismissed
+            ? HttpResponse.Json(new { success = true })
+            : HttpResponse.Error("No alert dialog detected to dismiss.", 404));
+    }
+
+    private sealed class AlertDismissRequest
+    {
+        public string? ButtonLabel { get; set; }
+    }
+
+    private async Task<HttpResponse> HandleQuerySelectorAsync(HttpRequest request)
+    {
+        if (!request.QueryParams.TryGetValue("selector", out var selector) || string.IsNullOrWhiteSpace(selector))
+            return HttpResponse.Error("Missing required query parameter 'selector'", 400);
+
+        var tree = await BuildTreeAsync().ConfigureAwait(false);
+        try
+        {
+            var results = CssSelectorEngine.Query(tree, selector);
+            return HttpResponse.Json(new { elements = results, count = results.Count });
+        }
+        catch (Exception ex)
+        {
+            return HttpResponse.Error($"Invalid selector: {ex.Message}", 400);
+        }
+    }
+
+    private async Task<HttpResponse> HandleHitTestAsync(HttpRequest request)
+    {
+        if (!request.QueryParams.TryGetValue("x", out var xRaw) || !double.TryParse(xRaw, out var x) ||
+            !request.QueryParams.TryGetValue("y", out var yRaw) || !double.TryParse(yRaw, out var y))
+            return HttpResponse.Error("Missing or invalid required query parameters 'x' and 'y'", 400);
+
+        var tree = await BuildTreeAsync().ConfigureAwait(false);
+        var hits = new List<ElementInfo>();
+        foreach (var root in tree)
+            CollectHits(root, x, y, hits);
+
+        // Deepest match last; report topmost-most-specific first.
+        hits.Reverse();
+        return HttpResponse.Json(new { elements = hits, topmost = hits.FirstOrDefault() });
+    }
+
+    private static void CollectHits(ElementInfo element, double x, double y, List<ElementInfo> hits)
+    {
+        var bounds = element.Bounds;
+        if (bounds != null && x >= bounds.X && x <= bounds.X + bounds.Width && y >= bounds.Y && y <= bounds.Y + bounds.Height)
+            hits.Add(StripChildren(element));
+
+        if (element.Children == null)
+            return;
+
+        foreach (var child in element.Children)
+            CollectHits(child, x, y, hits);
+    }
+
+    // Hit-test results must not carry each ancestor's full nested subtree — without
+    // stripping, every matched ancestor re-embeds the remainder of the tree it
+    // contains, so a hit near the tree root can multiply the response size by the
+    // number of ancestors matched.
+    private static ElementInfo StripChildren(ElementInfo el) => new()
+    {
+        Id = el.Id,
+        ParentId = el.ParentId,
+        Type = el.Type,
+        FullType = el.FullType,
+        AutomationId = el.AutomationId,
+        Text = el.Text,
+        Value = el.Value,
+        IsVisible = el.IsVisible,
+        IsEnabled = el.IsEnabled,
+        IsFocused = el.IsFocused,
+        Opacity = el.Opacity,
+        Bounds = el.Bounds,
+        Gestures = el.Gestures,
+        StyleClass = el.StyleClass,
+        NativeType = el.NativeType,
+        NativeProperties = el.NativeProperties,
+        Children = null,
+    };
+
+    private async Task<HttpResponse> HandleAssertAsync(HttpRequest request)
+    {
+        var body = request.BodyAs<AssertRequest>();
+        if (body == null || string.IsNullOrWhiteSpace(body.Selector))
+            return HttpResponse.Error("Missing required field 'selector'", 400);
+
+        var tree = await BuildTreeAsync().ConfigureAwait(false);
+        List<ElementInfo> matches;
+        try
+        {
+            matches = CssSelectorEngine.Query(tree, body.Selector);
+        }
+        catch (Exception ex)
+        {
+            return HttpResponse.Error($"Invalid selector: {ex.Message}", 400);
+        }
+
+        var failures = new List<string>();
+
+        if (body.Exists is bool expectedExists && expectedExists != matches.Count > 0)
+            failures.Add($"expected exists={expectedExists} but matched {matches.Count} element(s)");
+
+        if (body.Count is int expectedCount && matches.Count != expectedCount)
+            failures.Add($"expected count={expectedCount} but matched {matches.Count} element(s)");
+
+        if (body.TextEquals != null && !matches.Any(m => string.Equals(m.Text, body.TextEquals, StringComparison.Ordinal)))
+            failures.Add($"expected an element with text=='{body.TextEquals}'");
+
+        if (body.TextContains != null && !matches.Any(m => m.Text != null && m.Text.Contains(body.TextContains, StringComparison.Ordinal)))
+            failures.Add($"expected an element with text containing '{body.TextContains}'");
+
+        return HttpResponse.Json(new
+        {
+            success = failures.Count == 0,
+            selector = body.Selector,
+            matchCount = matches.Count,
+            failures
+        });
+    }
+
+    private sealed class AssertRequest
+    {
+        public string? Selector { get; set; }
+        public bool? Exists { get; set; }
+        public int? Count { get; set; }
+        public string? TextEquals { get; set; }
+        public string? TextContains { get; set; }
+    }
+
+    private Task<HttpResponse> HandleNetworkListAsync(HttpRequest request)
+    {
+        var count = 100;
+        if (request.QueryParams.TryGetValue("count", out var countValue) && int.TryParse(countValue, out var parsedCount))
+            count = parsedCount;
+
+        request.QueryParams.TryGetValue("host", out var host);
+        request.QueryParams.TryGetValue("method", out var method);
+        int? status = request.QueryParams.TryGetValue("status", out var statusValue) && int.TryParse(statusValue, out var parsedStatus)
+            ? parsedStatus
+            : null;
+
+        var entries = _networkStore.GetRecent(count, host, method, status).Select(e => e.ToSummary());
+        return Task.FromResult(HttpResponse.Json(new { requests = entries, total = _networkStore.Count }));
+    }
+
+    private Task<HttpResponse> HandleNetworkDetailAsync(HttpRequest request)
+    {
+        if (!request.QueryParams.TryGetValue("id", out var id) || string.IsNullOrWhiteSpace(id))
+            return Task.FromResult(HttpResponse.Error("Missing required query parameter 'id'", 400));
+
+        var entry = _networkStore.GetById(id);
+        return Task.FromResult(entry != null
+            ? HttpResponse.Json(entry)
+            : HttpResponse.Error($"Network request '{id}' not found", 404));
+    }
+
+    private Task<HttpResponse> HandleNetworkClearAsync(HttpRequest request)
+    {
+        _networkStore.Clear();
+        return Task.FromResult(HttpResponse.Json(new { success = true }));
     }
 
     private async Task<HttpResponse> HandleStatusAsync(HttpRequest request)

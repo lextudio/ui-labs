@@ -1,5 +1,9 @@
+using System.Net.Http;
+using System.Threading.Tasks;
 using System.Windows;
 using LeXtudio.DevFlow.Agent.Core;
+using Microsoft.Maui.DevFlow.Agent.Core;
+using Microsoft.Maui.DevFlow.Agent.Core.Network;
 using Microsoft.Web.WebView2.Core;
 
 namespace WpfDevFlowTestApp;
@@ -38,4 +42,19 @@ public partial class MainWindow : Window
 
     [DevFlowAction("wpf.echo", Description = "Echoes an input string for invoke API tests.")]
     public static string Echo(string value) => $"echo:{value}";
+
+    [DevFlowAction("wpf.network-test", Description = "Issues an HTTP GET through DevFlowHttp for network-monitor validation.")]
+    public static async Task<string> NetworkTest(string url = "https://example.com")
+    {
+        using var client = DevFlowHttp.CreateClient(new HttpClientHandler());
+        var response = await client.GetAsync(url);
+        return $"{(int)response.StatusCode} {response.ReasonPhrase}";
+    }
+
+    [DevFlowAction("wpf.show-alert", Description = "Shows a modal MessageBox for alert-detection validation.")]
+    public static Task ShowAlert(string message = "Test alert message")
+    {
+        Application.Current.Dispatcher.BeginInvoke(() => MessageBox.Show(message, "Test Alert"));
+        return Task.CompletedTask;
+    }
 }

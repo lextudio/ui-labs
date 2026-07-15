@@ -1,5 +1,6 @@
 using System.Windows.Forms;
 using LeXtudio.DevFlow.Agent.Core;
+using Microsoft.Maui.DevFlow.Agent.Core;
 using Microsoft.Web.WebView2.WinForms;
 
 namespace WinFormsDevFlowTestApp;

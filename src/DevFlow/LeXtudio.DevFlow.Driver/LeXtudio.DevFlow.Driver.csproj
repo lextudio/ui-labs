@@ -14,4 +14,31 @@
     <None Include="..\..\..\images\company_logo_512.png" Pack="true" PackagePath="\" Visible="false" />
     <None Include="README.md" Pack="true" PackagePath="\" Visible="false" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Driver\AgentClient.cs">
+      <Link>Upstream\AgentClient.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Driver\DevFlowDriverJson.cs">
+      <Link>Upstream\DevFlowDriverJson.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Driver\ElementInfo.cs">
+      <Link>Upstream\ElementInfo.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Driver\ScreenshotResult.cs">
+      <Link>Upstream\ScreenshotResult.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Driver\ThemeModels.cs">
+      <Link>Upstream\ThemeModels.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Driver\ExtensionModels.cs">
+      <Link>Upstream\ExtensionModels.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Driver\AlertInfo.cs">
+      <Link>Upstream\AlertInfo.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Driver\RecordingState.cs">
+      <Link>Upstream\RecordingState.cs</Link>
+    </Compile>
+  </ItemGroup>
 </Project>

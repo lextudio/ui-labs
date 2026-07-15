@@ -7,7 +7,7 @@
   <Target Name="_PatchRunGitVersion" BeforeTargets="RunGitVersion">
     <PropertyGroup>
       <_GitVersionFullCommand>$(GitVersionFileExe)</_GitVersionFullCommand>
-      <GitVersionFileExe Condition="'$(_DotnetHostPath)' != 'dotnet'">$(_DotnetHostPath)$(GitVersionFileExe.Substring(6))</GitVersionFileExe>
+      <GitVersionFileExe Condition="'$(_DotnetHostPath)' != 'dotnet'">&quot;$(_DotnetHostPath)&quot;$(GitVersionFileExe.Substring(6))</GitVersionFileExe>
     </PropertyGroup>
   </Target>
 </Project>

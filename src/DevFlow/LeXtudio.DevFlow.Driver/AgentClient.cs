@@ -79,6 +79,22 @@ public sealed class AgentClient : IDisposable
         return document.RootElement.Clone();
     }
 
+    public async Task<JsonElement?> ListExtensionsAsync(CancellationToken cancellationToken = default)
+    {
+        using var response = await _http.GetAsync(new Uri(_baseUrl + "/api/v1/invoke/actions"), cancellationToken).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+        using var document = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken).ConfigureAwait(false);
+        return document.RootElement.Clone();
+    }
+
+    public async Task<(bool Success, JsonElement Result)> CallExtensionAsync(string name, JsonElement[]? args = null, CancellationToken cancellationToken = default)
+    {
+        var payload = JsonContent.Create(new { args }, options: _jsonOptions);
+        using var response = await _http.PostAsync(new Uri(_baseUrl + $"/api/v1/invoke/actions/{Uri.EscapeDataString(name)}"), payload, cancellationToken).ConfigureAwait(false);
+        using var document = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken).ConfigureAwait(false);
+        return (response.IsSuccessStatusCode, document.RootElement.Clone());
+    }
+
     public void Dispose() => _http.Dispose();
 
     private async Task<T?> GetAsync<T>(string path, CancellationToken cancellationToken)

@@ -221,7 +221,7 @@ namespace LeXtudio.Wpf.Cli.UnitTests
 
         private static string GetAppCsContents(int port)
         {
-            return $"using System.Windows;\r\nusing LeXtudio.DevFlow.Agent.WPF;\r\nusing Microsoft.Maui.DevFlow.Agent.Core;\r\n\r\nnamespace WpfDevFlowValidationApp;\r\n\r\npublic partial class App : Application\r\n{{\r\n    private const int ValidationPort = {port};\r\n    private WpfAgentService? _devFlowService;\r\n\r\n    public App()\r\n    {{\r\n        Startup += OnStartup;\r\n    }}\r\n\r\n    private void OnStartup(object? sender, StartupEventArgs e)\r\n    {{\r\n        _devFlowService = this.AddWpfDevFlowAgent(new AgentOptions {{ Port = ValidationPort }});\r\n        var hiddenWindow = new MainWindow\r\n        {{\r\n            Visibility = Visibility.Hidden,\r\n            ShowInTaskbar = false\r\n        }};\r\n        hiddenWindow.Show();\r\n    }}\r\n}}\r\n";
+            return $"using System.Windows;\r\nusing LeXtudio.DevFlow.Agent.Wpf;\r\nusing Microsoft.Maui.DevFlow.Agent.Core;\r\n\r\nnamespace WpfDevFlowValidationApp;\r\n\r\npublic partial class App : Application\r\n{{\r\n    private const int ValidationPort = {port};\r\n    private WpfAgentService? _devFlowService;\r\n\r\n    public App()\r\n    {{\r\n        Startup += OnStartup;\r\n    }}\r\n\r\n    private void OnStartup(object? sender, StartupEventArgs e)\r\n    {{\r\n        _devFlowService = this.AddWpfDevFlowAgent(new AgentOptions {{ Port = ValidationPort }});\r\n        var hiddenWindow = new MainWindow\r\n        {{\r\n            Visibility = Visibility.Hidden,\r\n            ShowInTaskbar = false\r\n        }};\r\n        hiddenWindow.Show();\r\n    }}\r\n}}\r\n";
         }
     }
 }

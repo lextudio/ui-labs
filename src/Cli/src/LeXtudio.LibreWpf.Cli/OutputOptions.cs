@@ -1,4 +1,4 @@
-namespace LeXtudio.Wpf.Cli
+namespace LeXtudio.LibreWpf.Cli
 {
     public sealed record OutputOptions
     {

@@ -18,6 +18,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\LeXtudio.DevFlow.Analyzers\LeXtudio.DevFlow.Analyzers.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Core\AgentHttpServer.cs">
       <Link>AgentHttpServer.cs</Link>
     </Compile>
@@ -33,6 +37,38 @@
     <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Core\ElementInfo.cs">
       <Link>ElementInfo.cs</Link>
     </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Core\BrokerRegistration.cs">
+      <Link>BrokerRegistration.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Core\Network\DevFlowHttp.cs">
+      <Link>Network\DevFlowHttp.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Core\Network\DevFlowHttpHandler.cs">
+      <Link>Network\DevFlowHttpHandler.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Core\Network\NetworkRequestEntry.cs">
+      <Link>Network\NetworkRequestEntry.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Core\Network\NetworkRequestStore.cs">
+      <Link>Network\NetworkRequestStore.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Core\Css\CssSelectorEngine.cs">
+      <Link>Css\CssSelectorEngine.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Core\Css\ElementInfoOps.cs">
+      <Link>Css\ElementInfoOps.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Core\Css\SelectorPreprocessor.cs">
+      <Link>Css\SelectorPreprocessor.cs</Link>
+    </Compile>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Fizzler" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 
 </Project>
