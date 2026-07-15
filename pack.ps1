@@ -4,11 +4,13 @@ Param(
     [string[]]$Projects = @(
         "src\DevFlow\LeXtudio.DevFlow.Agent.Core\LeXtudio.DevFlow.Agent.Core.csproj",
         "src\DevFlow\LeXtudio.DevFlow.Agent.WPF\LeXtudio.DevFlow.Agent.WPF.csproj",
+        "src\DevFlow\LeXtudio.DevFlow.Agent.LibreWpf\LeXtudio.DevFlow.Agent.LibreWpf.csproj",
         "src\DevFlow\LeXtudio.DevFlow.Agent.WinForms\LeXtudio.DevFlow.Agent.WinForms.csproj",
         "src\DevFlow\LeXtudio.DevFlow.Agent.Uno\LeXtudio.DevFlow.Agent.Uno.csproj",
         "src\DevFlow\LeXtudio.DevFlow.Agent.MewUI\LeXtudio.DevFlow.Agent.MewUI.csproj",
         "src\DevFlow\LeXtudio.DevFlow.Driver\LeXtudio.DevFlow.Driver.csproj",
         "src\Cli\src\LeXtudio.Wpf.Cli\LeXtudio.Wpf.Cli.csproj",
+        "src\Cli\src\LeXtudio.LibreWpf.Cli\LeXtudio.LibreWpf.Cli.csproj",
         "src\Cli\src\LeXtudio.WinForms.Cli\LeXtudio.WinForms.Cli.csproj",
         "src\Cli\src\LeXtudio.MewUI.Cli\LeXtudio.MewUI.Cli.csproj",
         "src\Cli\src\LeXtudio.Uno.Cli\LeXtudio.Uno.Cli.csproj"
