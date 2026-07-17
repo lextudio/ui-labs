@@ -14,9 +14,22 @@ public class WpfVisualTreeWalker : IVisualTreeWalker
     private readonly ConditionalWeakTable<DependencyObject, string> _stableIds = new();
     private readonly Dictionary<string, DependencyObject> _elementsByStableId = new(StringComparer.Ordinal);
 
+    // GetChildren below merges four overlapping child sources (visual tree, ContentControl.Content,
+    // ItemsControl.Items, LogicalTreeHelper) because no single source is complete on its own - but for
+    // most controls those sources aren't disjoint: a ContentControl's Content is normally reachable
+    // BOTH as a visual descendant (through its template's ContentPresenter) AND directly via
+    // ContentControl.Content/LogicalTreeHelper. Without deduping, that one shared node - and
+    // everything under it - gets walked and materialized again as a sibling subtree at every level,
+    // so the node count multiplies with tree depth instead of adding, which OOMs on any reasonably
+    // deep real UI (AvalonDock + theme templates easily run 20-40 visual levels deep). This set makes
+    // each DependencyObject appear exactly once per walk, keyed by reference, and doubles as a guard
+    // against genuine reference cycles.
+    private readonly HashSet<DependencyObject> _visited = new(ReferenceEqualityComparer.Instance);
+
     public List<ElementInfo> WalkTree()
     {
         _elementsByStableId.Clear();
+        _visited.Clear();
 
         var app = Application.Current;
         if (app == null)
@@ -25,7 +38,8 @@ public class WpfVisualTreeWalker : IVisualTreeWalker
         var roots = new List<ElementInfo>();
         foreach (Window window in app.Windows.OfType<Window>())
         {
-            roots.Add(BuildElementInfo(window, null));
+            if (_visited.Add(window))
+                roots.Add(BuildElementInfo(window, null));
         }
         return roots;
     }
@@ -91,7 +105,10 @@ public class WpfVisualTreeWalker : IVisualTreeWalker
             Bounds = ResolveBounds(element),
             NativeProperties = BuildNativeProperties(element, id),
             FrameworkProperties = BuildFrameworkProperties(element),
-            Children = GetChildren(element).Select(child => BuildElementInfo(child, id)).ToList()
+            Children = GetChildren(element)
+                .Where(child => _visited.Add(child))
+                .Select(child => BuildElementInfo(child, id))
+                .ToList()
         };
 
         return info;
@@ -157,13 +174,7 @@ public class WpfVisualTreeWalker : IVisualTreeWalker
         {
             if (element is Window wind)
             {
-                return new BoundsInfo
-                {
-                    X = wind.Left,
-                    Y = wind.Top,
-                    Width = wind.ActualWidth,
-                    Height = wind.ActualHeight
-                };
+                return CreateIfFinite(wind.Left, wind.Top, wind.ActualWidth, wind.ActualHeight);
             }
 
             if (element is FrameworkElement fe && fe.IsVisible)
@@ -173,13 +184,7 @@ public class WpfVisualTreeWalker : IVisualTreeWalker
                 {
                     var transform = fe.TransformToAncestor(window);
                     var point = transform.Transform(new System.Windows.Point(0, 0));
-                    return new BoundsInfo
-                    {
-                        X = point.X,
-                        Y = point.Y,
-                        Width = fe.ActualWidth,
-                        Height = fe.ActualHeight
-                    };
+                    return CreateIfFinite(point.X, point.Y, fe.ActualWidth, fe.ActualHeight);
                 }
             }
         }
@@ -188,6 +193,19 @@ public class WpfVisualTreeWalker : IVisualTreeWalker
         }
 
         return null;
+    }
+
+    // A closing/mid-teardown window (e.g. an AvalonDock floating window mid-Close()) can
+    // transiently report NaN/Infinity bounds (a degenerate zero-scale transform, or layout not
+    // yet re-run after removal). System.Text.Json throws on those by default, which aborts the
+    // whole ui/tree response mid-stream - so treat "not finite" the same as "no bounds available"
+    // instead of ever serializing a non-finite number.
+    private static BoundsInfo? CreateIfFinite(double x, double y, double width, double height)
+    {
+        if (!double.IsFinite(x) || !double.IsFinite(y) || !double.IsFinite(width) || !double.IsFinite(height))
+            return null;
+
+        return new BoundsInfo { X = x, Y = y, Width = width, Height = height };
     }
 
     private static Dictionary<string, string?> BuildNativeProperties(DependencyObject element, string stableId)
