@@ -9,6 +9,8 @@ namespace LeXtudio.DevFlow.Agent.Core;
 public static class CliclickInput
 {
     private static readonly Lazy<string?> _path = new(ResolvePath);
+    private static readonly object _dragLock = new();
+    private static Process? _dragHoldProcess;
 
     public static bool IsAvailable => _path.Value != null;
 
@@ -16,6 +18,10 @@ public static class CliclickInput
     {
         if (!OperatingSystem.IsMacOS())
             return null;
+
+        var bundled = Path.Combine(AppContext.BaseDirectory, "CliclickSharp");
+        if (File.Exists(bundled))
+            return bundled;
 
         foreach (var candidate in new[] { "/opt/homebrew/bin/cliclick", "/usr/local/bin/cliclick" })
         {
@@ -45,11 +51,79 @@ public static class CliclickInput
 
     public static bool TryMove(double x, double y) => Run($"m:{Pt(x)},{Pt(y)}");
 
-    public static bool TryPressDown(double x, double y) => Run($"m:{Pt(x)},{Pt(y)}", $"dd:{Pt(x)},{Pt(y)}");
+    public static bool TryPressDown(double x, double y)
+    {
+        lock (_dragLock)
+        {
+            StopDragHoldProcess();
+            var exe = _path.Value;
+            if (exe == null)
+                return false;
 
-    public static bool TryDragMoveTo(double x, double y) => Run($"dm:{Pt(x)},{Pt(y)}");
+            try
+            {
+                var psi = new ProcessStartInfo
+                {
+                    FileName = exe,
+                    UseShellExecute = false,
+                };
+                psi.ArgumentList.Add($"m:{Pt(x)},{Pt(y)}");
+                psi.ArgumentList.Add($"dd:{Pt(x)},{Pt(y)}");
+                psi.ArgumentList.Add("w:600000");
+                psi.ArgumentList.Add("du:.");
+                _dragHoldProcess = Process.Start(psi);
+                if (_dragHoldProcess == null)
+                    return false;
 
-    public static bool TryRelease(double x, double y) => Run($"du:{Pt(x)},{Pt(y)}");
+                System.Threading.Thread.Sleep(100);
+                return !_dragHoldProcess.HasExited;
+            }
+            catch
+            {
+                StopDragHoldProcess();
+                return false;
+            }
+        }
+    }
+
+    public static bool TryDragMoveTo(double x, double y)
+    {
+        lock (_dragLock)
+        {
+            if (_dragHoldProcess == null || _dragHoldProcess.HasExited)
+                return false;
+
+            return Run($"m:{Pt(x)},{Pt(y)}");
+        }
+    }
+
+    public static bool TryRelease(double x, double y)
+    {
+        lock (_dragLock)
+        {
+            if (_dragHoldProcess == null || _dragHoldProcess.HasExited)
+                return false;
+
+            var released = Run($"du:{Pt(x)},{Pt(y)}");
+            StopDragHoldProcess();
+            return released;
+        }
+    }
+
+    private static void StopDragHoldProcess()
+    {
+        if (_dragHoldProcess == null)
+            return;
+
+        try
+        {
+            if (!_dragHoldProcess.HasExited)
+                _dragHoldProcess.Kill();
+        }
+        catch { }
+        _dragHoldProcess.Dispose();
+        _dragHoldProcess = null;
+    }
 
     public static bool TryClick(double x, double y, int clickCount)
     {
