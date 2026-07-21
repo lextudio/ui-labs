@@ -741,9 +741,17 @@ public abstract class DevFlowAgentServiceBase : IDisposable
         public double? Dx { get; set; }
         public double? Dy { get; set; }
         public int? Steps { get; set; }
-        /// <summary>When true, From/To are absolute global screen points (no
-        /// window-origin/scale mapping). Used for diagnostics.</summary>
-        public bool Global { get; set; }
+        /// <summary>When true (the default — matches <see cref="ClickRequest.Global"/> and
+        /// <see cref="MoveRequest.Global"/>), From/To are absolute global screen points (no
+        /// window-origin/scale mapping). When false, From/To are window-relative screenshot
+        /// pixels, converted via window origin + display scale. Before this default was
+        /// aligned, omitting "global" made /actions/drag silently take the screenshot-pixel
+        /// path while /actions/click and /actions/move took the global-point path for the
+        /// same omitted field — the same coordinates meant different things depending on
+        /// which endpoint received them (e.g. on a 2x Retina display, drag's screenshot-pixel
+        /// path divides by the display scale, so the same input landed at half the intended
+        /// position compared to click/move).</summary>
+        public bool Global { get; set; } = true;
     }
 
     private sealed class ActionRequest

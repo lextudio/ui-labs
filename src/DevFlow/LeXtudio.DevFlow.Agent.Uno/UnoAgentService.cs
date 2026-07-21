@@ -147,6 +147,9 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
             if (TryInvokeOnClick(target))
                 return true;
 
+            if (TryInvokeSelectionItemPattern(target))
+                return true;
+
             return false;
         });
     }
@@ -166,7 +169,8 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
                 () => TryNativeTap(target) ? CreateSuccessResult(SimulationModes.Native, elementId) : null,
                 () => TryExecuteCommand(target) ? CreateSuccessResult(SimulationModes.Semantic, elementId) : null,
                 () => TryInvokeAutomationPattern(target) ? CreateSuccessResult(SimulationModes.Reflection, elementId) : null,
-                () => TryInvokeOnClick(target) ? CreateSuccessResult(SimulationModes.Reflection, elementId) : null);
+                () => TryInvokeOnClick(target) ? CreateSuccessResult(SimulationModes.Reflection, elementId) : null,
+                () => TryInvokeSelectionItemPattern(target) ? CreateSuccessResult(SimulationModes.Semantic, elementId) : null);
         });
     }
 
@@ -2054,6 +2058,28 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
         }
 
         return false;
+    }
+
+    // Selection-container items — NavigationViewItem, ListViewItem, TreeViewItem,
+    // and any other IsSelected-bearing container — have no Command and no
+    // OnClick method, and ButtonAutomationPeer's constructor rejects a
+    // non-Button element, so all three existing fallbacks miss them. They also
+    // fall through TryNativeTap on non-Windows platforms (that whole path is
+    // Windows-only SendInput). Rather than requiring a real pointer gesture,
+    // this drives the same effect a user click has — toggling IsSelected — by
+    // setting the property directly, mirroring TryExecuteCommand's
+    // property/method reflection rather than pixel/native input simulation.
+    private static bool TryInvokeSelectionItemPattern(object element)
+    {
+        var isSelectedProperty = element.GetType().GetProperty("IsSelected", BindingFlags.Instance | BindingFlags.Public);
+        if (isSelectedProperty == null || isSelectedProperty.PropertyType != typeof(bool) || !isSelectedProperty.CanWrite)
+            return false;
+
+        if (isSelectedProperty.GetValue(element) is true)
+            return true; // already selected — the tap would be a no-op anyway
+
+        isSelectedProperty.SetValue(element, true);
+        return true;
     }
 
     private static bool TryNativeTap(object element)
