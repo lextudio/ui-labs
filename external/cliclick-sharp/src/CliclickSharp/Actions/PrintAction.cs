@@ -13,7 +13,7 @@ public class PrintAction : IAction
 
         if (string.IsNullOrEmpty(data) || data == ".")
         {
-            CGPoint pos = CoreGraphics.CGEventGetLocation(IntPtr.Zero);
+            CGPoint pos = CoreGraphics.GetCurrentMouseLocation();
             output = $"{(int)pos.X},{(int)pos.Y}";
         }
         else

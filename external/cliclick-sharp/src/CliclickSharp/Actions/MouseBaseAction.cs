@@ -23,7 +23,7 @@ public abstract partial class MouseBaseAction
             return false;
         }
 
-        CGPoint currentPos = CoreGraphics.CGEventGetLocation(IntPtr.Zero);
+        CGPoint currentPos = CoreGraphics.GetCurrentMouseLocation();
 
         if (!string.Equals(data, ".", StringComparison.Ordinal) && !string.IsNullOrEmpty(data))
         {
@@ -130,7 +130,7 @@ public abstract partial class MouseBaseAction
 
             if (!forceAbsolute)
             {
-                CGPoint currentPos = CoreGraphics.CGEventGetLocation(IntPtr.Zero);
+                CGPoint currentPos = CoreGraphics.GetCurrentMouseLocation();
                 relativeOffset = axis == CoordinateAxis.XAxis
                     ? absolute - currentPos.X
                     : absolute - currentPos.Y;
@@ -142,8 +142,8 @@ public abstract partial class MouseBaseAction
         }
 
         return relativeOffset + (axis == CoordinateAxis.XAxis
-            ? CoreGraphics.CGEventGetLocation(IntPtr.Zero).X
-            : CoreGraphics.CGEventGetLocation(IntPtr.Zero).Y);
+            ? CoreGraphics.GetCurrentMouseLocation().X
+            : CoreGraphics.GetCurrentMouseLocation().Y);
     }
 
     [GeneratedRegex(@"^=?[+-]?\d+$")]

@@ -152,7 +152,7 @@ public class Program
 
         if (restorePosition)
         {
-            initialPosition = CoreGraphics.CGEventGetLocation(IntPtr.Zero);
+            initialPosition = CoreGraphics.GetCurrentMouseLocation();
         }
 
         // Mark first and last

@@ -133,6 +133,15 @@ public static class CliclickInput
         return Run(commands.ToArray());
     }
 
+    // Waits (ms) woven into the drag gesture. Uno's Skia-macOS input backend DROPS a
+    // mouse-up that arrives too soon after the preceding down/drag events (they get
+    // coalesced), so a drag posted as one rapid m/dd/dm.../du batch delivers PointerPressed
+    // + PointerMoved but NO PointerReleased — the exact "release never arrived" failure the
+    // DataGrid column-reorder drag hit. Holding briefly after the press and, critically,
+    // settling before the release lets each event be processed as distinct.
+    private const int DragHoldAfterDownMs = 120;
+    private const int DragSettleBeforeUpMs = 150;
+
     public static bool TryDrag(double fromX, double fromY, double toX, double toY, int steps)
     {
         if (steps < 1)
@@ -142,6 +151,7 @@ public static class CliclickInput
         {
             $"m:{Pt(fromX)},{Pt(fromY)}",
             $"dd:{Pt(fromX)},{Pt(fromY)}",
+            $"w:{DragHoldAfterDownMs}",
         };
         for (var i = 1; i <= steps; i++)
         {
@@ -150,6 +160,8 @@ public static class CliclickInput
             var y = fromY + (toY - fromY) * t;
             commands.Add($"dm:{Pt(x)},{Pt(y)}");
         }
+        // Settle before releasing so the up is not coalesced with the final drag-move.
+        commands.Add($"w:{DragSettleBeforeUpMs}");
         commands.Add($"du:{Pt(toX)},{Pt(toY)}");
         return Run(commands.ToArray());
     }
@@ -176,6 +188,9 @@ public static class CliclickInput
             if (process == null)
                 return false;
 
+            // Drain stdout/stderr so the child never blocks on a full pipe.
+            _ = process.StandardOutput.ReadToEnd();
+            _ = process.StandardError.ReadToEnd();
             if (!process.WaitForExit(10_000))
             {
                 try { process.Kill(); } catch { }

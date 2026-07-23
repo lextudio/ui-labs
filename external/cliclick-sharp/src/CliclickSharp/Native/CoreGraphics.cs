@@ -153,4 +153,19 @@ public static class CoreGraphics
 
     [DllImport(ApplicationServicesLibrary)]
     public static extern bool AXIsProcessTrusted();
+
+    /// <summary>
+    /// Returns the current mouse location in global screen points (top-left origin).
+    /// <see cref="CGEventGetLocation"/> requires a real event: passing IntPtr.Zero returns
+    /// (0,0), so — matching the original cliclick (Actions/MouseBaseAction.m) — we create a
+    /// throwaway event with CGEventCreate(NULL) purely to read the cursor off it.
+    /// </summary>
+    public static CGPoint GetCurrentMouseLocation()
+    {
+        IntPtr evt = CGEventCreate(IntPtr.Zero);
+        if (evt == IntPtr.Zero)
+            return new CGPoint(0, 0);
+        try { return CGEventGetLocation(evt); }
+        finally { CFRelease(evt); }
+    }
 }

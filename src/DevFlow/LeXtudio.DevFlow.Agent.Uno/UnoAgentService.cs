@@ -280,23 +280,30 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
             if (!RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
                 return new { ok = false, reason = "drag injection is implemented for macOS only" };
 
+            // cliclick is the ONLY supported drag driver on macOS. The raw CGEventPost path was
+            // removed: its release (kCGEventLeftMouseUp) did not reliably reach a captured XAML
+            // element, so drags looked like they "worked" (ok=true) yet no PointerReleased fired.
+            // cliclick issues a coherent dd:/dm:/du: gesture the OS delivers end-to-end.
+            if (!CliclickInput.IsAvailable)
+                return new { ok = false, reason = "cliclick not found — install it (brew install cliclick) and grant Accessibility (TCC) permission" };
+
             TryActivateMainWindow();
 
-            // Diagnostic path: coordinates are already absolute global points.
+            // Coordinates already absolute global Quartz points (top-left origin).
             if (request.Global && request.FromX.HasValue && request.FromY.HasValue)
             {
                 double gToX = request.ToX ?? (request.FromX.Value + (request.Dx ?? 0));
                 double gToY = request.ToY ?? (request.FromY.Value + (request.Dy ?? 0));
                 var gSteps = request.Steps is > 0 ? request.Steps.Value : 24;
                 DragLog($"drag(global): from=({request.FromX},{request.FromY}) to=({gToX},{gToY}) steps={gSteps}");
-                var gok = MacOSNativeInput.TryMouseDrag(request.FromX.Value, request.FromY.Value, gToX, gToY, gSteps);
-                DragLog($"drag(global): TryMouseDrag returned {gok}");
-                return new { ok = gok, mode = "native-global", from = new { x = request.FromX, y = request.FromY }, to = new { x = gToX, y = gToY }, steps = gSteps };
+                var gok = CliclickInput.TryDrag(request.FromX.Value, request.FromY.Value, gToX, gToY, gSteps);
+                DragLog($"drag(global): cliclick returned {gok}");
+                return new { ok = gok, mode = "cliclick-global", from = new { x = request.FromX, y = request.FromY }, to = new { x = gToX, y = gToY }, steps = gSteps };
             }
 
             var metrics = TryGetWindowMetrics();
             if (metrics is null)
-                return new { ok = false, reason = "could not resolve window metrics (AppWindow.Position)" };
+                return new { ok = false, reason = "could not resolve window metrics (content origin)" };
             var m = metrics.Value;
 
             if (!TryResolveScreenPoint(request.FromId, request.FromX, request.FromY, m, out var fromX, out var fromY))
@@ -320,16 +327,16 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
 
             var steps = request.Steps is > 0 ? request.Steps.Value : 24;
             DragLog($"drag: posting global from=({fromX},{fromY}) to=({toX},{toY}) steps={steps}");
-            var ok = MacOSNativeInput.TryMouseDrag(fromX, fromY, toX, toY, steps);
-            DragLog($"drag: TryMouseDrag returned {ok}");
+            var ok = CliclickInput.TryDrag(fromX, fromY, toX, toY, steps);
+            DragLog($"drag: returned {ok}");
             return new
             {
                 ok,
-                mode = "native",
+                mode = "cliclick-global",
                 from = new { x = fromX, y = fromY },
                 to = new { x = toX, y = toY },
                 steps,
-                note = ok ? null : "CGEventPost returned without delivery — grant Accessibility (TCC) permission to the host process",
+                note = ok ? null : "drag returned without delivery — grant Accessibility (TCC) permission to the host process",
             };
         });
     }
@@ -430,6 +437,22 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
         var py = GetInt32Member(position, "Y");
         var scale = TryGetRasterizationScale(window);
         if (scale <= 0) scale = 1.0;
+
+        // On macOS, prefer the real NSWindow CONTENT origin (Quartz global points, top-left) over
+        // AppWindow.Position, which reports the outer window-frame origin and drifts from the
+        // content area by ~a title-bar height — a drag computed from it lands on the title bar
+        // instead of the target element. See MacOSWindowOrigin / UnoDock design.md coordinate model.
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        {
+            var contentOrigin = MacOSWindowOrigin.TryGetContentOrigin();
+            if (contentOrigin is { } co)
+            {
+                DragLog($"metrics: native contentOrigin=({co.X},{co.Y}) scale={scale} (AppWindow.Position posPx=({px},{py}))");
+                return (co.X, co.Y, scale);
+            }
+            DragLog("metrics: native contentOrigin unavailable, falling back to AppWindow.Position");
+        }
+
         DragLog($"metrics: posPx=({px},{py}) scale={scale}");
         if (px is null || py is null)
             return null;

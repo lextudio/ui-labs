@@ -34,6 +34,28 @@
                    TextWrapping="Wrap"
                    Width="320" />
 
+        <!-- Dedicated drag-probe surface: a synthesized OS drag whose path stays
+             entirely inside this Border must produce PointerPressed → PointerMoved(s)
+             → PointerReleased, recorded to a log a DevFlow probe reads back. This is
+             how we prove DevFlow's drag delivers a full press/move/release gesture
+             (esp. the release) end-to-end. -->
+        <Border x:Name="DragProbeSurface"
+                AutomationProperties.AutomationId="DragProbeSurface"
+                Width="320" Height="160"
+                Background="#2266AA"
+                CornerRadius="4">
+          <TextBlock Text="Drag probe surface"
+                     Foreground="White"
+                     HorizontalAlignment="Center"
+                     VerticalAlignment="Center" />
+        </Border>
+
+        <TextBlock x:Name="DragProbeLogText"
+                   AutomationProperties.AutomationId="DragProbeLogText"
+                   Text="drag:"
+                   TextWrapping="Wrap"
+                   Width="320" />
+
         <TextBox x:Name="EventProbeInput"
                  AutomationProperties.AutomationId="EventProbeInput"
                  Width="320"
