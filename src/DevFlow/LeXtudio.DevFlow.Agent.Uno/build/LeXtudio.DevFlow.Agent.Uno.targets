@@ -1,0 +1,15 @@
+<Project>
+  <!--
+    Copies the bundled CliclickSharp native helper into the CONSUMING project's output.
+    NuGet auto-imports build/*.targets only from DIRECT PackageReferences, and consumers
+    reference this Agent.Uno package directly (Agent.Core is transitive, so its own build/
+    targets would never fire for them) — so the binary + this targets are shipped here.
+  -->
+  <ItemGroup Condition="Exists('$(MSBuildThisFileDirectory)CliclickSharp')">
+    <None Include="$(MSBuildThisFileDirectory)CliclickSharp">
+      <Link>CliclickSharp</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Visible>false</Visible>
+    </None>
+  </ItemGroup>
+</Project>

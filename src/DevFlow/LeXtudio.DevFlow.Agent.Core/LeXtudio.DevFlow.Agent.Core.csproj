@@ -68,11 +68,17 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="..\..\..\external\cliclick-sharp\dist\CliclickSharp">
+    <!-- CliclickSharp native helper. One item serves three consumers:
+         * Own build + ProjectReference consumers — CopyToOutputDirectory flows transitively.
+         * NuGet package — Pack=true places it at build/CliclickSharp, next to the .targets that
+           copies it into a PackageReference consumer's output (contentFiles copyToOutput is
+           unreliable for a bare native binary, so the build/.targets is the reliable path). -->
+    <None Include="..\..\..\external\cliclick-sharp\dist\CliclickSharp" Pack="true" PackagePath="build\">
       <Link>CliclickSharp</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Visible>false</Visible>
-    </Content>
+    </None>
+    <None Include="build\LeXtudio.DevFlow.Agent.Core.targets" Pack="true" PackagePath="build\LeXtudio.DevFlow.Agent.Core.targets" Visible="false" />
   </ItemGroup>
 
   <ItemGroup>

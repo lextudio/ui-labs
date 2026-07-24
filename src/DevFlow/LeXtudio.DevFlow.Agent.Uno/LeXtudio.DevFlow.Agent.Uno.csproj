@@ -14,6 +14,11 @@
   <ItemGroup>
     <None Include="..\..\..\images\company_logo_512.png" Pack="true" PackagePath="\" Visible="false" />
     <None Include="README.md" Pack="true" PackagePath="\" Visible="false" />
+    <!-- Ship CliclickSharp + the auto-imported targets in THIS package's build/ folder, because
+         consumers reference Agent.Uno directly and NuGet imports build/*.targets only from direct
+         PackageReferences (Agent.Core is transitive for them). See the .targets for details. -->
+    <None Include="..\..\..\external\cliclick-sharp\dist\CliclickSharp" Pack="true" PackagePath="build\" Visible="false" />
+    <None Include="build\LeXtudio.DevFlow.Agent.Uno.targets" Pack="true" PackagePath="build\LeXtudio.DevFlow.Agent.Uno.targets" Visible="false" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,0 +1,18 @@
+<Project>
+  <!--
+    Copies the bundled CliclickSharp native helper into the CONSUMING project's output
+    directory. Package contentFiles are not copied to a PackageReference consumer's output
+    unless copyToOutput is set, and even then TFM matching is finicky for a plain native
+    binary; a build/.targets that adds it as a CopyToOutputDirectory item is the reliable
+    cross-project mechanism. (ProjectReference consumers get it via the <Content> item in the
+    .csproj instead, so this only needs to fire for package consumers — which is exactly when
+    this build/ targets file is auto-imported.)
+  -->
+  <ItemGroup Condition="Exists('$(MSBuildThisFileDirectory)CliclickSharp')">
+    <None Include="$(MSBuildThisFileDirectory)CliclickSharp">
+      <Link>CliclickSharp</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Visible>false</Visible>
+    </None>
+  </ItemGroup>
+</Project>
