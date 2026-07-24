@@ -139,6 +139,11 @@ public class UnoAgentIntegrationTests
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
             return;
 
+        // GitHub Actions macOS runners cannot grant Accessibility (TCC) permission
+        // to the host process, so cliclick-based OS drag injection always fails.
+        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GITHUB_ACTIONS")))
+            Assert.Skip("Skipping drag test on GitHub Actions CI — macOS Accessibility (TCC) permission is not available.");
+
         var repoRoot = FindRepositoryRoot(Directory.GetCurrentDirectory());
         var hostProjectPath = Path.GetFullPath(Path.Combine(repoRoot, "src", "DevFlow", "UnoDevFlowTestApp", "UnoDevFlowTestApp", "UnoDevFlowTestApp.csproj"));
         if (!File.Exists(hostProjectPath))
