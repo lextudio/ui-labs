@@ -20,6 +20,12 @@ Each guide covers:
 - Optional port configuration
 - Recommended best practices
 
+## Technical Notes
+
+Deeper notes for DevFlow maintainers (not needed for adoption):
+
+- **[Synthesized Drag on Uno-Skia-macOS](technote-uno-macos-drag.md)** — why injecting a real drag/drop gesture is subtle on macOS, and the fixes required to deliver a full `PointerPressed → PointerMoved → PointerReleased` sequence.
+
 ## FAQ
 
 See the [DevFlow FAQ](faq.md) for answers to common questions, including:

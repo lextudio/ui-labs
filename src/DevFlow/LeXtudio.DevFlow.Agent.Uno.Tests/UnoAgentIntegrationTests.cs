@@ -132,6 +132,109 @@ public class UnoAgentIntegrationTests
 
     [Theory]
     [MemberData(nameof(UnoTestTargets))]
+    public async Task Drag_OverProbeSurface_DeliversPressMoveRelease(string targetFramework)
+    {
+        // Injected OS drag is macOS-only (see capabilities.drag). On other platforms the
+        // gesture path is not implemented, so there is nothing to assert.
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            return;
+
+        var repoRoot = FindRepositoryRoot(Directory.GetCurrentDirectory());
+        var hostProjectPath = Path.GetFullPath(Path.Combine(repoRoot, "src", "DevFlow", "UnoDevFlowTestApp", "UnoDevFlowTestApp", "UnoDevFlowTestApp.csproj"));
+        if (!File.Exists(hostProjectPath))
+            throw new InvalidOperationException($"Unable to locate Uno host project at {hostProjectPath}");
+
+        var hostProjectDirectory = Path.GetDirectoryName(hostProjectPath)!;
+        BuildHostProject(hostProjectPath, targetFramework, hostProjectDirectory);
+
+        var exePath = GetHostExecutablePath(hostProjectDirectory, targetFramework);
+        if (!File.Exists(exePath))
+            throw new InvalidOperationException($"Unable to locate Uno host executable at {exePath}");
+
+        var port = GetFreePort();
+        using var process = StartHiddenProcess(exePath, hostProjectDirectory, port);
+        if (process == null || process.HasExited)
+            throw new InvalidOperationException("Failed to start the Uno host process.");
+
+        try
+        {
+            using var client = new HttpClient { BaseAddress = new Uri($"http://localhost:{port}") };
+            var status = await PollAgentStatusAsync(client, TimeSpan.FromSeconds(20));
+
+            // Content origin (Quartz global points) the injected drag maps window-local points against.
+            // A fresh window may not be placed by the window manager immediately, so poll a few
+            // seconds for a non-degenerate origin before giving up.
+            double ox = 0, oy = 0;
+            var originDeadline = DateTime.UtcNow.AddSeconds(5);
+            while (DateTime.UtcNow < originDeadline)
+            {
+                var s = await PollAgentStatusAsync(client, TimeSpan.FromSeconds(5));
+                var o = s.GetProperty("capabilities").GetProperty("windowContentOrigin");
+                ox = o.GetProperty("x").GetDouble();
+                oy = o.GetProperty("y").GetDouble();
+                if (ox != 0 || oy != 0)
+                    break;
+                await Task.Delay(300, TestContext.Current.CancellationToken);
+            }
+
+            // A synthesized OS drag can only be verified when the app window is actually placed on a
+            // screen and focusable. Headless / background test runners leave the NSWindow at a
+            // degenerate (0,0) content origin (the surface is laid out, but the window has no real
+            // on-screen position), so injected global events can't land — skip rather than fail.
+            // Run interactively (or in a session with a display) to exercise the real gesture.
+            if (ox == 0 && oy == 0)
+                Assert.Skip("Window not placed on-screen (content origin 0,0); injected drag can't be delivered in this environment.");
+
+            await InvokeActionAsync(client, "uno.drag-log-reset");
+
+            // DragProbeSurface window-local rect: "x,y,w,h" (points).
+            var rect = (await InvokeActionAsync(client, "uno.drag-surface-rect")).Split(',');
+            var sx = double.Parse(rect[0], System.Globalization.CultureInfo.InvariantCulture);
+            var sy = double.Parse(rect[1], System.Globalization.CultureInfo.InvariantCulture);
+            var sw = double.Parse(rect[2], System.Globalization.CultureInfo.InvariantCulture);
+            var sh = double.Parse(rect[3], System.Globalization.CultureInfo.InvariantCulture);
+
+            // Path stays entirely inside the surface (20%..80% width, vertical centre).
+            var fromX = ox + sx + 0.2 * sw;
+            var toX = ox + sx + 0.8 * sw;
+            var y = oy + sy + 0.5 * sh;
+
+            // Focus the window first (its first click is otherwise consumed by macOS to activate it).
+            await DragAsync(client, fromX, oy - 14.0, fromX, oy - 14.0);
+            await Task.Delay(300, TestContext.Current.CancellationToken);
+
+            var dragResult = await DragAsync(client, fromX, y, toX, y);
+            Assert.True(dragResult.GetProperty("ok").GetBoolean(), $"drag should succeed: {dragResult}");
+            Assert.Equal("cliclick-global", dragResult.GetProperty("mode").GetString());
+
+            // The release is processed on the UI thread after the drag call returns; poll the log.
+            string log = "";
+            var deadline = DateTime.UtcNow.AddSeconds(5);
+            while (DateTime.UtcNow < deadline)
+            {
+                log = await InvokeActionAsync(client, "uno.drag-log");
+                if (log.Contains("down@") && log.Contains("move@") && log.Contains("up@"))
+                    break;
+                await Task.Delay(250, TestContext.Current.CancellationToken);
+            }
+
+            var diag = $"origin=({ox},{oy}) surface=({sx},{sy},{sw},{sh}) from=({fromX},{y}) to=({toX},{y}) dragMode={dragResult.GetProperty("mode").GetString()} log='{log}'";
+            Assert.True(log.Contains("down@"), $"expected PointerPressed; {diag}");
+            Assert.True(log.Contains("move@"), $"expected PointerMoved; {diag}");
+            Assert.True(log.Contains("up@"), $"expected PointerReleased (historically dropped); {diag}");
+        }
+        finally
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(true);
+                process.WaitForExit(5000);
+            }
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(UnoTestTargets))]
     public async Task Screenshot_ReturnsValidPng(string targetFramework)
     {
         var repoRoot = FindRepositoryRoot(Directory.GetCurrentDirectory());
@@ -1376,4 +1479,25 @@ public class UnoAgentIntegrationTests
     private static Task<Stream> ReadAsStreamAsync(HttpContent content) => content.ReadAsStreamAsync(TestContext.Current.CancellationToken);
     private static Task<byte[]> ReadAsByteArrayAsync(HttpContent content) => content.ReadAsByteArrayAsync(TestContext.Current.CancellationToken);
     private static Task Delay(int millisecondsTimeout) => Task.Delay(millisecondsTimeout, TestContext.Current.CancellationToken);
+
+    // Invoke a [DevFlowAction] and return its string result (the wrapper's "returnValue").
+    private static async Task<string> InvokeActionAsync(HttpClient client, string action)
+    {
+        using var content = new StringContent("{\"args\":[]}", Encoding.UTF8, "application/json");
+        using var resp = await PostAsync(client, $"/api/v1/invoke/actions/{action}", content);
+        resp.EnsureSuccessStatusCode();
+        using var doc = JsonDocument.Parse(await ReadAsStreamAsync(resp.Content));
+        return doc.RootElement.TryGetProperty("returnValue", out var rv) ? rv.GetString() ?? "" : "";
+    }
+
+    // Post an OS-level global drag (points) and return the parsed response.
+    private static async Task<JsonElement> DragAsync(HttpClient client, double fromX, double fromY, double toX, double toY)
+    {
+        var body = JsonSerializer.Serialize(new { fromX, fromY, toX, toY, global = true });
+        using var content = new StringContent(body, Encoding.UTF8, "application/json");
+        using var resp = await PostAsync(client, "/api/v1/ui/actions/drag", content);
+        resp.EnsureSuccessStatusCode();
+        using var doc = JsonDocument.Parse(await ReadAsStreamAsync(resp.Content));
+        return doc.RootElement.Clone();
+    }
 }

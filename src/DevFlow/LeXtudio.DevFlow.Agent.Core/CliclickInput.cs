@@ -133,21 +133,23 @@ public static class CliclickInput
         return Run(commands.ToArray());
     }
 
-    // Waits (ms) woven into the drag gesture. Uno's Skia-macOS input backend DROPS a
-    // mouse-up that arrives too soon after the preceding down/drag events (they get
-    // coalesced), so a drag posted as one rapid m/dd/dm.../du batch delivers PointerPressed
-    // + PointerMoved but NO PointerReleased — the exact "release never arrived" failure the
-    // DataGrid column-reorder drag hit. Holding briefly after the press and, critically,
-    // settling before the release lets each event be processed as distinct.
+    // Uno's Skia-macOS input backend DROPS a mouse-up that arrives too soon after the preceding
+    // down/drag events (they get coalesced), so a drag posted as one rapid m/dd/dm.../du batch
+    // delivers PointerPressed + PointerMoved but NO PointerReleased — the "release never arrived"
+    // failure the DataGrid column-reorder drag hit. In-batch `w:` waits helped but were still
+    // intermittent. What is reliable (verified) is posting the RELEASE as a SEPARATE, time-
+    // separated cliclick invocation: the button-down state persists globally on the HID tap
+    // between processes, and the well-isolated up is consistently seen as a distinct PointerReleased.
     private const int DragHoldAfterDownMs = 120;
-    private const int DragSettleBeforeUpMs = 150;
+    private const int DragSettleBeforeUpMs = 180;
 
     public static bool TryDrag(double fromX, double fromY, double toX, double toY, int steps)
     {
         if (steps < 1)
             steps = 1;
 
-        var commands = new List<string>
+        // Phase 1 (one process): move → press → hold → drag to target. Button stays down after.
+        var press = new List<string>
         {
             $"m:{Pt(fromX)},{Pt(fromY)}",
             $"dd:{Pt(fromX)},{Pt(fromY)}",
@@ -158,12 +160,15 @@ public static class CliclickInput
             var t = (double)i / steps;
             var x = fromX + (toX - fromX) * t;
             var y = fromY + (toY - fromY) * t;
-            commands.Add($"dm:{Pt(x)},{Pt(y)}");
+            press.Add($"dm:{Pt(x)},{Pt(y)}");
         }
-        // Settle before releasing so the up is not coalesced with the final drag-move.
-        commands.Add($"w:{DragSettleBeforeUpMs}");
-        commands.Add($"du:{Pt(toX)},{Pt(toY)}");
-        return Run(commands.ToArray());
+        if (!Run(press.ToArray()))
+            return false;
+
+        // Phase 2 (separate process, after a real settle): release. Kept out of the phase-1 batch
+        // so the up is delivered as an isolated event Uno reliably turns into PointerReleased.
+        System.Threading.Thread.Sleep(DragSettleBeforeUpMs);
+        return Run($"du:{Pt(toX)},{Pt(toY)}");
     }
 
     private static bool Run(params string[] arguments)
