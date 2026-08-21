@@ -1,3 +1,4 @@
+using System.Runtime.Versioning;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -544,33 +545,60 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
 
     protected override async Task<object?> TryPressResponseAsync(ClickRequest request)
     {
-        if (!CliclickInput.IsAvailable)
-            return new { ok = false, reason = "cliclick is required for decomposed press/drag-move/release and is not installed" };
-
         var x = request.X!.Value;
         var y = request.Y!.Value;
+
+        // XTest keeps the button state across separate calls, which is what decomposed
+        // press/drag-move/release needs in order to hold a drag open between requests.
+        if (OperatingSystem.IsLinux() && LinuxNativeInput.IsAvailable)
+        {
+            var linuxOk = await LinuxPressDownAsync(x, y).ConfigureAwait(false);
+            return new { ok = linuxOk, mode = "xtest", x, y };
+        }
+
+        if (!CliclickInput.IsAvailable)
+            return new { ok = false, reason = "decomposed press/drag-move/release needs cliclick on macOS, or an X display (X11/XWayland) on Linux" };
+
         var ok = await Task.Run(() => CliclickInput.TryPressDown(x, y)).ConfigureAwait(false);
         return new { ok, mode = "cliclick", x, y };
     }
 
     protected override async Task<object?> TryDragMoveResponseAsync(ClickRequest request)
     {
-        if (!CliclickInput.IsAvailable)
-            return new { ok = false, reason = "cliclick is required for decomposed press/drag-move/release and is not installed" };
-
         var x = request.X!.Value;
         var y = request.Y!.Value;
+
+        // XTest keeps the button state across separate calls, which is what decomposed
+        // press/drag-move/release needs in order to hold a drag open between requests.
+        if (OperatingSystem.IsLinux() && LinuxNativeInput.IsAvailable)
+        {
+            var linuxOk = await LinuxMoveAsync(x, y).ConfigureAwait(false);
+            return new { ok = linuxOk, mode = "xtest", x, y };
+        }
+
+        if (!CliclickInput.IsAvailable)
+            return new { ok = false, reason = "decomposed press/drag-move/release needs cliclick on macOS, or an X display (X11/XWayland) on Linux" };
+
         var ok = await Task.Run(() => CliclickInput.TryDragMoveTo(x, y)).ConfigureAwait(false);
         return new { ok, mode = "cliclick", x, y };
     }
 
     protected override async Task<object?> TryReleaseResponseAsync(ClickRequest request)
     {
-        if (!CliclickInput.IsAvailable)
-            return new { ok = false, reason = "cliclick is required for decomposed press/drag-move/release and is not installed" };
-
         var x = request.X!.Value;
         var y = request.Y!.Value;
+
+        // XTest keeps the button state across separate calls, which is what decomposed
+        // press/drag-move/release needs in order to hold a drag open between requests.
+        if (OperatingSystem.IsLinux() && LinuxNativeInput.IsAvailable)
+        {
+            var linuxOk = await LinuxReleaseAsync(x, y).ConfigureAwait(false);
+            return new { ok = linuxOk, mode = "xtest", x, y };
+        }
+
+        if (!CliclickInput.IsAvailable)
+            return new { ok = false, reason = "decomposed press/drag-move/release needs cliclick on macOS, or an X display (X11/XWayland) on Linux" };
+
         var ok = await Task.Run(() => CliclickInput.TryRelease(x, y)).ConfigureAwait(false);
         return new { ok, mode = "cliclick", x, y };
     }
@@ -857,6 +885,9 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
         if (OperatingSystem.IsMacOS())
             return MacOSNativeInput.TryMouseDrag(fromX, fromY, toX, toY, steps);
 
+        if (OperatingSystem.IsLinux())
+            return LinuxNativeInput.TryMouseDrag(fromX, fromY, toX, toY, steps);
+
         return false;
     }
 
@@ -868,6 +899,9 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
         if (OperatingSystem.IsMacOS())
             return MacOSNativeInput.TryMouseClick(x, y, clickCount);
 
+        if (OperatingSystem.IsLinux())
+            return LinuxNativeInput.TryMouseClick(x, y, clickCount);
+
         return false;
     }
 
@@ -875,6 +909,9 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
     {
         if (OperatingSystem.IsMacOS())
             return MacOSNativeInput.TryMouseMove(x, y);
+
+        if (OperatingSystem.IsLinux())
+            return LinuxNativeInput.TryMouseMove(x, y);
 
         return false;
     }
@@ -887,8 +924,11 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
         if (OperatingSystem.IsMacOS())
             return "CGEventPost may require Accessibility (TCC) permission for the host process.";
 
+        if (OperatingSystem.IsLinux())
+            return "XTest injection needs a reachable X display (X11 or XWayland); it is unavailable on a pure Wayland session.";
+
         if (!OperatingSystem.IsWindows())
-            return "native mouse injection is supported on Windows and macOS only.";
+            return "native mouse injection is supported on Windows, macOS and Linux (X11/XWayland) only.";
 
         return null;
     }
@@ -1390,4 +1430,21 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
         encoder.Save(ms);
         return ms.ToArray();
     }
+
+    // CA1416 cannot follow an OperatingSystem.IsLinux() guard into a lambda, so calling
+    // LinuxNativeInput (which is [SupportedOSPlatform("linux")]) directly inside Task.Run reports the
+    // call site as reachable on Windows. Attributed wrappers keep the platform contract explicit and
+    // let the analyzer see it - the callers are still guarded by OperatingSystem.IsLinux().
+    [SupportedOSPlatform("linux")]
+    private static Task<bool> LinuxPressDownAsync(double x, double y)
+        => Task.Run(() => LinuxNativeInput.TryMousePressDown(x, y));
+
+    [SupportedOSPlatform("linux")]
+    private static Task<bool> LinuxMoveAsync(double x, double y)
+        => Task.Run(() => LinuxNativeInput.TryMouseMove(x, y));
+
+    [SupportedOSPlatform("linux")]
+    private static Task<bool> LinuxReleaseAsync(double x, double y)
+        => Task.Run(() => LinuxNativeInput.TryMouseRelease(x, y));
+
 }

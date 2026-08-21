@@ -16,6 +16,119 @@ public static class LinuxNativeInput
 
     public static bool IsAvailable => RuntimeInformation.IsOSPlatform(OSPlatform.Linux) && TryGetDisplay() != IntPtr.Zero;
 
+    /// <summary>X11 button number for the left mouse button.</summary>
+    private const uint Button1 = 1;
+
+    /// <summary>
+    /// Moves the pointer to an absolute screen position via XTest.
+    /// </summary>
+    public static bool TryMouseMove(double x, double y)
+        => WithDisplay(display =>
+        {
+            XTestFakeMotionEvent(display, -1, (int)Math.Round(x), (int)Math.Round(y), 0);
+            return true;
+        });
+
+    /// <summary>Presses the left button at an absolute screen position.</summary>
+    public static bool TryMousePressDown(double x, double y)
+        => WithDisplay(display =>
+        {
+            XTestFakeMotionEvent(display, -1, (int)Math.Round(x), (int)Math.Round(y), 0);
+            XTestFakeButtonEvent(display, Button1, true, 0);
+            return true;
+        });
+
+    /// <summary>Releases the left button at an absolute screen position.</summary>
+    public static bool TryMouseRelease(double x, double y)
+        => WithDisplay(display =>
+        {
+            XTestFakeMotionEvent(display, -1, (int)Math.Round(x), (int)Math.Round(y), 0);
+            XTestFakeButtonEvent(display, Button1, false, 0);
+            return true;
+        });
+
+    /// <summary>Clicks the left button at an absolute screen position.</summary>
+    public static bool TryMouseClick(double x, double y, int clickCount)
+        => WithDisplay(display =>
+        {
+            XTestFakeMotionEvent(display, -1, (int)Math.Round(x), (int)Math.Round(y), 0);
+            for (var i = 0; i < Math.Max(1, clickCount); i++)
+            {
+                XTestFakeButtonEvent(display, Button1, true, 0);
+                XTestFakeButtonEvent(display, Button1, false, 0);
+            }
+
+            return true;
+        });
+
+    /// <summary>
+    /// Presses at the start point, moves to the end point in steps, then releases. The intermediate
+    /// moves matter: applications that track a drag need to observe motion between press and
+    /// release, not just the endpoints.
+    /// </summary>
+    public static bool TryMouseDrag(double fromX, double fromY, double toX, double toY, int steps)
+        => WithDisplay(display =>
+        {
+            var count = Math.Max(1, steps);
+
+            XTestFakeMotionEvent(display, -1, (int)Math.Round(fromX), (int)Math.Round(fromY), 0);
+            XFlush(display);
+            XTestFakeButtonEvent(display, Button1, true, 0);
+            XFlush(display);
+
+            for (var i = 1; i <= count; i++)
+            {
+                var t = (double)i / count;
+                XTestFakeMotionEvent(
+                    display,
+                    -1,
+                    (int)Math.Round(fromX + ((toX - fromX) * t)),
+                    (int)Math.Round(fromY + ((toY - fromY) * t)),
+                    0);
+                XFlush(display);
+
+                // Give the target a chance to process each move; a burst of motion delivered in one
+                // go can be coalesced by the server and read as a single jump.
+                Thread.Sleep(16);
+            }
+
+            XTestFakeButtonEvent(display, Button1, false, 0);
+            return true;
+        });
+
+    /// <summary>
+    /// Runs an XTest sequence against a short-lived display connection, flushing and closing it
+    /// afterwards. Returns false when no X display is reachable (for example a pure Wayland session).
+    /// </summary>
+    private static bool WithDisplay(Func<IntPtr, bool> action)
+    {
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            return false;
+
+        var display = TryGetDisplay();
+        if (display == IntPtr.Zero)
+            return false;
+
+        try
+        {
+            var result = action(display);
+            XFlush(display);
+            return result;
+        }
+        catch (DllNotFoundException)
+        {
+            return false;
+        }
+        catch (EntryPointNotFoundException)
+        {
+            return false;
+        }
+        finally
+        {
+            XCloseDisplay(display);
+        }
+    }
+
     public static bool SendUnicodeText(string text)
     {
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux) || string.IsNullOrEmpty(text))
@@ -188,4 +301,10 @@ public static class LinuxNativeInput
 
     [DllImport(LibXtst)]
     private static extern int XTestFakeKeyEvent(IntPtr display, byte keycode, [MarshalAs(UnmanagedType.I1)] bool isPress, ulong delay);
+
+    [DllImport(LibXtst)]
+    private static extern int XTestFakeMotionEvent(IntPtr display, int screen, int x, int y, ulong delay);
+
+    [DllImport(LibXtst)]
+    private static extern int XTestFakeButtonEvent(IntPtr display, uint button, [MarshalAs(UnmanagedType.I1)] bool isPress, ulong delay);
 }
