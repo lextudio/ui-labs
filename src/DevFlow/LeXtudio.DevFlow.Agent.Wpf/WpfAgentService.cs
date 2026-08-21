@@ -1,3 +1,4 @@
+using System.Runtime.Versioning;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -551,7 +552,7 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
         // press/drag-move/release needs in order to hold a drag open between requests.
         if (OperatingSystem.IsLinux() && LinuxNativeInput.IsAvailable)
         {
-            var linuxOk = await Task.Run(() => LinuxNativeInput.TryMousePressDown(x, y)).ConfigureAwait(false);
+            var linuxOk = await LinuxPressDownAsync(x, y).ConfigureAwait(false);
             return new { ok = linuxOk, mode = "xtest", x, y };
         }
 
@@ -571,7 +572,7 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
         // press/drag-move/release needs in order to hold a drag open between requests.
         if (OperatingSystem.IsLinux() && LinuxNativeInput.IsAvailable)
         {
-            var linuxOk = await Task.Run(() => LinuxNativeInput.TryMouseMove(x, y)).ConfigureAwait(false);
+            var linuxOk = await LinuxMoveAsync(x, y).ConfigureAwait(false);
             return new { ok = linuxOk, mode = "xtest", x, y };
         }
 
@@ -591,7 +592,7 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
         // press/drag-move/release needs in order to hold a drag open between requests.
         if (OperatingSystem.IsLinux() && LinuxNativeInput.IsAvailable)
         {
-            var linuxOk = await Task.Run(() => LinuxNativeInput.TryMouseRelease(x, y)).ConfigureAwait(false);
+            var linuxOk = await LinuxReleaseAsync(x, y).ConfigureAwait(false);
             return new { ok = linuxOk, mode = "xtest", x, y };
         }
 
@@ -1429,4 +1430,21 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
         encoder.Save(ms);
         return ms.ToArray();
     }
+
+    // CA1416 cannot follow an OperatingSystem.IsLinux() guard into a lambda, so calling
+    // LinuxNativeInput (which is [SupportedOSPlatform("linux")]) directly inside Task.Run reports the
+    // call site as reachable on Windows. Attributed wrappers keep the platform contract explicit and
+    // let the analyzer see it - the callers are still guarded by OperatingSystem.IsLinux().
+    [SupportedOSPlatform("linux")]
+    private static Task<bool> LinuxPressDownAsync(double x, double y)
+        => Task.Run(() => LinuxNativeInput.TryMousePressDown(x, y));
+
+    [SupportedOSPlatform("linux")]
+    private static Task<bool> LinuxMoveAsync(double x, double y)
+        => Task.Run(() => LinuxNativeInput.TryMouseMove(x, y));
+
+    [SupportedOSPlatform("linux")]
+    private static Task<bool> LinuxReleaseAsync(double x, double y)
+        => Task.Run(() => LinuxNativeInput.TryMouseRelease(x, y));
+
 }
