@@ -32,6 +32,16 @@ public class ActionExecutor
         Register<DragDownAction>(() => new DragDownAction());
         Register<DragMoveAction>(() => new DragMoveAction());
         Register<DragUpAction>(() => new DragUpAction());
+        // Extensions beyond the original cliclick v5.1, whose dd/dm/du can only left-drag and which
+        // has no middle button at all. Needed for gestures bound to the other buttons - a 3D
+        // viewport's right-drag look-around, for instance.
+        Register<MiddleClickAction>(() => new MiddleClickAction());
+        Register<RightDragDownAction>(() => new RightDragDownAction());
+        Register<RightDragMoveAction>(() => new RightDragMoveAction());
+        Register<RightDragUpAction>(() => new RightDragUpAction());
+        Register<MiddleDragDownAction>(() => new MiddleDragDownAction());
+        Register<MiddleDragMoveAction>(() => new MiddleDragMoveAction());
+        Register<MiddleDragUpAction>(() => new MiddleDragUpAction());
         Register<KeyDownAction>(() => new KeyDownAction());
         Register<KeyUpAction>(() => new KeyUpAction());
         Register<KeyPressAction>(() => new KeyPressAction());

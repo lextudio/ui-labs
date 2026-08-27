@@ -13,6 +13,25 @@ public abstract partial class MouseBaseAction
 {
     protected virtual CGEventType GetMoveEventConstant() => CGEventType.kCGEventMouseMoved;
 
+    /// <summary>
+    /// The button a mouse event carries. macOS ignores this on plain moves, but for down/up/dragged
+    /// events it must agree with the event type - so right- and middle-button actions override this
+    /// alongside <see cref="GetMoveEventConstant"/>.
+    /// </summary>
+    protected virtual CGMouseButton GetMouseButton() => CGMouseButton.kCGMouseButtonLeft;
+
+    /// <summary>Posts one mouse event of <paramref name="type"/> carrying this action's button.</summary>
+    protected void PostMouseEvent(CGEventType type, CGPoint point)
+    {
+        IntPtr mouseEvent = CoreGraphics.CGEventCreateMouseEvent(
+            IntPtr.Zero,
+            type,
+            point,
+            GetMouseButton());
+        CoreGraphics.CGEventPost(CGEventTapLocation.kCGHIDEventTap, mouseEvent);
+        CoreGraphics.CFRelease(mouseEvent);
+    }
+
     public virtual bool PerformAction(string data, ExecutionOptions options)
     {
         double toX, toY;
@@ -56,13 +75,7 @@ public abstract partial class MouseBaseAction
             double x = fromPoint.X + deltaX * easedT;
             double y = fromPoint.Y + deltaY * easedT;
 
-            IntPtr moveEvent = CoreGraphics.CGEventCreateMouseEvent(
-                IntPtr.Zero,
-                GetMoveEventConstant(),
-                new CGPoint(x, y),
-                CGMouseButton.kCGMouseButtonLeft);
-            CoreGraphics.CGEventPost(CGEventTapLocation.kCGHIDEventTap, moveEvent);
-            CoreGraphics.CFRelease(moveEvent);
+            PostMouseEvent(GetMoveEventConstant(), new CGPoint(x, y));
 
             Thread.Sleep(TimeSpan.FromTicks(2200));
         }

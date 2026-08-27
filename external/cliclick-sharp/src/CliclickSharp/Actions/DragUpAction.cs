@@ -10,13 +10,5 @@ public class DragUpAction : MouseBaseAction, IAction
     protected override CGEventType GetMoveEventConstant() => CGEventType.kCGEventLeftMouseDragged;
 
     protected override void PerformActionAtPoint(CGPoint point)
-    {
-        IntPtr upEvent = CoreGraphics.CGEventCreateMouseEvent(
-            IntPtr.Zero,
-            CGEventType.kCGEventLeftMouseUp,
-            point,
-            CGMouseButton.kCGMouseButtonLeft);
-        CoreGraphics.CGEventPost(CGEventTapLocation.kCGHIDEventTap, upEvent);
-        CoreGraphics.CFRelease(upEvent);
-    }
+        => PostMouseEvent(CGEventType.kCGEventLeftMouseUp, point);
 }

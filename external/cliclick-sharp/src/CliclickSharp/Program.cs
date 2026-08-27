@@ -223,7 +223,17 @@ public class Program
             "  p             print current mouse position\n" +
             "  p:text        print text\n" +
             "  w:ms          wait for N milliseconds\n" +
-            "  cp:x,y        get RGB color at screen coordinates");
+            "  cp:x,y        get RGB color at screen coordinates\n" +
+            "\n" +
+            "Extensions (not in the original cliclick, whose drag is left-button only\n" +
+            "and which has no middle button):\n" +
+            "  mc:x,y        middle-click at coordinates\n" +
+            "  rdd:x,y       press right mouse button (begin right-drag)\n" +
+            "  rdm:x,y       right-drag to coordinates\n" +
+            "  rdu:x,y       release right mouse button (end right-drag)\n" +
+            "  mdd:x,y       press middle mouse button (begin middle-drag)\n" +
+            "  mdm:x,y       middle-drag to coordinates\n" +
+            "  mdu:x,y       release middle mouse button (end middle-drag)");
     }
 
     private static IEnumerable<string> ReadCommandsFromFile(string filePath)

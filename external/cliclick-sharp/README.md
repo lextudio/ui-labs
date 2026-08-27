@@ -48,6 +48,22 @@ All commands and options from the original cliclick v5.1 are supported:
 | `w:ms` | Wait |
 | `cp:x,y` | Get RGB color at coordinates |
 
+### Extensions beyond cliclick v5.1
+
+The original's `dd`/`dm`/`du` press, drag and release the **left** button only, and it has no
+middle-button command at all. These add the other two buttons, so gestures bound to them can be
+driven - a 3D viewport's right-drag look-around, or a middle-drag pan.
+
+| Command | Description |
+|---------|-------------|
+| `mc:x,y` | Middle-click |
+| `rdd:x,y` | Right-drag down (press right button) |
+| `rdm:x,y` | Right-drag move |
+| `rdu:x,y` | Right-drag up (release right button) |
+| `mdd:x,y` | Middle-drag down (press middle button) |
+| `mdm:x,y` | Middle-drag move |
+| `mdu:x,y` | Middle-drag up (release middle button) |
+
 ## Implementation
 
 - .NET 8 console app using P/Invoke to CoreGraphics, Carbon, and Objective-C runtime
