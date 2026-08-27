@@ -547,60 +547,75 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
     {
         var x = request.X!.Value;
         var y = request.Y!.Value;
+        if (!CliclickInput.TryParseButton(request.Button, out var button))
+            return new { ok = false, reason = $"Unknown button '{request.Button}'; use left, right or middle" };
 
         // XTest keeps the button state across separate calls, which is what decomposed
         // press/drag-move/release needs in order to hold a drag open between requests.
         if (OperatingSystem.IsLinux() && LinuxNativeInput.IsAvailable)
         {
+            if (button != CliclickInput.MouseButton.Left)
+                return new { ok = false, reason = "only the left button is supported on Linux (XTest)" };
+
             var linuxOk = await LinuxPressDownAsync(x, y).ConfigureAwait(false);
-            return new { ok = linuxOk, mode = "xtest", x, y };
+            return new { ok = linuxOk, mode = "xtest", x, y, button = "left" };
         }
 
         if (!CliclickInput.IsAvailable)
             return new { ok = false, reason = "decomposed press/drag-move/release needs cliclick on macOS, or an X display (X11/XWayland) on Linux" };
 
-        var ok = await Task.Run(() => CliclickInput.TryPressDown(x, y)).ConfigureAwait(false);
-        return new { ok, mode = "cliclick", x, y };
+        var ok = await Task.Run(() => CliclickInput.TryPressDown(x, y, button)).ConfigureAwait(false);
+        return new { ok, mode = "cliclick", x, y, button = button.ToString().ToLowerInvariant() };
     }
 
     protected override async Task<object?> TryDragMoveResponseAsync(ClickRequest request)
     {
         var x = request.X!.Value;
         var y = request.Y!.Value;
+        if (!CliclickInput.TryParseButton(request.Button, out var button))
+            return new { ok = false, reason = $"Unknown button '{request.Button}'; use left, right or middle" };
 
         // XTest keeps the button state across separate calls, which is what decomposed
         // press/drag-move/release needs in order to hold a drag open between requests.
         if (OperatingSystem.IsLinux() && LinuxNativeInput.IsAvailable)
         {
+            if (button != CliclickInput.MouseButton.Left)
+                return new { ok = false, reason = "only the left button is supported on Linux (XTest)" };
+
             var linuxOk = await LinuxMoveAsync(x, y).ConfigureAwait(false);
-            return new { ok = linuxOk, mode = "xtest", x, y };
+            return new { ok = linuxOk, mode = "xtest", x, y, button = "left" };
         }
 
         if (!CliclickInput.IsAvailable)
             return new { ok = false, reason = "decomposed press/drag-move/release needs cliclick on macOS, or an X display (X11/XWayland) on Linux" };
 
-        var ok = await Task.Run(() => CliclickInput.TryDragMoveTo(x, y)).ConfigureAwait(false);
-        return new { ok, mode = "cliclick", x, y };
+        var ok = await Task.Run(() => CliclickInput.TryDragMoveTo(x, y, button)).ConfigureAwait(false);
+        return new { ok, mode = "cliclick", x, y, button = button.ToString().ToLowerInvariant() };
     }
 
     protected override async Task<object?> TryReleaseResponseAsync(ClickRequest request)
     {
         var x = request.X!.Value;
         var y = request.Y!.Value;
+        if (!CliclickInput.TryParseButton(request.Button, out var button))
+            return new { ok = false, reason = $"Unknown button '{request.Button}'; use left, right or middle" };
 
         // XTest keeps the button state across separate calls, which is what decomposed
         // press/drag-move/release needs in order to hold a drag open between requests.
         if (OperatingSystem.IsLinux() && LinuxNativeInput.IsAvailable)
         {
+            if (button != CliclickInput.MouseButton.Left)
+                return new { ok = false, reason = "only the left button is supported on Linux (XTest)" };
+
             var linuxOk = await LinuxReleaseAsync(x, y).ConfigureAwait(false);
-            return new { ok = linuxOk, mode = "xtest", x, y };
+            return new { ok = linuxOk, mode = "xtest", x, y, button = "left" };
         }
 
         if (!CliclickInput.IsAvailable)
             return new { ok = false, reason = "decomposed press/drag-move/release needs cliclick on macOS, or an X display (X11/XWayland) on Linux" };
 
-        var ok = await Task.Run(() => CliclickInput.TryRelease(x, y)).ConfigureAwait(false);
-        return new { ok, mode = "cliclick", x, y };
+        var ok = await Task.Run(() => CliclickInput.TryRelease(x, y, button)).ConfigureAwait(false);
+        return new { ok, mode = "cliclick", x, y, button = button.ToString().ToLowerInvariant() };
     }
 
     protected override async Task<object?> TryMoveResponseAsync(MoveRequest request)

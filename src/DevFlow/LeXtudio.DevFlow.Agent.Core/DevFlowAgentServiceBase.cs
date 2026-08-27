@@ -587,6 +587,11 @@ public abstract class DevFlowAgentServiceBase : IDisposable
         public bool Global { get; set; } = true;
         /// <summary>Number of clicks (1=single, 2=double).</summary>
         public int ClickCount { get; set; } = 1;
+        /// <summary>
+        /// Mouse button for press/drag-move/release: "left" (default), "right" or "middle". Responses
+        /// echo the button actually used, so a caller can confirm it took effect rather than assuming.
+        /// </summary>
+        public string? Button { get; set; }
     }
 
     private async Task<HttpResponse> HandleFillAsync(HttpRequest request)

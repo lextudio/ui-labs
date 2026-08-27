@@ -51,7 +51,52 @@ public static class CliclickInput
 
     public static bool TryMove(double x, double y) => Run($"m:{Pt(x)},{Pt(y)}");
 
-    public static bool TryPressDown(double x, double y)
+    /// <summary>
+    /// Which mouse button a decomposed press/drag-move/release gesture uses. Right and middle rely on
+    /// commands the bundled CliclickSharp adds - the original cliclick can only ever left-drag and has
+    /// no middle button - so a system cliclick found on PATH supports <see cref="Left"/> only.
+    /// </summary>
+    public enum MouseButton
+    {
+        Left,
+        Right,
+        Middle,
+    }
+
+    /// <summary>Maps a button name, defaulting to left when absent. False for an unrecognised name.</summary>
+    public static bool TryParseButton(string? name, out MouseButton button)
+    {
+        switch (name?.Trim().ToLowerInvariant())
+        {
+            case null or "" or "left":
+                button = MouseButton.Left;
+                return true;
+            case "right":
+                button = MouseButton.Right;
+                return true;
+            case "middle" or "center" or "centre":
+                button = MouseButton.Middle;
+                return true;
+            default:
+                button = MouseButton.Left;
+                return false;
+        }
+    }
+
+    // Left uses the original dd/dm/du; the others use the CliclickSharp extensions
+    // (see external/cliclick-sharp/README.md).
+    private static string DownCmd(MouseButton b)
+        => b switch { MouseButton.Right => "rdd", MouseButton.Middle => "mdd", _ => "dd" };
+
+    private static string MoveCmd(MouseButton b)
+        => b switch { MouseButton.Right => "rdm", MouseButton.Middle => "mdm", _ => "dm" };
+
+    private static string UpCmd(MouseButton b)
+        => b switch { MouseButton.Right => "rdu", MouseButton.Middle => "mdu", _ => "du" };
+
+    public static bool TryPressDown(double x, double y) => TryPressDown(x, y, MouseButton.Left);
+
+    public static bool TryPressDown(double x, double y, MouseButton button)
     {
         lock (_dragLock)
         {
@@ -68,9 +113,11 @@ public static class CliclickInput
                     UseShellExecute = false,
                 };
                 psi.ArgumentList.Add($"m:{Pt(x)},{Pt(y)}");
-                psi.ArgumentList.Add($"dd:{Pt(x)},{Pt(y)}");
+                psi.ArgumentList.Add($"{DownCmd(button)}:{Pt(x)},{Pt(y)}");
                 psi.ArgumentList.Add("w:600000");
-                psi.ArgumentList.Add("du:.");
+                // Safety release if this holder process outlives the caller, so a stuck button cannot
+                // be left down system-wide.
+                psi.ArgumentList.Add($"{UpCmd(button)}:.");
                 _dragHoldProcess = Process.Start(psi);
                 if (_dragHoldProcess == null)
                     return false;
@@ -86,25 +133,34 @@ public static class CliclickInput
         }
     }
 
-    public static bool TryDragMoveTo(double x, double y)
+    public static bool TryDragMoveTo(double x, double y) => TryDragMoveTo(x, y, MouseButton.Left);
+
+    public static bool TryDragMoveTo(double x, double y, MouseButton button)
     {
         lock (_dragLock)
         {
             if (_dragHoldProcess == null || _dragHoldProcess.HasExited)
                 return false;
 
-            return Run($"m:{Pt(x)},{Pt(y)}");
+            // Left keeps using a plain move, which is what the existing verified drag behaviour relies
+            // on. The other buttons must post a *dragged* event carrying that button, or the target
+            // sees a hover move with no button state.
+            return button == MouseButton.Left
+                ? Run($"m:{Pt(x)},{Pt(y)}")
+                : Run($"{MoveCmd(button)}:{Pt(x)},{Pt(y)}");
         }
     }
 
-    public static bool TryRelease(double x, double y)
+    public static bool TryRelease(double x, double y) => TryRelease(x, y, MouseButton.Left);
+
+    public static bool TryRelease(double x, double y, MouseButton button)
     {
         lock (_dragLock)
         {
             if (_dragHoldProcess == null || _dragHoldProcess.HasExited)
                 return false;
 
-            var released = Run($"du:{Pt(x)},{Pt(y)}");
+            var released = Run($"{UpCmd(button)}:{Pt(x)},{Pt(y)}");
             StopDragHoldProcess();
             return released;
         }
