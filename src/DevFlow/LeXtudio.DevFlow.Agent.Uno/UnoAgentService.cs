@@ -56,7 +56,7 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
 
     // Diagnostic: the window content origin (screen points) + scale used to
     // map element/window coordinates to the global space for drag injection.
-    private static object? TryDescribeWindowOrigin()
+    private object? TryDescribeWindowOrigin()
     {
         try
         {
@@ -241,6 +241,8 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
             DragLog($"--- click request x={request.X} y={request.Y} global={request.Global} clicks={request.ClickCount}");
             if (!RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
                 return new { ok = false, reason = "click injection implemented for macOS only" };
+            if (!CliclickInput.IsAvailable)
+                return new { ok = false, reason = "cliclick is unavailable" };
 
             TryActivateMainWindow();
 
@@ -262,8 +264,8 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
             }
 
             DragLog($"click: injecting at ({x:F1},{y:F1}) count={request.ClickCount}");
-            var ok = MacOSNativeInput.TryMouseClick(x, y, request.ClickCount);
-            DragLog($"click: TryMouseClick returned {ok}");
+            var ok = CliclickInput.TryClick(x, y, request.ClickCount);
+            DragLog($"click: cliclick returned {ok}");
             return new { ok, mode = request.Global ? "native-global" : "native-window", x, y };
         });
     }
@@ -416,13 +418,32 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
     // Window content origin in screen POINTS plus the rasterization scale.
     // AppWindow.Position is in physical pixels; CGEvent mouse coordinates and
     // element DIPs are in points, so origin-in-points = positionPx / scale.
-    private static (double OriginX, double OriginY, double Scale)? TryGetWindowMetrics()
+    private (double OriginX, double OriginY, double Scale)? TryGetWindowMetrics()
     {
         var window = TryGetMainWindow();
         if (window == null)
         {
             DragLog("metrics: window=null");
             return null;
+        }
+
+        var scale = TryGetRasterizationScale(window);
+        if (scale <= 0) scale = 1.0;
+
+        // Require a real Uno Window first, then use NSWindow only to measure that window's
+        // content-area origin accurately on macOS.
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        {
+            var contentOrigin = MacOSWindowOrigin.TryGetContentOrigin();
+            if (contentOrigin is { } co)
+            {
+                // Uno bounds and NSWindow content origin are logical points. The bundled
+                // CliclickSharp executable consumes backing-pixel coordinates, so both the
+                // origin and the element offset must be scaled on Retina displays.
+                DragLog($"metrics: native contentOrigin=({co.X},{co.Y}) rasterizationScale={scale}");
+                return (co.X * scale, co.Y * scale, scale);
+            }
+            DragLog("metrics: native contentOrigin unavailable, falling back to AppWindow.Position");
         }
 
         var appWindow = GetPropertyValueAny(window, "AppWindow");
@@ -435,23 +456,6 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
 
         var px = GetInt32Member(position, "X");
         var py = GetInt32Member(position, "Y");
-        var scale = TryGetRasterizationScale(window);
-        if (scale <= 0) scale = 1.0;
-
-        // On macOS, prefer the real NSWindow CONTENT origin (Quartz global points, top-left) over
-        // AppWindow.Position, which reports the outer window-frame origin and drifts from the
-        // content area by ~a title-bar height — a drag computed from it lands on the title bar
-        // instead of the target element. See MacOSWindowOrigin / UnoDock design.md coordinate model.
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-        {
-            var contentOrigin = MacOSWindowOrigin.TryGetContentOrigin();
-            if (contentOrigin is { } co)
-            {
-                DragLog($"metrics: native contentOrigin=({co.X},{co.Y}) scale={scale} (AppWindow.Position posPx=({px},{py}))");
-                return (co.X, co.Y, scale);
-            }
-            DragLog("metrics: native contentOrigin unavailable, falling back to AppWindow.Position");
-        }
 
         DragLog($"metrics: posPx=({px},{py}) scale={scale}");
         if (px is null || py is null)
@@ -477,16 +481,18 @@ public sealed class UnoAgentService : DevFlowAgentServiceBase
         };
     }
 
-    private static object? TryGetMainWindow()
+    private object? TryGetMainWindow()
     {
         var appType = FindType("Microsoft.UI.Xaml.Application", "Windows.UI.Xaml.Application");
         var app = appType?.GetProperty("Current", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
-        return GetPropertyValueAny(app, "MainWindow") ?? GetPropertyValueAny(app, "CurrentWindow");
+        return GetPropertyValueAny(app, "MainWindow")
+            ?? GetPropertyValueAny(app, "CurrentWindow")
+            ?? _treeWalker.GetAllWindows().FirstOrDefault();
     }
 
     // Bring the app window to the foreground so synthesized OS pointer events
     // land on it (and the docking tear-off's PointerPressed routing fires).
-    private static void TryActivateMainWindow()
+    private void TryActivateMainWindow()
     {
         try
         {
