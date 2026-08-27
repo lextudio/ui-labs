@@ -618,6 +618,24 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
         return new { ok, mode = "cliclick", x, y, button = button.ToString().ToLowerInvariant() };
     }
 
+    protected override async Task<object?> TryKeyDownResponseAsync(string key)
+    {
+        if (!CliclickInput.IsAvailable)
+            return new { ok = false, reason = "keydown/keyup needs cliclick on macOS - not implemented for other platforms yet" };
+
+        var ok = await Task.Run(() => CliclickInput.TryKeyDown(key)).ConfigureAwait(false);
+        return new { ok, mode = "cliclick", key };
+    }
+
+    protected override async Task<object?> TryKeyUpResponseAsync(string key)
+    {
+        if (!CliclickInput.IsAvailable)
+            return new { ok = false, reason = "keydown/keyup needs cliclick on macOS - not implemented for other platforms yet" };
+
+        var ok = await Task.Run(() => CliclickInput.TryKeyUp(key)).ConfigureAwait(false);
+        return new { ok, mode = "cliclick", key };
+    }
+
     protected override async Task<object?> TryMoveResponseAsync(MoveRequest request)
     {
         if (CliclickInput.IsAvailable)

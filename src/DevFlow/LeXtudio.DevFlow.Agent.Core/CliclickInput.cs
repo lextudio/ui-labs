@@ -11,6 +11,8 @@ public static class CliclickInput
     private static readonly Lazy<string?> _path = new(ResolvePath);
     private static readonly object _dragLock = new();
     private static Process? _dragHoldProcess;
+    private static readonly object _keyLock = new();
+    private static Process? _keyHoldProcess;
 
     public static bool IsAvailable => _path.Value != null;
 
@@ -226,6 +228,82 @@ public static class CliclickInput
         System.Threading.Thread.Sleep(DragSettleBeforeUpMs);
         return Run($"du:{Pt(toX)},{Pt(toY)}");
     }
+
+    /// <summary>
+    /// Presses AND HOLDS a key (letter/digit/modifier/named special key - anything
+    /// KeyBaseAction.SupportedKeycodes or ModifierKeycodes in the bundled CliclickSharp knows),
+    /// mirroring TryPressDown's mouse-button-hold trick: the CGEvent-level key-down state persists
+    /// system-wide once posted, independent of the process that posted it, so a long-lived "holder"
+    /// process is only a safety net (auto-release after 10 minutes if TryKeyUp is never called) -
+    /// not the actual holding mechanism.
+    /// </summary>
+    public static bool TryKeyDown(string key)
+    {
+        lock (_keyLock)
+        {
+            StopKeyHoldProcess();
+            var exe = _path.Value;
+            if (exe == null || string.IsNullOrWhiteSpace(key))
+                return false;
+
+            try
+            {
+                var psi = new ProcessStartInfo
+                {
+                    FileName = exe,
+                    UseShellExecute = false,
+                };
+                psi.ArgumentList.Add($"kd:{key}");
+                psi.ArgumentList.Add("w:600000");
+                // Safety release if this holder process outlives the caller, so a stuck key cannot
+                // be left down system-wide.
+                psi.ArgumentList.Add($"ku:{key}");
+                _keyHoldProcess = Process.Start(psi);
+                if (_keyHoldProcess == null)
+                    return false;
+
+                System.Threading.Thread.Sleep(50);
+                return !_keyHoldProcess.HasExited;
+            }
+            catch
+            {
+                StopKeyHoldProcess();
+                return false;
+            }
+        }
+    }
+
+    /// <summary>Releases a key previously held via <see cref="TryKeyDown"/>.</summary>
+    public static bool TryKeyUp(string key)
+    {
+        lock (_keyLock)
+        {
+            if (_keyHoldProcess == null || _keyHoldProcess.HasExited)
+                return false;
+
+            var released = Run($"ku:{key}");
+            StopKeyHoldProcess();
+            return released;
+        }
+    }
+
+    private static void StopKeyHoldProcess()
+    {
+        if (_keyHoldProcess == null)
+            return;
+
+        try
+        {
+            if (!_keyHoldProcess.HasExited)
+                _keyHoldProcess.Kill();
+        }
+        catch { }
+        _keyHoldProcess.Dispose();
+        _keyHoldProcess = null;
+    }
+
+    /// <summary>Presses and releases a key in one call - for a single keystroke, not a held key.</summary>
+    public static bool TryKeyPress(string key) => Run($"kp:{key}");
 
     private static bool Run(params string[] arguments)
     {

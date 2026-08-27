@@ -141,6 +141,8 @@ public abstract class DevFlowAgentServiceBase : IDisposable
         _server.MapPost("/api/v1/ui/actions/press", HandlePressAsync);
         _server.MapPost("/api/v1/ui/actions/drag-move", HandleDragMoveAsync);
         _server.MapPost("/api/v1/ui/actions/release", HandleReleaseAsync);
+        _server.MapPost("/api/v1/ui/actions/keydown", HandleKeyDownAsync);
+        _server.MapPost("/api/v1/ui/actions/keyup", HandleKeyUpAsync);
         _server.MapGet("/api/v1/device/app/theme", HandleThemeGetAsync);
         _server.MapPut("/api/v1/device/app/theme", HandleThemeSetAsync);
         _server.MapGet("/api/v1/invoke/actions", HandleListInvokeActionsAsync);
@@ -577,6 +579,46 @@ public abstract class DevFlowAgentServiceBase : IDisposable
     }
 
     protected virtual Task<object?> TryReleaseResponseAsync(ClickRequest request)
+        => Task.FromResult<object?>(null);
+
+    /// <summary>
+    /// POST /api/v1/ui/actions/keydown — press AND HOLD a real OS-level key (not an element-scoped
+    /// semantic key event like /actions/key), so a game/editor viewport that only listens to real
+    /// input can be driven with a key held across several frames (WASD-style movement). Body:
+    /// { "key": "w" }. Release with /actions/keyup.
+    /// </summary>
+    private async Task<HttpResponse> HandleKeyDownAsync(HttpRequest request)
+    {
+        var payload = request.BodyAs<KeyRequest>();
+        if (payload == null || string.IsNullOrWhiteSpace(payload.Key))
+            return HttpResponse.Error("key is required", 400);
+
+        var result = await TryKeyDownResponseAsync(payload.Key).ConfigureAwait(false);
+        return result != null
+            ? HttpResponse.Json(result)
+            : HttpResponse.Error("Keydown is not supported by this agent", 501);
+    }
+
+    protected virtual Task<object?> TryKeyDownResponseAsync(string key)
+        => Task.FromResult<object?>(null);
+
+    /// <summary>
+    /// POST /api/v1/ui/actions/keyup — release a key previously held via /actions/keydown.
+    /// Body: { "key": "w" }.
+    /// </summary>
+    private async Task<HttpResponse> HandleKeyUpAsync(HttpRequest request)
+    {
+        var payload = request.BodyAs<KeyRequest>();
+        if (payload == null || string.IsNullOrWhiteSpace(payload.Key))
+            return HttpResponse.Error("key is required", 400);
+
+        var result = await TryKeyUpResponseAsync(payload.Key).ConfigureAwait(false);
+        return result != null
+            ? HttpResponse.Json(result)
+            : HttpResponse.Error("Keyup is not supported by this agent", 501);
+    }
+
+    protected virtual Task<object?> TryKeyUpResponseAsync(string key)
         => Task.FromResult<object?>(null);
 
     protected sealed class ClickRequest

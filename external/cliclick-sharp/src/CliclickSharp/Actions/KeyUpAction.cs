@@ -5,7 +5,7 @@ namespace CliclickSharp.Actions;
 public class KeyUpAction : KeyDownUpBaseAction, IAction
 {
     public static string CommandShortcut => "ku";
-    public static string CommandDescription => "Release modifier key(s)";
+    public static string CommandDescription => "Release a modifier or ordinary key";
 
     public bool PerformAction(string data, ExecutionOptions options)
     {
@@ -17,9 +17,10 @@ public class KeyUpAction : KeyDownUpBaseAction, IAction
         {
             string key = keys[i].Trim().ToLowerInvariant();
 
-            if (!ModifierKeycodes.TryGetValue(key, out ushort keycode))
+            if (!ModifierKeycodes.TryGetValue(key, out ushort keycode)
+                && !KeyBaseAction.SupportedKeycodes.TryGetValue(key, out keycode))
             {
-                Console.Error.WriteLine($"Unsupported modifier key: {key}");
+                Console.Error.WriteLine($"Unsupported key: {key}");
                 return false;
             }
 

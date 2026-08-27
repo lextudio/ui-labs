@@ -5,7 +5,11 @@ namespace CliclickSharp.Actions;
 public class KeyDownAction : KeyDownUpBaseAction, IAction
 {
     public static string CommandShortcut => "kd";
-    public static string CommandDescription => "Press modifier key(s)";
+    // Originally "modifier key(s)" only; now also accepts any key from KeyBaseAction's
+    // SupportedKeycodes (letters, digits, arrows, ...), so a non-modifier key can be held down
+    // across several separate cliclick-sharp invocations - e.g. a game's WASD movement, which
+    // needs the key down for multiple frames, not a single kp: press-and-release.
+    public static string CommandDescription => "Press and hold a modifier or ordinary key";
 
     public bool PerformAction(string data, ExecutionOptions options)
     {
@@ -17,9 +21,10 @@ public class KeyDownAction : KeyDownUpBaseAction, IAction
         {
             string key = keys[i].Trim().ToLowerInvariant();
 
-            if (!ModifierKeycodes.TryGetValue(key, out ushort keycode))
+            if (!ModifierKeycodes.TryGetValue(key, out ushort keycode)
+                && !KeyBaseAction.SupportedKeycodes.TryGetValue(key, out keycode))
             {
-                Console.Error.WriteLine($"Unsupported modifier key: {key}");
+                Console.Error.WriteLine($"Unsupported key: {key}");
                 return false;
             }
 
