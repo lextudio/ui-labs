@@ -27,7 +27,7 @@ dotnet winflex doctor
 Create a new WinForms project:
 
 ```powershell
-dotnet winflex new app --name MyWinFormsApp --framework net8.0-windows
+dotnet winflex new app --name MyWinFormsApp --framework net10.0-windows
 ```
 
 Build and run:

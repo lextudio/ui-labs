@@ -34,5 +34,5 @@ await driver.GetStatusAsync();
 
 ## Compatibility
 
-- .NET 8.0+
+- .NET 10.0+
 - Works with any DevFlow agent runtime package

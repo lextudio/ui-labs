@@ -4,7 +4,7 @@ This guide shows how to add DevFlow to an existing WPF app and verify it is work
 
 ## 1. Prerequisites
 
-- .NET 8.0 or later
+- .NET 10.0
 - A WPF app project on Windows
 - App can run locally
 

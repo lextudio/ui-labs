@@ -35,7 +35,7 @@ The same CLI shape now also applies to `LeXtudio.WinForms.Cli`, exposed as `dotn
     - `library`
     - `mvvm`
   - Example usage:
-    - `dotnet wpflex new app --name MyApp --framework net8.0-windows`
+    - `dotnet wpflex new app --name MyApp --framework net10.0-windows`
 
 - `dotnet wpflex build`
   - Build the current WPF project or specified `.csproj`

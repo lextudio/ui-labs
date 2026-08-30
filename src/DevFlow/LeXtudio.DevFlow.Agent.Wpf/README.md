@@ -36,5 +36,5 @@ public partial class App : Application
 
 ## Compatibility
 
-- .NET 8.0+ on Windows
+- .NET 10.0+ on Windows
 - WPF applications only

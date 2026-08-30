@@ -414,7 +414,7 @@ public class WinFormsAgentIntegrationTests
         if (!RunCommand("dotnet", $"build \"{hostProjectPath}\" -c Debug", hostProjectDirectory, out var outp, out var err))
             throw new InvalidOperationException($"Failed to build WinForms host project:\n{err}\n{outp}");
 
-        var exePath = Path.Combine(hostProjectDirectory, "bin", "Debug", "net8.0-windows", "WinFormsDevFlowTestApp.exe");
+        var exePath = Path.Combine(hostProjectDirectory, "bin", "Debug", "net10.0-windows", "WinFormsDevFlowTestApp.exe");
         var psi = new ProcessStartInfo(exePath)
         {
             UseShellExecute = false,

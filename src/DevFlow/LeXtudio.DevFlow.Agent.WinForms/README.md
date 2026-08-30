@@ -60,5 +60,5 @@ For common agent endpoints and port configuration notes, see the top-level DevFl
 
 ## Compatibility
 
-- .NET 8.0+ on Windows
+- .NET 10.0+ on Windows
 - WinForms applications only

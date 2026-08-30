@@ -26,7 +26,7 @@ dotnet wpflex doctor
 Create a new WPF project:
 
 ```powershell
-dotnet wpflex new app --name MyWpfApp --framework net8.0-windows
+dotnet wpflex new app --name MyWpfApp --framework net10.0-windows
 ```
 
 Build and run:

@@ -33,5 +33,5 @@ Add a platform-specific agent package and register it in your app startup.
 
 ## Compatibility
 
-- .NET 8.0+
+- .NET 10.0+
 - Used by WPF, WinForms, Uno, and MewUI runtime packages
