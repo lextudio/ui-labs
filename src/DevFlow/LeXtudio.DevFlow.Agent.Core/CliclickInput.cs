@@ -18,6 +18,15 @@ public static class CliclickInput
 
     private static string? ResolvePath()
     {
+        if (OperatingSystem.IsWindows())
+        {
+            var bundledWindows = Path.Combine(AppContext.BaseDirectory, "CliclickSharp.exe");
+            if (File.Exists(bundledWindows))
+                return bundledWindows;
+
+            return null;
+        }
+
         if (!OperatingSystem.IsMacOS())
             return null;
 
@@ -113,6 +122,8 @@ public static class CliclickInput
                 {
                     FileName = exe,
                     UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden,
                 };
                 psi.ArgumentList.Add($"m:{Pt(x)},{Pt(y)}");
                 psi.ArgumentList.Add($"{DownCmd(button)}:{Pt(x)},{Pt(y)}");
@@ -252,6 +263,8 @@ public static class CliclickInput
                 {
                     FileName = exe,
                     UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden,
                 };
                 psi.ArgumentList.Add($"kd:{key}");
                 psi.ArgumentList.Add("w:600000");
@@ -317,6 +330,8 @@ public static class CliclickInput
             {
                 FileName = exe,
                 UseShellExecute = false,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
             };

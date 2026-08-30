@@ -11,6 +11,9 @@ public class Program
 
     public static int Main(string[] args)
     {
+        if (OperatingSystem.IsWindows())
+            return WindowsCommandExecutor.Execute(args);
+
         if (!CoreGraphics.AXIsProcessTrusted())
         {
             Console.Error.WriteLine(

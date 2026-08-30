@@ -15,29 +15,16 @@ dotnet publish "$SRC/CliclickSharp.csproj" \
   -o "$DIST/osx-arm64"
 
 echo ""
-echo "=== Publishing CliclickSharp AOT for osx-x64 ==="
-dotnet publish "$SRC/CliclickSharp.csproj" \
-  -c Release \
-  -r osx-x64 \
-  -p:PublishAot=true \
-  -p:OutputType=Exe \
-  --self-contained \
-  -o "$DIST/osx-x64"
-
-echo ""
-echo "=== Creating universal binary with lipo ==="
+echo "=== Staging arm64 binary ==="
 mkdir -p "$DIST"
-lipo -create \
-  "$DIST/osx-arm64/CliclickSharp" \
-  "$DIST/osx-x64/CliclickSharp" \
-  -output "$DIST/CliclickSharp"
+cp "$DIST/osx-arm64/CliclickSharp" "$DIST/CliclickSharp"
 
-echo "=== Cleaning up per-arch artifacts ==="
-rm -rf "$DIST/osx-arm64" "$DIST/osx-x64"
+echo "=== Cleaning up per-arch artifact ==="
+rm -rf "$DIST/osx-arm64"
 
 echo ""
 echo "=== Done ==="
-echo "Universal binary: $DIST/CliclickSharp"
+echo "arm64 binary: $DIST/CliclickSharp"
 file "$DIST/CliclickSharp"
 echo ""
 echo "Size: $(du -h "$DIST/CliclickSharp" | cut -f1)"

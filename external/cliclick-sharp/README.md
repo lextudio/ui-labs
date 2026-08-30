@@ -1,6 +1,9 @@
 # CliclickSharp
 
-C# reimplementation of [cliclick](https://github.com/BlueM/cliclick), a command line tool for macOS that can simulate mouse and keyboard events.
+C# reimplementation of [cliclick](https://github.com/BlueM/cliclick), a command-line tool that
+simulates mouse and keyboard events. It uses CoreGraphics on macOS and native `SetCursorPos` plus
+`SendInput` on Windows. The Windows implementation preserves mouse-button state across separate
+`dd` / `dm` / `du` invocations, so it can drive DevFlow's decomposed drag API.
 
 ## Build
 
