@@ -10,6 +10,7 @@ namespace CliclickSharp;
 /// </remarks>
 internal static class WindowsCommandExecutor
 {
+	static readonly string DebugLogPath = Path.Combine(Path.GetTempPath(), "cliclick-sharp-windows.log");
     const uint MouseMove = 0x0001;
     const uint LeftDown = 0x0002;
     const uint LeftUp = 0x0004;
@@ -28,7 +29,9 @@ internal static class WindowsCommandExecutor
     {
         foreach (var command in commands)
         {
-            if (!ExecuteOne(command))
+            var result = ExecuteOne(command);
+            Log($"command={command} ok={result}");
+            if (!result)
                 return 1;
         }
 
@@ -58,7 +61,10 @@ internal static class WindowsCommandExecutor
 
         return op switch
         {
-            "m" or "dm" or "rdm" or "mdm" => Move(x, y),
+            "m" => Move(x, y),
+            "dm" => MoveWhileHeld(x, y),
+            "rdm" => MoveWhileHeld(x, y),
+            "mdm" => MoveWhileHeld(x, y),
             "dd" => MoveAndSend(x, y, LeftDown),
             "du" => MoveAndSend(x, y, LeftUp),
             "rdd" => MoveAndSend(x, y, RightDown),
@@ -114,13 +120,51 @@ internal static class WindowsCommandExecutor
                 dwFlags = MouseMove | Absolute | VirtualDesk,
             },
         };
-        return SendInput(1, new[] { input }, Marshal.SizeOf<INPUT>()) == 1;
+        var sent = SendInput(1, new[] { input }, Marshal.SizeOf<INPUT>());
+        GetCursorPos(out var actual);
+        Log($"move requested=({x},{y}) normalized=({input.mi.dx},{input.mi.dy}) sent={sent} error={Marshal.GetLastWin32Error()} actual=({actual.X},{actual.Y})");
+        return sent == 1;
+    }
+
+    static bool MoveWhileHeld(int x, int y)
+    {
+        var left = GetSystemMetrics(SmXVirtualScreen);
+        var top = GetSystemMetrics(SmYVirtualScreen);
+        var width = Math.Max(1, GetSystemMetrics(SmCxVirtualScreen) - 1);
+        var height = Math.Max(1, GetSystemMetrics(SmCyVirtualScreen) - 1);
+        var input = new INPUT
+        {
+            type = 0,
+            mi = new MOUSEINPUT
+            {
+                dx = (int)Math.Round((x - left) * 65535.0 / width),
+                dy = (int)Math.Round((y - top) * 65535.0 / height),
+                // The down transition was sent by the preceding dd/rdd/mdd command and remains
+                // in the system input state until its matching *du. Re-sending it here creates a
+                // new MouseDown on every move, which resets WPF resize gestures instead of
+                // extending them.
+                dwFlags = MouseMove | Absolute | VirtualDesk,
+            },
+        };
+        var sent = SendInput(1, new[] { input }, Marshal.SizeOf<INPUT>());
+        GetCursorPos(out var actual);
+        Log($"held-move requested=({x},{y}) flags=0x{input.mi.dwFlags:X} sent={sent} error={Marshal.GetLastWin32Error()} actual=({actual.X},{actual.Y})");
+        return sent == 1;
     }
 
     static bool Send(uint flags)
     {
         var input = new INPUT { type = 0, mi = new MOUSEINPUT { dwFlags = flags } };
-        return SendInput(1, new[] { input }, Marshal.SizeOf<INPUT>()) == 1;
+        var sent = SendInput(1, new[] { input }, Marshal.SizeOf<INPUT>());
+        GetCursorPos(out var actual);
+        Log($"button flags=0x{flags:X} sent={sent} error={Marshal.GetLastWin32Error()} actual=({actual.X},{actual.Y})");
+        return sent == 1;
+    }
+
+    static void Log(string message)
+    {
+        try { File.AppendAllText(DebugLogPath, $"[{DateTime.Now:HH:mm:ss.fff}] pid={Environment.ProcessId} {message}{Environment.NewLine}"); }
+        catch { }
     }
 
     static bool TryGetPoint(string value, out int x, out int y)

@@ -561,6 +561,13 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
             return new { ok = linuxOk, mode = "xtest", x, y, button = "left" };
         }
 
+        if (OperatingSystem.IsWindows())
+        {
+            var windowsOk = await Task.Run(() => WindowsNativeInput.TryMousePress(
+                (int)Math.Round(x), (int)Math.Round(y), button == CliclickInput.MouseButton.Left)).ConfigureAwait(false);
+            return new { ok = windowsOk, mode = "sendinput", x, y, button = button.ToString().ToLowerInvariant() };
+        }
+
         if (!CliclickInput.IsAvailable)
             return new { ok = false, reason = "decomposed press/drag-move/release needs cliclick on macOS, or an X display (X11/XWayland) on Linux" };
 
@@ -586,6 +593,13 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
             return new { ok = linuxOk, mode = "xtest", x, y, button = "left" };
         }
 
+        if (OperatingSystem.IsWindows())
+        {
+            var windowsOk = await Task.Run(() => WindowsNativeInput.TryMouseDragMove(
+                (int)Math.Round(x), (int)Math.Round(y))).ConfigureAwait(false);
+            return new { ok = windowsOk, mode = "sendinput", x, y, button = button.ToString().ToLowerInvariant() };
+        }
+
         if (!CliclickInput.IsAvailable)
             return new { ok = false, reason = "decomposed press/drag-move/release needs cliclick on macOS, or an X display (X11/XWayland) on Linux" };
 
@@ -609,6 +623,13 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
 
             var linuxOk = await LinuxReleaseAsync(x, y).ConfigureAwait(false);
             return new { ok = linuxOk, mode = "xtest", x, y, button = "left" };
+        }
+
+        if (OperatingSystem.IsWindows())
+        {
+            var windowsOk = await Task.Run(() => WindowsNativeInput.TryMouseRelease(
+                (int)Math.Round(x), (int)Math.Round(y), button == CliclickInput.MouseButton.Left)).ConfigureAwait(false);
+            return new { ok = windowsOk, mode = "sendinput", x, y, button = button.ToString().ToLowerInvariant() };
         }
 
         if (!CliclickInput.IsAvailable)

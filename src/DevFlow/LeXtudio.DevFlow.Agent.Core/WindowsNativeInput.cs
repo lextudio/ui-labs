@@ -80,6 +80,38 @@ public static class WindowsNativeInput
     }
 
     /// <summary>
+    /// Starts a native mouse gesture and deliberately leaves the button held.  This is the
+    /// Windows counterpart of cliclick's separate down/move/up commands: each DevFlow HTTP
+    /// request runs in a new task, so the held state must live in the Windows input queue rather
+    /// than in a helper-process lifetime.
+    /// </summary>
+    public static bool TryMousePress(int x, int y, bool leftButton)
+    {
+        if (!OperatingSystem.IsWindows() || !SetCursorPos(x, y))
+            return false;
+        mouse_event(leftButton ? MouseEventLeftDown : MouseEventRightDown, 0, 0, 0, UIntPtr.Zero);
+        return true;
+    }
+
+    /// <summary>Moves the cursor while a button started by <see cref="TryMousePress"/> is held.</summary>
+    public static bool TryMouseDragMove(int x, int y)
+    {
+        if (!OperatingSystem.IsWindows() || !SetCursorPos(x, y))
+            return false;
+        mouse_event(MouseEventMove, 0, 0, 0, UIntPtr.Zero);
+        return true;
+    }
+
+    /// <summary>Ends a native mouse gesture started by <see cref="TryMousePress"/>.</summary>
+    public static bool TryMouseRelease(int x, int y, bool leftButton)
+    {
+        if (!OperatingSystem.IsWindows() || !SetCursorPos(x, y))
+            return false;
+        mouse_event(leftButton ? MouseEventLeftUp : MouseEventRightUp, 0, 0, 0, UIntPtr.Zero);
+        return true;
+    }
+
+    /// <summary>
     /// Injects a left-click press → drag → release gesture via the OS input
     /// queue.  Coordinates are absolute screen pixels (top-left origin).
     /// Mirrors the macOS <c>MacOSNativeInput.TryMouseDrag</c> implementation.

@@ -155,12 +155,10 @@ public static class CliclickInput
             if (_dragHoldProcess == null || _dragHoldProcess.HasExited)
                 return false;
 
-            // Left keeps using a plain move, which is what the existing verified drag behaviour relies
-            // on. The other buttons must post a *dragged* event carrying that button, or the target
-            // sees a hover move with no button state.
-            return button == MouseButton.Left
-                ? Run($"m:{Pt(x)},{Pt(y)}")
-                : Run($"{MoveCmd(button)}:{Pt(x)},{Pt(y)}");
+            // Always request a dragged move. On Windows a plain synthetic move does not reliably
+            // surface the held-button state to WPF's Thumb/ScrollViewer routing when the down was
+            // posted by a preceding helper process; the explicit dm/rdm/mdm command carries it.
+            return Run($"{MoveCmd(button)}:{Pt(x)},{Pt(y)}");
         }
     }
 
