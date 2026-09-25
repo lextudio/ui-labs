@@ -11,6 +11,8 @@ public enum CoordinateAxis
 
 public abstract partial class MouseBaseAction
 {
+    private const int PostMoveSettleMilliseconds = 30;
+
     protected virtual CGEventType GetMoveEventConstant() => CGEventType.kCGEventMouseMoved;
 
     /// <summary>
@@ -47,6 +49,11 @@ public abstract partial class MouseBaseAction
         if (!string.Equals(data, ".", StringComparison.Ordinal) && !string.IsNullOrEmpty(data))
         {
             PostHumanizedMouseEvents(currentPos, toX, toY, options.Easing);
+            // Let the pointer settle before acting. A button-down posted right after a move makes
+            // macOS drop the button-up that follows (measured through GLFW/Silk.NET on LibreWPF:
+            // 3 of 10 ups arrived with no wait, 9-10 of 10 with 30 ms), so a click registered as a
+            // press only and the target kept mouse capture.
+            Thread.Sleep(PostMoveSettleMilliseconds);
         }
         else
         {

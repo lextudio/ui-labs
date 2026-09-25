@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>LeXtudio.DevFlow.Agent.ProGPU</AssemblyName>
+    <RootNamespace>LeXtudio.DevFlow.Agent.ProGPU</RootNamespace>
+    <IsPackable>true</IsPackable>
+    <PackageId>LeXtudio.DevFlow.Agent.ProGPU</PackageId>
+    <PackageIcon>company_logo_512.png</PackageIcon>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\..\images\company_logo_512.png" Pack="true" PackagePath="\" Visible="false" />
+    <None Include="README.md" Pack="true" PackagePath="\" Visible="false" />
+    <None Include="..\..\..\external\cliclick-sharp\dist\CliclickSharp" Pack="true" PackagePath="build\" Visible="false" />
+    <None Include="build\LeXtudio.DevFlow.Agent.ProGPU.targets" Pack="true" PackagePath="build\LeXtudio.DevFlow.Agent.ProGPU.targets" Visible="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LeXtudio.DevFlow.Agent.Core\LeXtudio.DevFlow.Agent.Core.csproj" />
+    <ProjectReference Include="..\LeXtudio.DevFlow.Analyzers\LeXtudio.DevFlow.Analyzers.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <!-- ProGPU framework references (development only; NuGet packages for production) -->
+    <ProjectReference Include="../../../../../uno-tools/Files/ProGPU/src/ProGPU.Scene/ProGPU.Scene.csproj" />
+    <ProjectReference Include="../../../../../uno-tools/Files/ProGPU/src/ProGPU.Layout/ProGPU.Layout.csproj" />
+    <ProjectReference Include="../../../../../uno-tools/Files/ProGPU/src/ProGPU.WinUI/ProGPU.WinUI.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Drawing.Common" />
+  </ItemGroup>
+
+</Project>

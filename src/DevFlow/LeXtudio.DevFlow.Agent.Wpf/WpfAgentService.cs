@@ -247,9 +247,30 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
         }).Task ?? Task.FromResult(false);
     }
 
-    protected override Task<object?> TryTapResponseAsync(string elementId)
+    protected override async Task<object?> TryTapResponseAsync(string elementId)
     {
-        return Application.Current?.Dispatcher.InvokeAsync<object?>(() =>
+        // macOS has no in-process native tap (WindowsNativeActions is Windows-only and
+        // MacOSNativeInput is disabled), so a tap there was always the semantic fallback: a raised
+        // Click event that toggles no CheckBox, runs no Command and "clicks" disabled buttons.
+        // Click the element's centre for real instead. Only the point is resolved on the UI thread;
+        // the click runs off it, because the app has to keep pumping to receive the native events
+        // the click produces.
+        if (OperatingSystem.IsMacOS() && CliclickInput.IsAvailable)
+        {
+            var point = await DispatchToApplicationAsync<WindowsScreenPoint?>(() =>
+                ResolveElementObject(elementId) is FrameworkElement fe ? TryGetScreenPoint(fe) : null).ConfigureAwait(false);
+            if (point is WindowsScreenPoint p
+                && await Task.Run(() => CliclickInput.TryClick(p.X, p.Y, 1)).ConfigureAwait(false))
+            {
+                return CreateSuccessResult(SimulationModes.Native, elementId);
+            }
+        }
+
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher is null)
+            return null;
+
+        return await dispatcher.InvokeAsync<object?>(() =>
         {
             var target = ResolveElementObject(elementId);
             if (target is null)
@@ -258,7 +279,7 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
             return ActionSimulationExecutor.Execute(
                 () => target is FrameworkElement fe && WindowsNativeActions.TryTap(fe, TryGetScreenPoint) ? CreateSuccessResult(SimulationModes.Native, elementId) : null,
                 () => TryInvokeOnElement(target) ? CreateSuccessResult(SimulationModes.Semantic, elementId) : null);
-        }).Task ?? Task.FromResult<object?>(null);
+        }).Task.ConfigureAwait(false);
     }
 
     protected override Task<bool> TryScrollAsync(string elementId, double deltaX, double deltaY)
@@ -867,70 +888,6 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
         }
     }
 
-    private Task<T> DispatchToApplicationAsync<T>(Func<T> callback)
-    {
-        var app = Application.Current;
-        if (app == null)
-            return Task.FromResult(callback());
-
-        if (app.Dispatcher.CheckAccess())
-        {
-            CacheMainWindow(app);
-            return Task.FromResult(callback());
-        }
-
-        var operation = app.Dispatcher.InvokeAsync(callback);
-        TryWakeProGpuHost(_cachedMainWindow ?? TryGetMainWindowUnsafe(app));
-        return operation.Task;
-    }
-
-    private void CacheMainWindow(Application? app)
-    {
-        if (app == null)
-            return;
-
-        try
-        {
-            _cachedMainWindow = app.MainWindow;
-        }
-        catch
-        {
-        }
-    }
-
-    private void TryWakeProGpuHost(Window? window)
-    {
-        if (window == null)
-            return;
-
-        try
-        {
-            var type = Type.GetType("System.Windows.Media.ProGPU.ProGpuWpfDiagnostics, ProGPU.Wpf");
-            var renderMethod = type?.GetMethod("TryRequestRender", BindingFlags.Public | BindingFlags.Static);
-            var wakeMethod = type?.GetMethod("TryWakeNativeLoop", BindingFlags.Public | BindingFlags.Static);
-            renderMethod?.Invoke(null, new object?[] { window });
-            wakeMethod?.Invoke(null, new object?[] { window });
-        }
-        catch
-        {
-        }
-    }
-
-    private Window? _cachedMainWindow;
-
-    private static Window? TryGetMainWindowUnsafe(Application app)
-    {
-        try
-        {
-            var field = typeof(Application).GetField("_mainWindow", BindingFlags.Instance | BindingFlags.NonPublic);
-            return field?.GetValue(app) as Window;
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
     private static bool TryNativeMouseDrag(double fromX, double fromY, double toX, double toY, int steps)
     {
         if (OperatingSystem.IsWindows())
@@ -1017,6 +974,70 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
         return false;
     }
 #endif
+
+    private Task<T> DispatchToApplicationAsync<T>(Func<T> callback)
+    {
+        var app = Application.Current;
+        if (app == null)
+            return Task.FromResult(callback());
+
+        if (app.Dispatcher.CheckAccess())
+        {
+            CacheMainWindow(app);
+            return Task.FromResult(callback());
+        }
+
+        var operation = app.Dispatcher.InvokeAsync(callback);
+        TryWakeProGpuHost(_cachedMainWindow ?? TryGetMainWindowUnsafe(app));
+        return operation.Task;
+    }
+
+    private void CacheMainWindow(Application? app)
+    {
+        if (app == null)
+            return;
+
+        try
+        {
+            _cachedMainWindow = app.MainWindow;
+        }
+        catch
+        {
+        }
+    }
+
+    private void TryWakeProGpuHost(Window? window)
+    {
+        if (window == null)
+            return;
+
+        try
+        {
+            var type = Type.GetType("System.Windows.Media.ProGPU.ProGpuWpfDiagnostics, ProGPU.Wpf");
+            var renderMethod = type?.GetMethod("TryRequestRender", BindingFlags.Public | BindingFlags.Static);
+            var wakeMethod = type?.GetMethod("TryWakeNativeLoop", BindingFlags.Public | BindingFlags.Static);
+            renderMethod?.Invoke(null, new object?[] { window });
+            wakeMethod?.Invoke(null, new object?[] { window });
+        }
+        catch
+        {
+        }
+    }
+
+    private Window? _cachedMainWindow;
+
+    private static Window? TryGetMainWindowUnsafe(Application app)
+    {
+        try
+        {
+            var field = typeof(Application).GetField("_mainWindow", BindingFlags.Instance | BindingFlags.NonPublic);
+            return field?.GetValue(app) as Window;
+        }
+        catch
+        {
+            return null;
+        }
+    }
 
     private DependencyObject? ResolveElementObject(string elementId)
     {

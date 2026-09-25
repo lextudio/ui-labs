@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MauiDevFlowPort Condition="'$(MauiDevFlowPort)' == ''">9223</MauiDevFlowPort>
+  </PropertyGroup>
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadata">
+      <_Parameter1>Microsoft.Maui.DevFlowPort</_Parameter1>
+      <_Parameter2>$(MauiDevFlowPort)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+</Project>

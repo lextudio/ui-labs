@@ -28,5 +28,6 @@
     <Project Path="DevFlow/LeXtudio.DevFlow.Agent.Jalium/LeXtudio.DevFlow.Agent.Jalium.csproj" />
     <Project Path="DevFlow/LeXtudio.DevFlow.Agent.Jalium.Tests/LeXtudio.DevFlow.Agent.Jalium.Tests.csproj" />
     <Project Path="DevFlow/JaliumDevFlowTestApp/JaliumDevFlowTestApp.csproj" />
+    <Project Path="DevFlow/LeXtudio.DevFlow.Agent.ProGPU/LeXtudio.DevFlow.Agent.ProGPU.csproj" />
   </Folder>
 </Solution>
