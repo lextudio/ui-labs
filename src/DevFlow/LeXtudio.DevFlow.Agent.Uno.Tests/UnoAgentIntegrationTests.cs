@@ -1443,6 +1443,27 @@ public class UnoAgentIntegrationTests
         process.StartInfo.CreateNoWindow = true;
         process.StartInfo.UseShellExecute = false;
 
+        // This process is launched by `dotnet test`, so it inherits the MSBuild environment of the outer
+        // build (MSBuildSDKsPath, MSBUILD_EXE_PATH and friends). The nested build below resolves its own
+        // SDK — UnoDevFlowTestApp has its own global.json without a version, so it can land on a different
+        // one — and the inherited paths then contradict it. MSBuild cannot start a task host for its
+        // Roslyn inline tasks and fails with MSB4216 "could not create or connect to a task host".
+        // Clearing the inherited variables lets the nested build resolve its SDK cleanly. Node reuse is
+        // disabled for the same reason: reusing a node across two SDK versions fails the same way.
+        foreach (var variable in new[]
+                 {
+                     "MSBUILD_EXE_PATH",
+                     "MSBuildSDKsPath",
+                     "MSBuildExtensionsPath",
+                     "MSBuildLoadMicrosoftTargetsReadOnly",
+                     "MSBuildBinPath",
+                 })
+        {
+            process.StartInfo.Environment.Remove(variable);
+        }
+
+        process.StartInfo.Environment["MSBUILDDISABLENODEREUSE"] = "1";
+
         var stdout = new StringWriter();
         var stderr = new StringWriter();
         process.OutputDataReceived += (_, e) => { if (e.Data != null) stdout.WriteLine(e.Data); };
