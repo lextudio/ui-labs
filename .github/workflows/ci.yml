@@ -127,7 +127,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libxkbcommon0 libinput10 xvfb \
-            libglfw3 libgl1 libglu1-mesa libglx-mesa0 libxi6 libxcursor1 libxrandr2 libxinerama1 libxxf86vm1
+            libglfw3 libgl1 libglu1-mesa libglx-mesa0 libxi6 libxcursor1 libxrandr2 libxinerama1 libxxf86vm1 \
+            libvulkan1 mesa-vulkan-drivers
 
       - name: Start Xvfb
         if: runner.os == 'Linux'
