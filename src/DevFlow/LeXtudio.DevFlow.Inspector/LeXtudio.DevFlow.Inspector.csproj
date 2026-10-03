@@ -30,6 +30,39 @@
     <Compile Include="..\..\..\external\maui-labs\src\Cli\Microsoft.Maui.Cli\DevFlow\Inspector\LocalOriginValidator.cs">
       <Link>Upstream\LocalOriginValidator.cs</Link>
     </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\Cli\Microsoft.Maui.Cli\DevFlow\Flows\FlowMarkdown.cs">
+      <Link>Upstream\FlowMarkdown.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\Cli\Microsoft.Maui.Cli\DevFlow\Flows\FlowRecorder.cs">
+      <Link>Upstream\FlowRecorder.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\Cli\Microsoft.Maui.Cli\DevFlow\Flows\FlowRecordingStore.cs">
+      <Link>Upstream\FlowRecordingStore.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\Cli\Microsoft.Maui.Cli\DevFlow\Flows\FlowReplayer.cs">
+      <Link>Upstream\FlowReplayer.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\Cli\Microsoft.Maui.Cli\DevFlow\Flows\FlowValidator.cs">
+      <Link>Upstream\FlowValidator.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\Cli\Microsoft.Maui.Cli\DevFlow\Flows\MauiFlow.cs">
+      <Link>Upstream\MauiFlow.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\Cli\Microsoft.Maui.Cli\DevFlow\LayoutDiagnosticsPolicy.cs">
+      <Link>Upstream\LayoutDiagnosticsPolicy.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\Cli\Microsoft.Maui.Cli\DevFlow\Inspector\LayoutDiagnosticsDelta.cs">
+      <Link>Upstream\LayoutDiagnosticsDelta.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Core\LayoutDiagnostics\LayoutDiagnosticsModels.cs">
+      <Link>Upstream\LayoutDiagnosticsModels.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\Cli\Microsoft.Maui.Cli\DevFlow\Inspector\PageFilter.cs">
+      <Link>Upstream\PageFilter.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\Cli\Microsoft.Maui.Cli\DevFlow\Inspector\XamlSourcePropertyEditor.cs">
+      <Link>Upstream\XamlSourcePropertyEditor.cs</Link>
+    </Compile>
   </ItemGroup>
 
   <ItemGroup>
