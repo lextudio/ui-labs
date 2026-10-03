@@ -22,6 +22,8 @@ public class DevFlowProtocolParityTests
     private static readonly string[] ContractPathsNotYetServed =
     [
         "/api/v1/agent/capabilities",
+        "/api/v1/agent/lease",
+        "/api/v1/agent/recording",
         "/api/v1/device/app",
         "/api/v1/device/battery",
         "/api/v1/device/connectivity",
@@ -35,6 +37,7 @@ public class DevFlowProtocolParityTests
         "/api/v1/device/sensors",
         "/api/v1/device/sensors/{name}/start",
         "/api/v1/device/sensors/{name}/stop",
+        "/api/v1/device/version-tracking",
         "/api/v1/ext/{namespace}/{path}",
         "/api/v1/logs",
         "/api/v1/profiler/capabilities",
@@ -54,7 +57,11 @@ public class DevFlowProtocolParityTests
         "/api/v1/ui/actions/gesture",
         "/api/v1/ui/actions/navigate",
         "/api/v1/ui/actions/resize",
+        "/api/v1/ui/diagnostics/layout",
+        "/api/v1/ui/diagnostics/layout/rules",
+        "/api/v1/ui/elements/{id}/properties",
         "/api/v1/ui/elements/{id}/properties/{name}",
+        "/api/v1/webview/console",
         "/api/v1/webview/dom",
         "/api/v1/webview/dom/query",
         "/api/v1/webview/evaluate",
@@ -62,6 +69,7 @@ public class DevFlowProtocolParityTests
         "/api/v1/webview/input/fill",
         "/api/v1/webview/input/text",
         "/api/v1/webview/navigate",
+        "/api/v1/webview/network",
         "/api/v1/webview/source",
     ];
 
@@ -71,11 +79,9 @@ public class DevFlowProtocolParityTests
     /// </summary>
     private static readonly string[] DesktopAdditionsOutsideContract =
     [
-        "get /api/v1/alert/detect",
-        "get /api/v1/invoke/actions",
+"get /api/v1/alert/detect",
         "get /api/v1/ui/query-selector",
         "post /api/v1/alert/dismiss",
-        "post /api/v1/invoke/actions/{name}",
         "post /api/v1/ui/actions/click",
         "post /api/v1/ui/actions/drag",
         "post /api/v1/ui/actions/drag-move",

@@ -83,12 +83,22 @@ public class DeepTreeSerializationTests
     }
 
     [Fact]
-    public void HttpResponseJson_WithSelfReferencingTree_DoesNotThrow()
+    public void DevFlowJson_WithSelfReferencingTree_DoesNotThrow()
     {
-        var response = HttpResponse.Json(new { elements = new List<ElementInfo> { AgentTestHarness.BuildCyclicTree() } });
+        var response = DevFlowJson.Json(new { elements = new List<ElementInfo> { AgentTestHarness.BuildCyclicTree() } });
 
         Assert.Equal(200, response.StatusCode);
         Assert.False(string.IsNullOrWhiteSpace(response.Body));
+    }
+
+    [Fact]
+    public void UpstreamHttpResponseJson_RejectsSelfReferencingTree_SoOurOwnPathIsRequired()
+    {
+        // Upstream serializes through AgentJson, which keeps the System.Text.Json defaults: cycles throw.
+        // This is why responses the agent produces for trees go through DevFlowJson instead, and it is the
+        // behavior the LeXtudio fork patch used to put on HttpResponse.Json itself.
+        Assert.Throws<JsonException>(
+            () => HttpResponse.Json(new { elements = new List<ElementInfo> { AgentTestHarness.BuildCyclicTree() } }));
     }
 
     [Fact]
