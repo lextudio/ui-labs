@@ -76,8 +76,10 @@ public sealed class ProGpuAgentService : DevFlowAgentServiceBase
 
 		if (target is Microsoft.UI.Xaml.Controls.Primitives.ButtonBase button)
 		{
-			button.PerformClick();
-			return Task.FromResult(true);
+			if (TryRaiseClick(button))
+			{
+				return Task.FromResult(true);
+			}
 		}
 
         var pointerEvent = new PointerRoutedEventArgs
@@ -137,5 +139,44 @@ public sealed class ProGpuAgentService : DevFlowAgentServiceBase
     {
         var entryAssembly = Assembly.GetEntryAssembly();
         return Task.FromResult(entryAssembly?.GetName().Name);
+    }
+
+    /// <summary>
+    /// Raises a <c>ButtonBase</c> click across ProGPU versions.
+    /// </summary>
+    /// <remarks>
+    /// ProGPU exposes the click trigger under different names: the published
+    /// <c>ProGPU.WinUI</c> package has <c>RaiseClick</c>, while newer ProGPU sources also add
+    /// <c>PerformClick</c>. Both are resolved by name so the agent keeps working against either, and the
+    /// caller falls back to synthesized pointer input when neither is present.
+    /// </remarks>
+    private static bool TryRaiseClick(Microsoft.UI.Xaml.Controls.Primitives.ButtonBase button)
+    {
+        foreach (var name in (string[])["PerformClick", "RaiseClick", "TriggerClick"])
+        {
+            var method = button.GetType().GetMethod(
+                name,
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                binder: null,
+                types: Type.EmptyTypes,
+                modifiers: null);
+
+            if (method is null)
+            {
+                continue;
+            }
+
+            try
+            {
+                method.Invoke(button, parameters: null);
+                return true;
+            }
+            catch (TargetInvocationException)
+            {
+                return false;
+            }
+        }
+
+        return false;
     }
 }
