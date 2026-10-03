@@ -8,11 +8,11 @@
 - Core agent status and UI inspection:
   - `GET /api/v1/agent/status`
   - `GET /api/v1/ui/tree`
-  - `GET /api/v1/ui/element`
+  - `GET /api/v1/ui/elements/{id}`
   - `GET /api/v1/ui/elements`
   - `GET /api/v1/ui/screenshot` (full + element; selector where supported)
 - UI actions:
-  - `POST /api/v1/ui/tap`
+  - `POST /api/v1/ui/actions/tap`
   - `POST /api/v1/ui/actions/scroll`
   - `POST /api/v1/ui/actions/fill`
   - `POST /api/v1/ui/actions/clear`
@@ -77,3 +77,43 @@
 - No changes required in `external/maui-labs` sources.
 - Integration test added for WPF and for Uno/MewUI where runtime support is real.
 - Capability flags updated only for existing MAUI features.
+
+## Contract alignment (route renames)
+
+The desktop agents now use the same route names as the shared DevFlow contract
+(`external/maui-labs/docs/DevFlow/spec/openapi.yaml`). Upstream states that spec is framework-agnostic and
+intended for "MAUI and other UI stacks", so it is the authority for the wire surface.
+
+| Previous route | Contract route |
+|---|---|
+| `POST /api/v1/ui/tap` | `POST /api/v1/ui/actions/tap` |
+| `GET /api/v1/ui/element?id=<id>` | `GET /api/v1/ui/elements/<id>` |
+| `GET /api/v1/network/list` | `GET /api/v1/network/requests` |
+| `GET /api/v1/network/detail?id=<id>` | `GET /api/v1/network/requests/<id>` |
+| `POST /api/v1/network/clear` | `DELETE /api/v1/network/requests` |
+
+Notes:
+- These are breaking changes for any external script or automation that called the old paths. CLI
+  subcommand names (`devflow network list|detail|clear`) are unchanged.
+- Element and network ids moved from a query string to a path segment, so they are percent-encoded by
+  the caller and unescaped by the agent.
+- `POST /api/v1/ui/actions/tap` was the last action still outside `/api/v1/ui/actions/`; the rename also
+  removed an internal inconsistency.
+
+## Contract enforcement
+
+`LeXtudio.DevFlow.Agent.Core.Tests` (cross-platform, runs on macOS) holds the tests that keep the
+desktop agents aligned with the pinned contract:
+
+- `DevFlowProtocolParityTests` — parses the pinned `openapi.yaml` and compares it against the routes the
+  agent actually registers. Two tracked lists act as the sync backlog:
+  - `ContractPathsNotYetServed` — contract paths not implemented yet (42 remaining).
+  - `DesktopAdditionsOutsideContract` — routes we serve that the contract does not describe (16:
+    pointer input, alert detection, invoke, `ui/assert`, `ui/query-selector`, `webview/cdp`).
+  Shrink these lists as endpoints are adopted; the tests then fail on any undeclared drift.
+- `DeepTreeSerializationTests` — protects the LeXtudio fork JSON behavior that upstream does not carry
+  (deep UI trees and self-referencing trees). Current shape: 120-level trees and cycles serialize, and
+  the tests fail if that regresses.
+
+Because the spec is copied from the submodule at build time, bumping the submodule pointer moves the
+contract these tests enforce without editing them.

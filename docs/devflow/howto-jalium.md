@@ -61,10 +61,10 @@ Routes:
 
 - `GET /api/v1/agent/status`
 - `GET /api/v1/ui/tree`
-- `GET /api/v1/ui/element?id=<id>`
+- `GET /api/v1/ui/elements/<id>`
 - `GET /api/v1/ui/elements`
 - `GET /api/v1/ui/screenshot`
-- `POST /api/v1/ui/tap`
+- `POST /api/v1/ui/actions/tap`
 - `POST /api/v1/ui/actions/scroll`
 - `POST /api/v1/ui/actions/fill`
 - `POST /api/v1/ui/actions/clear`

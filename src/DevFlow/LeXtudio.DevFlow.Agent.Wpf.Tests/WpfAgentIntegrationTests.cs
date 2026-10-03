@@ -49,10 +49,10 @@ public class WpfAgentIntegrationTests
 
         Assert.True(status.GetProperty("running").GetBoolean());
 
-        using var tapResponse = await client.PostAsync("/api/v1/ui/tap", new StringContent("{ \"id\": \"ActionButton\" }", System.Text.Encoding.UTF8, "application/json"));
+        using var tapResponse = await client.PostAsync("/api/v1/ui/actions/tap", new StringContent("{ \"id\": \"ActionButton\" }", System.Text.Encoding.UTF8, "application/json"));
         tapResponse.EnsureSuccessStatusCode();
 
-        using var elementResponse = await client.GetAsync("/api/v1/ui/element?id=ResponseText");
+        using var elementResponse = await client.GetAsync("/api/v1/ui/elements/ResponseText");
         elementResponse.EnsureSuccessStatusCode();
         using var elementDoc = JsonDocument.Parse(await elementResponse.Content.ReadAsStreamAsync());
         var text = elementDoc.RootElement.GetProperty("text").GetString();

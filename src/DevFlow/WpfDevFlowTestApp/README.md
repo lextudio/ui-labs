@@ -15,9 +15,9 @@ The app starts a DevFlow agent on port `9223`.
 
 - `GET http://localhost:9223/api/v1/agent/status`
 - `GET http://localhost:9223/api/v1/ui/tree`
-- `GET http://localhost:9223/api/v1/ui/element?id=<id>`
+- `GET http://localhost:9223/api/v1/ui/elements/<id>`
 - `GET http://localhost:9223/api/v1/ui/screenshot`
-- `POST http://localhost:9223/api/v1/ui/tap` with JSON body `{ "id": "<element-id>" }`
+- `POST http://localhost:9223/api/v1/ui/actions/tap` with JSON body `{ "id": "<element-id>" }`
 - `POST http://localhost:9223/api/v1/ui/actions/scroll` with JSON body `{ "id": "<element-id>", "deltaX": 0, "deltaY": 600 }`
 
 ## Example status request

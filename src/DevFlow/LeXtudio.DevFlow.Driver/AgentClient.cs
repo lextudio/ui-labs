@@ -37,7 +37,7 @@ public sealed class AgentClient : IDisposable
 
     public async Task<JsonElement?> GetElementAsync(string elementId, CancellationToken cancellationToken = default)
     {
-        var url = new Uri(_baseUrl + $"/api/v1/ui/element?id={Uri.EscapeDataString(elementId)}");
+        var url = new Uri(_baseUrl + $"/api/v1/ui/elements/{Uri.EscapeDataString(elementId)}");
         using var response = await _http.GetAsync(url, cancellationToken).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
         using var document = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -47,7 +47,7 @@ public sealed class AgentClient : IDisposable
     public async Task<bool> TapAsync(string elementId, CancellationToken cancellationToken = default)
     {
         var content = JsonContent.Create(new { id = elementId }, options: _jsonOptions);
-        using var response = await _http.PostAsync(new Uri(_baseUrl + "/api/v1/ui/tap"), content, cancellationToken).ConfigureAwait(false);
+        using var response = await _http.PostAsync(new Uri(_baseUrl + "/api/v1/ui/actions/tap"), content, cancellationToken).ConfigureAwait(false);
         return response.IsSuccessStatusCode;
     }
 

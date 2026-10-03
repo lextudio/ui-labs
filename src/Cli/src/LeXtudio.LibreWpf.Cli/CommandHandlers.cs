@@ -586,7 +586,7 @@ namespace LeXtudio.LibreWpf.Cli
             try
             {
                 using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
-                var response = http.GetStringAsync($"http://{host}:{port}/api/v1/network/list").GetAwaiter().GetResult();
+                var response = http.GetStringAsync($"http://{host}:{port}/api/v1/network/requests").GetAwaiter().GetResult();
                 Console.WriteLine(JsonSerializer.Serialize(JsonDocument.Parse(response).RootElement, new JsonSerializerOptions { WriteIndented = true }));
                 return 0;
             }
@@ -615,7 +615,7 @@ namespace LeXtudio.LibreWpf.Cli
             try
             {
                 using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
-                var response = http.GetStringAsync($"http://{host}:{port}/api/v1/network/detail?id={Uri.EscapeDataString(id)}").GetAwaiter().GetResult();
+                var response = http.GetStringAsync($"http://{host}:{port}/api/v1/network/requests/{Uri.EscapeDataString(id)}").GetAwaiter().GetResult();
                 Console.WriteLine(JsonSerializer.Serialize(JsonDocument.Parse(response).RootElement, new JsonSerializerOptions { WriteIndented = true }));
                 return 0;
             }
@@ -631,7 +631,7 @@ namespace LeXtudio.LibreWpf.Cli
             try
             {
                 using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
-                using var response = http.PostAsync($"http://{host}:{port}/api/v1/network/clear", new StringContent(string.Empty)).GetAwaiter().GetResult();
+                using var response = http.DeleteAsync($"http://{host}:{port}/api/v1/network/requests").GetAwaiter().GetResult();
                 return WriteResult("devflow", response.IsSuccessStatusCode ? "Network log cleared." : "Failed to clear network log.", options);
             }
             catch (Exception ex)

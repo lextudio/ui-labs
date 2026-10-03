@@ -39,13 +39,13 @@ public class MewUIAgentIntegrationTests
         using var client = new HttpClient { BaseAddress = new Uri($"http://localhost:{port}") };
         await PollAgentStatusAsync(client, TimeSpan.FromSeconds(20));
 
-        using var tapResponse = await PostAsync(client, "/api/v1/ui/tap", new StringContent("{ \"id\": \"ActionButton\" }", Encoding.UTF8, "application/json"));
+        using var tapResponse = await PostAsync(client, "/api/v1/ui/actions/tap", new StringContent("{ \"id\": \"ActionButton\" }", Encoding.UTF8, "application/json"));
         tapResponse.EnsureSuccessStatusCode();
         using var tapDoc = JsonDocument.Parse(await ReadAsStreamAsync(tapResponse.Content));
         Assert.True(tapDoc.RootElement.GetProperty("success").GetBoolean());
         Assert.Contains(tapDoc.RootElement.GetProperty("simulationMode").GetString(), new[] { "native", "reflection" });
 
-        using var elementResponse = await GetAsync(client, "/api/v1/ui/element?id=ResponseText");
+        using var elementResponse = await GetAsync(client, "/api/v1/ui/elements/ResponseText");
         elementResponse.EnsureSuccessStatusCode();
         using var elementDoc = JsonDocument.Parse(await ReadAsStreamAsync(elementResponse.Content));
         var text = elementDoc.RootElement.GetProperty("text").GetString();
@@ -90,7 +90,7 @@ public class MewUIAgentIntegrationTests
         Assert.True(fillResultDoc.RootElement.GetProperty("success").GetBoolean());
         Assert.Contains(fillResultDoc.RootElement.GetProperty("simulationMode").GetString(), new[] { "native", "property-mutation" });
 
-        using var afterFill = await GetAsync(client, "/api/v1/ui/element?id=ResponseText");
+        using var afterFill = await GetAsync(client, "/api/v1/ui/elements/ResponseText");
         afterFill.EnsureSuccessStatusCode();
         using var fillDoc = JsonDocument.Parse(await ReadAsStreamAsync(afterFill.Content));
         Assert.Equal("Filled by test", fillDoc.RootElement.GetProperty("text").GetString());
@@ -100,7 +100,7 @@ public class MewUIAgentIntegrationTests
             new StringContent("{\"elementId\":\"ResponseText\"}", Encoding.UTF8, "application/json"));
         clearResponse.EnsureSuccessStatusCode();
 
-        using var afterClear = await GetAsync(client, "/api/v1/ui/element?id=ResponseText");
+        using var afterClear = await GetAsync(client, "/api/v1/ui/elements/ResponseText");
         afterClear.EnsureSuccessStatusCode();
         using var clearDoc = JsonDocument.Parse(await ReadAsStreamAsync(afterClear.Content));
         Assert.Equal(string.Empty, clearDoc.RootElement.GetProperty("text").GetString());

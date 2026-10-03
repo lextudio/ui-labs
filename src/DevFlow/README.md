@@ -148,7 +148,7 @@ You can override the port at build time with `dotnet build -p:MauiDevFlowPort=95
 |---------|-------------|
 | `GET /api/v1/agent/status` | Read agent status. |
 | `GET /api/v1/ui/tree` | Read the live UI tree. |
-| `GET /api/v1/ui/element?id=<id>` | Read one UI element by id. |
+| `GET /api/v1/ui/elements/<id>` | Read one UI element by id. |
 | `GET /api/v1/ui/elements?type=&automationId=&text=` | Query elements by type, automation id, or text. |
 | `GET /api/v1/ui/query-selector?selector=<css>` | Query elements with a CSS selector (type, class, attribute, `:visible`/`:enabled`/`:focused`, combinators). |
 | `GET /api/v1/ui/hit-test?x=&y=` | Return the ancestor chain (and topmost match) at a point. |
@@ -159,7 +159,7 @@ You can override the port at build time with `dotnet build -p:MauiDevFlowPort=95
 | `GET /api/v1/webview/contexts` | List discoverable WebView contexts. |
 | `GET /api/v1/webview/screenshot?context=<id>` | Capture a WebView screenshot. |
 | `POST /api/v1/webview/cdp` | Execute a WebView CDP command. |
-| `POST /api/v1/ui/tap` | Tap an element with body `{ "id": "<element-id>" }`. |
+| `POST /api/v1/ui/actions/tap` | Tap an element with body `{ "id": "<element-id>" }`. |
 | `POST /api/v1/ui/actions/fill` | Fill text with body `{ "elementId": "<element-id>", "text": "value" }`. |
 | `POST /api/v1/ui/actions/clear` | Clear text with body `{ "elementId": "<element-id>" }`. |
 | `POST /api/v1/ui/actions/focus` | Focus an element with body `{ "elementId": "<element-id>" }`. |
@@ -167,14 +167,18 @@ You can override the port at build time with `dotnet build -p:MauiDevFlowPort=95
 | `POST /api/v1/ui/actions/scroll` | Scroll an element with body `{ "id": "<element-id>", "deltaX": 0, "deltaY": 600 }`. |
 | `GET /api/v1/invoke/actions` | List discovered `[DevFlowAction]` methods with their parameters. |
 | `POST /api/v1/invoke/actions/{name}` | Invoke a `[DevFlowAction]` method with body `{ "args": [...] }`. |
-| `GET /api/v1/network/list?count=&host=&method=&status=` | List captured HTTP requests (apps opt in via `DevFlowHttp.CreateClient()`). |
-| `GET /api/v1/network/detail?id=<id>` | Full detail (headers/body) for one captured request. |
-| `POST /api/v1/network/clear` | Clear the captured network log. |
+| `GET /api/v1/network/requests?count=&host=&method=&status=` | List captured HTTP requests (apps opt in via `DevFlowHttp.CreateClient()`). |
+| `GET /api/v1/network/requests/<id>` | Full detail (headers/body) for one captured request. |
+| `DELETE /api/v1/network/requests` | Clear the captured network log. |
 | `GET /api/v1/alert/detect` | Detect a native dialog box (Win32 `#32770` class) and return its message/buttons. |
 | `POST /api/v1/alert/dismiss` | Dismiss a detected dialog with body `{ "buttonLabel": "OK" }` (omit to click the first button). |
 | `GET /api/v1/device/app/theme` / `PUT /api/v1/device/app/theme` | Get or set the app theme. |
 
 Each CLI's `devflow` subcommand wraps this API — see [Core Commands / DevFlow Commands](../Cli/README.md) for the command-line surface, plus the standalone `LeXtudio.DevFlow.Inspector` (`devflow inspector`) and `LeXtudio.DevFlow.Broker` (`devflow broker`) packages for the browser inspector and multi-agent daemon.
+
+These routes follow the shared DevFlow contract in `external/maui-labs/docs/DevFlow/spec/openapi.yaml`. See
+[docs/devflow/plan.md](../../docs/devflow/plan.md) for the routes we have not adopted yet, the routes we
+add on top of the contract, and the tests that enforce both.
 
 ## WinForms support
 
@@ -201,7 +205,14 @@ Each CLI's `devflow` subcommand wraps this API — see [Core Commands / DevFlow 
 
 - `LeXtudio.DevFlow.Agent.LibreWpf` is the LibreWPF DevFlow runtime package. It shares the WPF visual tree walker and agent service via linked source rather than duplicating it.
 - `LibreWpfDevFlowTestApp` is a reference sample project demonstrating a process-local DevFlow HTTP agent in a LibreWPF app.
-- `LeXtudio.DevFlow.Agent.LibreWpf.Tests` mirrors the WPF integration test coverage.
+- `LeXtudio.DevFlow.Agent.LibreWpf.Tests` compiles the WPF integration tests against the LibreWPF agent.
+
+## LibreWinForms support preview
+
+- `LeXtudio.DevFlow.Agent.LibreWinForms` is the LibreWinForms DevFlow runtime package, for WinForms-shaped apps rendered on the ProGPU/Silk.NET backend on macOS, Linux, and Windows. Like the LibreWPF package, it compiles the `LeXtudio.DevFlow.Agent.WinForms` sources rather than duplicating them, so the HTTP surface matches the desktop WinForms agent. `LIBREWINFORMS` is defined for the sources so platform differences can be branched where they appear.
+- It references `LibreWinForms.System.Windows.Forms` directly instead of using `LibreWinForms.Sdk`, because that SDK requires `net11.0` from preview.57 onward while this package targets `net10.0`. LibreWinForms apps themselves should still use the SDK, which supplies the ProGPU platform bootstrap.
+- `LibreWinFormsDevFlowTestApp` is a cross-platform sample app; `LeXtudio.DevFlow.Agent.LibreWinForms.Tests` drives it end to end over HTTP. These tests are not Windows-only — they run on macOS and Linux, and skip when the machine has no .NET 11 SDK to build the host app.
+- Desktop WinForms behavior that depends on Win32 does not carry over: tree walking, element queries, `PerformClick`-based tapping, scrolling, and text input are managed WinForms APIs and work, while the agent's Win32 input injection is guarded by `OperatingSystem.IsWindows()` and no-ops elsewhere.
 
 ## Jalium support preview
 

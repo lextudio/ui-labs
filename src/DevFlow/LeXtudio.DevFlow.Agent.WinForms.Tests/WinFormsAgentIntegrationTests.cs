@@ -48,7 +48,7 @@ public class WinFormsAgentIntegrationTests
         await PollStatusAsync(client, TimeSpan.FromSeconds(15));
         await WaitForElementAsync(client, "InputBox", TimeSpan.FromSeconds(10));
 
-        using var response = await GetAsync(client, "/api/v1/ui/element?id=InputBox");
+        using var response = await GetAsync(client, "/api/v1/ui/elements/InputBox");
         response.EnsureSuccessStatusCode();
         using var doc = JsonDocument.Parse(await ReadAsStreamAsync(response.Content));
         Assert.Equal("InputBox", doc.RootElement.GetProperty("id").GetString());
@@ -81,7 +81,7 @@ public class WinFormsAgentIntegrationTests
         await WaitForElementAsync(client, "InputBox", TimeSpan.FromSeconds(10));
         await WaitForElementAsync(client, "ResponseLabel", TimeSpan.FromSeconds(10));
 
-        using var tapResponse = await PostAsync(client, "/api/v1/ui/tap", Json("{" + "\"id\":\"ActionButton\"}"));
+        using var tapResponse = await PostAsync(client, "/api/v1/ui/actions/tap", Json("{" + "\"id\":\"ActionButton\"}"));
         tapResponse.EnsureSuccessStatusCode();
         using var tapDoc = JsonDocument.Parse(await ReadAsStreamAsync(tapResponse.Content));
         Assert.True(tapDoc.RootElement.GetProperty("success").GetBoolean());
@@ -105,12 +105,12 @@ public class WinFormsAgentIntegrationTests
         Assert.True(clearDoc.RootElement.GetProperty("success").GetBoolean());
         Assert.Contains(clearDoc.RootElement.GetProperty("simulationMode").GetString(), new[] { "native", "property-mutation" });
 
-        using var input = await GetAsync(client, "/api/v1/ui/element?id=InputBox");
+        using var input = await GetAsync(client, "/api/v1/ui/elements/InputBox");
         input.EnsureSuccessStatusCode();
         using var inputDoc = JsonDocument.Parse(await ReadAsStreamAsync(input.Content));
         Assert.Equal(string.Empty, inputDoc.RootElement.GetProperty("text").GetString());
 
-        using var responseLabel = await GetAsync(client, "/api/v1/ui/element?id=ResponseLabel");
+        using var responseLabel = await GetAsync(client, "/api/v1/ui/elements/ResponseLabel");
         responseLabel.EnsureSuccessStatusCode();
         using var labelDoc = JsonDocument.Parse(await ReadAsStreamAsync(responseLabel.Content));
         Assert.Equal("Button clicked", labelDoc.RootElement.GetProperty("text").GetString());
@@ -126,13 +126,13 @@ public class WinFormsAgentIntegrationTests
         await WaitForElementAsync(client, "InputBox", TimeSpan.FromSeconds(10));
 
         (await PostAsync(client, "/api/v1/ui/actions/fill", Json("{\"elementId\":\"InputBox\",\"text\":\"hello\"}"))).EnsureSuccessStatusCode();
-        using var filled = await GetAsync(client, "/api/v1/ui/element?id=InputBox");
+        using var filled = await GetAsync(client, "/api/v1/ui/elements/InputBox");
         filled.EnsureSuccessStatusCode();
         using var filledDoc = JsonDocument.Parse(await ReadAsStreamAsync(filled.Content));
         Assert.Equal("hello", filledDoc.RootElement.GetProperty("text").GetString());
 
         (await PostAsync(client, "/api/v1/ui/actions/clear", Json("{\"elementId\":\"InputBox\"}"))).EnsureSuccessStatusCode();
-        using var cleared = await GetAsync(client, "/api/v1/ui/element?id=InputBox");
+        using var cleared = await GetAsync(client, "/api/v1/ui/elements/InputBox");
         cleared.EnsureSuccessStatusCode();
         using var clearedDoc = JsonDocument.Parse(await ReadAsStreamAsync(cleared.Content));
         Assert.Equal(string.Empty, clearedDoc.RootElement.GetProperty("text").GetString());
@@ -322,7 +322,7 @@ public class WinFormsAgentIntegrationTests
         using var query = await GetAsync(client, "/api/v1/ui/elements?type=TextBox");
         query.EnsureSuccessStatusCode();
 
-        using var bad = await GetAsync(client, "/api/v1/ui/element");
+        using var bad = await GetAsync(client, "/api/v1/ui/elements");
         Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);
     }
 
@@ -393,7 +393,7 @@ public class WinFormsAgentIntegrationTests
         {
             try
             {
-                using var response = await GetAsync(client, $"/api/v1/ui/element?id={Uri.EscapeDataString(elementId)}");
+                using var response = await GetAsync(client, $"/api/v1/ui/elements/{Uri.EscapeDataString(elementId)}");
                 if (response.IsSuccessStatusCode)
                     return;
             }

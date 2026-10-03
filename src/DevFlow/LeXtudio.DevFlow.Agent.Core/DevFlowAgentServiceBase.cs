@@ -120,13 +120,13 @@ public abstract class DevFlowAgentServiceBase : IDisposable
     {
         _server.MapGet("/api/v1/agent/status", HandleStatusAsync);
         _server.MapGet("/api/v1/ui/tree", HandleTreeAsync);
-        _server.MapGet("/api/v1/ui/element", HandleElementAsync);
+        _server.MapGet("/api/v1/ui/elements/{id}", HandleElementAsync);
         _server.MapGet("/api/v1/ui/elements", HandleQueryAsync);
         _server.MapGet("/api/v1/ui/screenshot", HandleScreenshotAsync);
         _server.MapGet("/api/v1/webview/contexts", HandleWebViewContextsAsync);
         _server.MapGet("/api/v1/webview/screenshot", HandleWebViewScreenshotAsync);
         _server.MapPost("/api/v1/webview/cdp", HandleWebViewCdpAsync);
-        _server.MapPost("/api/v1/ui/tap", HandleTapAsync);
+        _server.MapPost("/api/v1/ui/actions/tap", HandleTapAsync);
         _server.MapPost("/api/v1/ui/actions/right-tap", HandleRightTapAsync);
         _server.MapPost("/api/v1/ui/actions/fill", HandleFillAsync);
         _server.MapPost("/api/v1/ui/actions/clear", HandleClearAsync);
@@ -147,9 +147,9 @@ public abstract class DevFlowAgentServiceBase : IDisposable
         _server.MapPut("/api/v1/device/app/theme", HandleThemeSetAsync);
         _server.MapGet("/api/v1/invoke/actions", HandleListInvokeActionsAsync);
         _server.MapPost("/api/v1/invoke/actions/{name}", HandleInvokeActionAsync);
-        _server.MapGet("/api/v1/network/list", HandleNetworkListAsync);
-        _server.MapGet("/api/v1/network/detail", HandleNetworkDetailAsync);
-        _server.MapPost("/api/v1/network/clear", HandleNetworkClearAsync);
+        _server.MapGet("/api/v1/network/requests", HandleNetworkListAsync);
+        _server.MapGet("/api/v1/network/requests/{id}", HandleNetworkDetailAsync);
+        _server.MapDelete("/api/v1/network/requests", HandleNetworkClearAsync);
         _server.MapGet("/api/v1/ui/query-selector", HandleQuerySelectorAsync);
         _server.MapGet("/api/v1/ui/hit-test", HandleHitTestAsync);
         _server.MapPost("/api/v1/ui/assert", HandleAssertAsync);
@@ -317,9 +317,10 @@ public abstract class DevFlowAgentServiceBase : IDisposable
 
     private Task<HttpResponse> HandleNetworkDetailAsync(HttpRequest request)
     {
-        if (!request.QueryParams.TryGetValue("id", out var id) || string.IsNullOrWhiteSpace(id))
-            return Task.FromResult(HttpResponse.Error("Missing required query parameter 'id'", 400));
+        if (!request.RouteParams.TryGetValue("id", out var rawId) || string.IsNullOrWhiteSpace(rawId))
+            return Task.FromResult(HttpResponse.Error("Missing required route parameter 'id'", 400));
 
+        var id = Uri.UnescapeDataString(rawId);
         var entry = _networkStore.GetById(id);
         return Task.FromResult(entry != null
             ? HttpResponse.Json(entry)
@@ -356,9 +357,10 @@ public abstract class DevFlowAgentServiceBase : IDisposable
 
     private async Task<HttpResponse> HandleElementAsync(HttpRequest request)
     {
-        if (!request.QueryParams.TryGetValue("id", out var id) || string.IsNullOrWhiteSpace(id))
-            return HttpResponse.Error("Missing required query parameter 'id'", 400);
+        if (!request.RouteParams.TryGetValue("id", out var rawId) || string.IsNullOrWhiteSpace(rawId))
+            return HttpResponse.Error("Missing required route parameter 'id'", 400);
 
+        var id = Uri.UnescapeDataString(rawId);
         var element = await FindElementAsync(id).ConfigureAwait(false);
         return element is null ? HttpResponse.NotFound($"Element '{id}' not found") : HttpResponse.Json(element);
     }
@@ -431,7 +433,7 @@ public abstract class DevFlowAgentServiceBase : IDisposable
 
     /// <summary>
     /// POST /api/v1/ui/actions/right-tap — right-click an element by id to open its context menu.
-    /// Body: { "id": "&lt;id&gt;" }. Mirrors /api/v1/ui/tap but injects a secondary (right) click.
+    /// Body: { "id": "&lt;id&gt;" }. Mirrors /api/v1/ui/actions/tap but injects a secondary (right) click.
     /// </summary>
     private async Task<HttpResponse> HandleRightTapAsync(HttpRequest request)
     {
@@ -500,7 +502,7 @@ public abstract class DevFlowAgentServiceBase : IDisposable
     /// When global=true, x/y are absolute screen coordinates (no scaling).
     /// When global=false (default), x/y are window-relative logical points.
     /// The click is implemented as: MouseMoved → LeftMouseDown → LeftMouseUp via CGEvent on macOS.
-    /// This is preferred over /api/v1/ui/tap (which requires an element ID) for elements
+    /// This is preferred over /api/v1/ui/actions/tap (which requires an element ID) for elements
     /// that do not have x:AutomationProperties.AutomationId set.
     /// </summary>
     private async Task<HttpResponse> HandleClickAsync(HttpRequest request)

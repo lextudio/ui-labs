@@ -102,7 +102,7 @@ public class UnoAgentIntegrationTests
             using var client = new HttpClient { BaseAddress = new Uri($"http://localhost:{port}") };
             await PollAgentStatusAsync(client, TimeSpan.FromSeconds(20));
 
-            using var tapResponse = await PostAsync(client, "/api/v1/ui/tap", new StringContent("{\"id\":\"ActionButton\"}", Encoding.UTF8, "application/json"));
+            using var tapResponse = await PostAsync(client, "/api/v1/ui/actions/tap", new StringContent("{\"id\":\"ActionButton\"}", Encoding.UTF8, "application/json"));
             tapResponse.EnsureSuccessStatusCode();
             using var tapDoc = JsonDocument.Parse(await ReadAsStreamAsync(tapResponse.Content));
             Assert.True(tapDoc.RootElement.GetProperty("success").GetBoolean());
@@ -112,7 +112,7 @@ public class UnoAgentIntegrationTests
             // var simulationMode = tapDoc.RootElement.GetProperty("simulationMode").GetString();
             // Assert.Contains(simulationMode, new[] { "native", "reflection", "semantic" });
 
-            using var elementResponse = await GetAsync(client, "/api/v1/ui/element?id=ResponseText");
+            using var elementResponse = await GetAsync(client, "/api/v1/ui/elements/ResponseText");
             elementResponse.EnsureSuccessStatusCode();
             using var elementDoc = JsonDocument.Parse(await ReadAsStreamAsync(elementResponse.Content));
             var text = elementDoc.RootElement.GetProperty("text").GetString();
@@ -317,7 +317,7 @@ public class UnoAgentIntegrationTests
             // can have different dispatch/render timing, so we poll the UI state on macOS/Linux.
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
-                using var elementResponse = await GetAsync(client, "/api/v1/ui/element?id=MainScrollViewer");
+                using var elementResponse = await GetAsync(client, "/api/v1/ui/elements/MainScrollViewer");
                 elementResponse.EnsureSuccessStatusCode();
                 using var elementDoc = JsonDocument.Parse(await ReadAsStreamAsync(elementResponse.Content));
                 var offset = elementDoc.RootElement
@@ -334,7 +334,7 @@ public class UnoAgentIntegrationTests
                 Assert.True(offsetValue > 0, "ScrollViewer verticalOffset did not increase after scrolling.");
             }
 
-            using var targetResponse = await GetAsync(client, "/api/v1/ui/element?id=ScrollTargetText");
+            using var targetResponse = await GetAsync(client, "/api/v1/ui/elements/ScrollTargetText");
             targetResponse.EnsureSuccessStatusCode();
             using var targetDoc = JsonDocument.Parse(await ReadAsStreamAsync(targetResponse.Content));
             var text = targetDoc.RootElement.GetProperty("text").GetString();
@@ -704,7 +704,7 @@ public class UnoAgentIntegrationTests
             // is the real correctness check.
             // Assert.Contains(fillResultDoc.RootElement.GetProperty("simulationMode").GetString(), new[] { "property-mutation", "native" });
 
-            using var afterFill = await GetAsync(client, "/api/v1/ui/element?id=ResponseText");
+            using var afterFill = await GetAsync(client, "/api/v1/ui/elements/ResponseText");
             afterFill.EnsureSuccessStatusCode();
             using var fillDoc = JsonDocument.Parse(await ReadAsStreamAsync(afterFill.Content));
             Assert.Equal("Filled by test", fillDoc.RootElement.GetProperty("text").GetString());
@@ -716,7 +716,7 @@ public class UnoAgentIntegrationTests
             using var clearResultDoc = JsonDocument.Parse(await ReadAsStreamAsync(clearResponse.Content));
             // Assert.Contains(clearResultDoc.RootElement.GetProperty("simulationMode").GetString(), new[] { "property-mutation", "native" });
 
-            using var afterClear = await GetAsync(client, "/api/v1/ui/element?id=ResponseText");
+            using var afterClear = await GetAsync(client, "/api/v1/ui/elements/ResponseText");
             afterClear.EnsureSuccessStatusCode();
             using var clearDoc = JsonDocument.Parse(await ReadAsStreamAsync(afterClear.Content));
             Assert.Equal(string.Empty, clearDoc.RootElement.GetProperty("text").GetString());
@@ -1078,7 +1078,7 @@ public class UnoAgentIntegrationTests
             await PollAgentStatusAsync(client, TimeSpan.FromSeconds(20));
 
             using var tapResponse = await PostAsync(client, 
-                "/api/v1/ui/tap",
+                "/api/v1/ui/actions/tap",
                 new StringContent("{\"id\":\"DisabledActionButton\"}", Encoding.UTF8, "application/json"));
             Assert.Equal(System.Net.HttpStatusCode.NotFound, tapResponse.StatusCode);
 
@@ -1260,7 +1260,7 @@ public class UnoAgentIntegrationTests
 
         while (DateTime.UtcNow < deadline)
         {
-            using var elementResponse = await GetAsync(client, $"/api/v1/ui/element?id={elementId}");
+            using var elementResponse = await GetAsync(client, $"/api/v1/ui/elements/{elementId}");
             if (elementResponse.IsSuccessStatusCode)
             {
                 using var elementDoc = JsonDocument.Parse(await ReadAsStreamAsync(elementResponse.Content));
@@ -1350,7 +1350,7 @@ public class UnoAgentIntegrationTests
 
     private static async Task<string?> GetElementTextAsync(HttpClient client, string elementId)
     {
-        using var response = await GetAsync(client, $"/api/v1/ui/element?id={elementId}");
+        using var response = await GetAsync(client, $"/api/v1/ui/elements/{elementId}");
         response.EnsureSuccessStatusCode();
         using var doc = JsonDocument.Parse(await ReadAsStreamAsync(response.Content));
         return doc.RootElement.GetProperty("text").GetString();
