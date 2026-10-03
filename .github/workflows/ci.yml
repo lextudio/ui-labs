@@ -42,8 +42,8 @@ jobs:
       - name: Restore CLI unit tests
         # bash -e aborts on the first failing command. The Windows default shell is
         # PowerShell, which ignores a native command's exit code and returns the last one, which
-{indent}  # let failing dotnet test runs report success.
-{indent}  shell: bash
+        # let failing dotnet test runs report success.
+        shell: bash
         run: |
           dotnet restore src/Cli/src/LeXtudio.Wpf.Cli.UnitTests/LeXtudio.Wpf.Cli.UnitTests.csproj
           dotnet restore src/Cli/src/LeXtudio.LibreWpf.Cli.UnitTests/LeXtudio.LibreWpf.Cli.UnitTests.csproj
@@ -100,8 +100,8 @@ jobs:
       - name: Run CLI unit tests
         # bash -e aborts on the first failing command. The Windows default shell is
         # PowerShell, which ignores a native command's exit code and returns the last one, which
-{indent}  # let failing dotnet test runs report success.
-{indent}  shell: bash
+        # let failing dotnet test runs report success.
+        shell: bash
         run: |
           dotnet test src/Cli/src/LeXtudio.Wpf.Cli.UnitTests/LeXtudio.Wpf.Cli.UnitTests.csproj --configuration Release --no-restore
           dotnet test src/Cli/src/LeXtudio.LibreWpf.Cli.UnitTests/LeXtudio.LibreWpf.Cli.UnitTests.csproj --configuration Release --no-restore
@@ -168,8 +168,8 @@ jobs:
       - name: Restore MewUI CLI unit tests
         # bash -e aborts on the first failing command. The Windows default shell is
         # PowerShell, which ignores a native command's exit code and returns the last one, which
-{indent}  # let failing dotnet test runs report success.
-{indent}  shell: bash
+        # let failing dotnet test runs report success.
+        shell: bash
         run: |
           dotnet restore src/Cli/src/LeXtudio.MewUI.Cli.UnitTests/LeXtudio.MewUI.Cli.UnitTests.csproj
           dotnet restore src/Cli/src/LeXtudio.Uno.Cli.UnitTests/LeXtudio.Uno.Cli.UnitTests.csproj
