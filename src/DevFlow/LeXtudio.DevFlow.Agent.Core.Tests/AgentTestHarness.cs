@@ -21,7 +21,13 @@ internal sealed class StubAgentService(List<ElementInfo> tree, AgentOptions? opt
     protected override string AgentName => "LeXtudio.DevFlow.Agent";
     protected override string FrameworkName => "stub";
 
-    protected override Task<List<ElementInfo>> BuildTreeAsync() => Task.FromResult(_tree);
+    private ITreeSource? _source;
+
+    /// <summary>Lets a test vary the tree between requests instead of fixing it at construction.</summary>
+    internal void SetTreeSource(ITreeSource source) => _source = source;
+
+    protected override Task<List<ElementInfo>> BuildTreeAsync()
+        => _source is null ? Task.FromResult(_tree) : _source.GetAsync();
 
     protected override Task<ElementInfo?> FindElementAsync(string id)
         => Task.FromResult(Flatten(_tree).FirstOrDefault(e => e.Id == id));
@@ -81,6 +87,12 @@ internal sealed class StubAgentService(List<ElementInfo> tree, AgentOptions? opt
             }
         }
     }
+}
+
+/// <summary>Supplies the visual tree for a stub agent, so a test can change it between requests.</summary>
+internal interface ITreeSource
+{
+    Task<List<ElementInfo>> GetAsync();
 }
 
 internal static class AgentTestHarness

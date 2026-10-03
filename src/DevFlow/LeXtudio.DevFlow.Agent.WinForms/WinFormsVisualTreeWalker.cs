@@ -68,6 +68,10 @@ public sealed class WinFormsVisualTreeWalker
     {
         var id = _stableIds.GetValue(c, x => string.IsNullOrWhiteSpace(x.Name) ? $"_winforms_{Guid.NewGuid():N}" : x.Name);
         _byId[id] = c;
+
+        var bounds = Measure(c);
+        var isWindow = c is Form;
+
         return new ElementInfo
         {
             Id = id,
@@ -79,8 +83,52 @@ public sealed class WinFormsVisualTreeWalker
             Text = c.Text,
             IsVisible = c.Visible,
             IsEnabled = c.Enabled,
+            // Bounds are reported relative to the owning window's client area, and WindowBounds states the
+            // area they are measured against, which is the convention the shared revision hash and the
+            // layout diagnostics both assume.
+            Bounds = bounds,
+            WindowBounds = isWindow ? bounds : null,
+            BoundsQuality = bounds is null ? null : "exact",
             FrameworkProperties = BuildFrameworkProperties(c),
             Children = c.Controls.Cast<Control>().Select(child => BuildElement(child, id)).ToList()
         };
+    }
+
+    /// <summary>
+    /// Measures a control in window coordinates, or null when it has no meaningful size.
+    /// </summary>
+    /// <remarks>
+    /// A control's own <c>Left</c>/<c>Top</c> are relative to its parent, so the chain is summed up to the
+    /// form. Scrollable containers offset their children, which this does not follow; the values are
+    /// therefore exact for the common case and consistent within a window either way, which is what the
+    /// revision hash and overlap checks need.
+    /// </remarks>
+    private static BoundsInfo? Measure(Control c)
+    {
+        try
+        {
+            var width = c.Width;
+            var height = c.Height;
+            if (width <= 0 || height <= 0)
+            {
+                return null;
+            }
+
+            var x = 0;
+            var y = 0;
+            for (var current = c; current is not null; current = current.Parent)
+            {
+                x += current.Left;
+                y += current.Top;
+            }
+
+            return new BoundsInfo { X = x, Y = y, Width = width, Height = height };
+        }
+        catch (InvalidOperationException)
+        {
+            // The handle or the parent chain went away mid-walk; report the control without geometry
+            // rather than failing the whole tree.
+            return null;
+        }
     }
 }

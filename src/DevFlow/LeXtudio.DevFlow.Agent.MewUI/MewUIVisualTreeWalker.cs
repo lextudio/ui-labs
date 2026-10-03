@@ -91,6 +91,8 @@ public sealed class MewUIVisualTreeWalker : IVisualTreeWalker
             IsFocused = GetBoolProperty(element, "IsFocused", false),
             Opacity = GetDoubleProperty(element, "Opacity", 1.0),
             NativeType = element.GetType().FullName,
+            Bounds = ResolveBounds(element),
+            BoundsQuality = "exact",
             FrameworkProperties = GetFrameworkProperties(element)
         };
 
@@ -195,6 +197,74 @@ public sealed class MewUIVisualTreeWalker : IVisualTreeWalker
         var value = GetPropertyValue(element, propertyName);
         return value is bool boolValue ? boolValue : defaultValue;
     }
+
+    /// <summary>
+    /// Reads an element's rectangle, accepting either a rect-shaped property or separate X/Y/Width/Height.
+    /// </summary>
+    /// <remarks>
+    /// MewUI elements are read reflectively throughout this walker, and the geometry is named differently
+    /// across element types, so both shapes are accepted rather than hard-coding one. Null means the element
+    /// does not expose usable geometry, which is what the shared revision hash treats as "skip".
+    /// </remarks>
+    private static BoundsInfo? ResolveBounds(object element)
+    {
+        foreach (var name in new[] { "Bounds", "Frame", "Rect" })
+        {
+            if (GetPropertyValue(element, name) is not { } rect)
+            {
+                continue;
+            }
+
+            var type = rect.GetType();
+            if (TryReadRect(type, rect, out var fromRect))
+            {
+                return fromRect;
+            }
+        }
+
+        if (HasProperty(element, "Width") && HasProperty(element, "Height"))
+        {
+            var width = GetDoubleProperty(element, "Width", 0);
+            var height = GetDoubleProperty(element, "Height", 0);
+            if (width > 0 && height > 0)
+            {
+                return new BoundsInfo
+                {
+                    X = GetDoubleProperty(element, "X", 0),
+                    Y = GetDoubleProperty(element, "Y", 0),
+                    Width = width,
+                    Height = height,
+                };
+            }
+        }
+
+        return null;
+    }
+
+    private static bool TryReadRect(Type type, object rect, out BoundsInfo? bounds)
+    {
+        bounds = null;
+        var width = ReadDouble(rect, type, "Width");
+        var height = ReadDouble(rect, type, "Height");
+        if (width is null || height is null || width <= 0 || height <= 0)
+        {
+            return false;
+        }
+
+        var x = ReadDouble(rect, type, "X") ?? ReadDouble(rect, type, "Left") ?? 0;
+        var y = ReadDouble(rect, type, "Y") ?? ReadDouble(rect, type, "Top") ?? 0;
+        bounds = new BoundsInfo { X = x, Y = y, Width = width.Value, Height = height.Value };
+        return true;
+    }
+
+    private static double? ReadDouble(object instance, Type type, string propertyName)
+    {
+        var property = type.GetProperty(propertyName);
+        return property?.GetValue(instance) is double value ? value : null;
+    }
+
+    private static bool HasProperty(object element, string propertyName)
+        => element.GetType().GetProperty(propertyName) is not null;
 
     private static double GetDoubleProperty(object element, string propertyName, double defaultValue)
     {

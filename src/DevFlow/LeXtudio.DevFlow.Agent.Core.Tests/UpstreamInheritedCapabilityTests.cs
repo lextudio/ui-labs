@@ -101,6 +101,57 @@ public sealed class UpstreamInheritedCapabilityTests
     }
 
     [Fact]
+    public async Task TreeRevision_TracksTheElementsRatherThanBeingConstant()
+    {
+        // VisualTreeRevision skips elements without bounds, so an agent that reports no geometry hashes to
+        // the digest of an empty string - the same value for every tree, which makes it useless for telling
+        // a stale capture from a fresh one. This pins that geometry reaches the hash.
+        var first = BuildElement("root", 10, 20, 300, 400);
+        var second = BuildElement("root", 10, 20, 301, 400);
+
+        var service = new StaticElementSource(first);
+        using var stub = new StubAgentService([], new AgentOptions { Port = AgentTestHarness.GetFreePort() });
+        stub.SetTreeSource(service);
+        stub.Start();
+
+        using var client = CreateClient(stub.Port);
+        await AgentTestHarness.WaitForServerAsync(client, TimeSpan.FromSeconds(20), TestContext.Current.CancellationToken);
+
+        using var response = await client.GetAsync("/api/v1/ui/tree?envelope=true", TestContext.Current.CancellationToken);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        var revision = document.RootElement.GetProperty("revision").GetString();
+
+        Assert.NotEqual(EmptyContentDigest, revision);
+
+        // The digest of an empty payload, which is what a geometry-less agent produces.
+        service.Element = second;
+        using var changed = await client.GetAsync("/api/v1/ui/tree?envelope=true", TestContext.Current.CancellationToken);
+        using var changedDoc = JsonDocument.Parse(await changed.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+
+        Assert.NotEqual(revision, changedDoc.RootElement.GetProperty("revision").GetString());
+    }
+
+    private const string EmptyContentDigest =
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+
+    private static ElementInfo BuildElement(string id, double x, double y, double width, double height)
+        => new()
+        {
+            Id = id,
+            Type = "Panel",
+            Framework = "stub",
+            AutomationId = id,
+            Bounds = new BoundsInfo { X = x, Y = y, Width = width, Height = height },
+        };
+
+    private sealed class StaticElementSource(ElementInfo element) : ITreeSource
+    {
+        public ElementInfo Element { get; set; } = element;
+
+        public Task<List<ElementInfo>> GetAsync() => Task.FromResult(new List<ElementInfo> { Element });
+    }
+
+    [Fact]
     public async Task Tree_HonorsTheDepthParameter()
     {
         using var service = new StubAgentService([AgentTestHarness.BuildCyclicTree()], new AgentOptions

@@ -79,6 +79,8 @@ public sealed class JaliumVisualTreeWalker : IVisualTreeWalker
             IsFocused = isFocused,
             Opacity = opacity,
             NativeType = element.GetType().FullName,
+            Bounds = ResolveBounds(element),
+            BoundsQuality = "exact",
             FrameworkProperties = GetFrameworkProperties(element)
         };
 
@@ -158,6 +160,61 @@ public sealed class JaliumVisualTreeWalker : IVisualTreeWalker
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Measures an element against the window that contains it.
+    /// </summary>
+    /// <remarks>
+    /// A framework element's own origin is relative to its parent, so the transform to the window is what
+    /// places it in the frame the shared revision hash and the layout diagnostics compare against. Null when
+    /// the element is not laid out yet or has been detached.
+    /// </remarks>
+    private static BoundsInfo? ResolveBounds(object element)
+    {
+        try
+        {
+            if (element is not FrameworkElement fe || fe.ActualWidth <= 0 || fe.ActualHeight <= 0)
+            {
+                return null;
+            }
+
+            // Jalium has no IsVisible on FrameworkElement; UIElement carries Visibility instead, and
+            // the walker's own IsVisible already reads it.
+            var window = Application.Current?.MainWindow;
+            if (window is null || (fe is UIElement ui && ui.Visibility != Visibility.Visible))
+            {
+                return null;
+            }
+
+            // TransformToVisual, not TransformToAncestor: Jalium exposes the former, and it is what the
+            // tap and screenshot paths already use to place an element, so the reported bounds and the
+            // point a synthetic click lands on cannot drift apart.
+            var transform = fe.TransformToVisual(window);
+            if (transform is null)
+            {
+                return null;
+            }
+
+            var origin = transform.Transform(new Point(0, 0));
+            if (!double.IsFinite(origin.X) || !double.IsFinite(origin.Y))
+            {
+                return null;
+            }
+
+            return new BoundsInfo
+            {
+                X = origin.X,
+                Y = origin.Y,
+                Width = fe.ActualWidth,
+                Height = fe.ActualHeight,
+            };
+        }
+        catch (InvalidOperationException)
+        {
+            // The element was detached mid-walk; report it without geometry rather than failing the tree.
+            return null;
+        }
     }
 
     private static string GetElementText(object element)
