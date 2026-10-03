@@ -432,11 +432,12 @@ public abstract class DevFlowAgentServiceBase : DevFlowAgentService
     private async Task<HttpResponse> HandleTapAsync(HttpRequest request)
     {
         var payload = request.BodyAs<TapRequest>();
-        if (payload == null || string.IsNullOrWhiteSpace(payload.Id))
-            return HttpResponse.Error("Request must include a JSON body with an 'id' field", 400);
+        var target = payload?.Target;
+        if (string.IsNullOrWhiteSpace(target))
+            return HttpResponse.Error("Request must include a JSON body with an 'id' or 'elementId' field", 400);
 
-        var result = await TryTapResponseAsync(payload.Id).ConfigureAwait(false);
-        return result != null ? DevFlowJson.Json(result) : HttpResponse.Error($"Tap target '{payload.Id}' could not be activated", 404);
+        var result = await TryTapResponseAsync(target).ConfigureAwait(false);
+        return result != null ? DevFlowJson.Json(result) : HttpResponse.Error($"Tap target '{target}' could not be activated", 404);
     }
 
     /// <summary>
@@ -461,11 +462,11 @@ public abstract class DevFlowAgentServiceBase : DevFlowAgentService
     private async Task<HttpResponse> HandleScrollAsync(HttpRequest request)
     {
         var payload = request.BodyAs<ScrollRequest>();
-        if (payload == null || string.IsNullOrWhiteSpace(payload.Id))
+        if (string.IsNullOrWhiteSpace(payload?.Target))
             return HttpResponse.Error("Request must include a JSON body with an 'id' field", 400);
 
-        var result = await TryScrollResponseAsync(payload.Id, payload.DeltaX, payload.DeltaY).ConfigureAwait(false);
-        return result != null ? DevFlowJson.Json(result) : HttpResponse.Error($"Scroll target '{payload.Id}' could not be scrolled", 404);
+        var result = await TryScrollResponseAsync(payload.Target!, payload.DeltaX, payload.DeltaY).ConfigureAwait(false);
+        return result != null ? DevFlowJson.Json(result) : HttpResponse.Error($"Scroll target '{payload.Target}' could not be scrolled", 404);
     }
 
     private async Task<HttpResponse> HandleDragAsync(HttpRequest request)
@@ -766,13 +767,28 @@ public abstract class DevFlowAgentServiceBase : DevFlowAgentService
     private sealed class TapRequest
     {
         public string? Id { get; set; }
+
+        /// <summary>
+        /// Alias for <see cref="Id"/>. Upstream's own AgentClient sends <c>elementId</c> for every action,
+        /// while this agent originally only accepted <c>id</c>, so a client built on that library - the MCP
+        /// server, for one - silently failed to tap anything. Accepting both keeps older callers working.
+        /// </summary>
+        public string? ElementId { get; set; }
+
+        public string? Target => string.IsNullOrWhiteSpace(Id) ? ElementId : Id;
     }
 
     private sealed class ScrollRequest
     {
         public string? Id { get; set; }
+
+        /// <summary>Alias for <see cref="Id"/>; see <see cref="TapRequest.ElementId"/>.</summary>
+        public string? ElementId { get; set; }
+
         public double DeltaX { get; set; }
         public double DeltaY { get; set; }
+
+        public string? Target => string.IsNullOrWhiteSpace(Id) ? ElementId : Id;
     }
 
     private sealed class FillRequest

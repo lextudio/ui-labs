@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>LeXtudio.DevFlow.Mcp</AssemblyName>
+    <RootNamespace>LeXtudio.DevFlow.Mcp</RootNamespace>
+    <IsPackable>true</IsPackable>
+    <PackageId>LeXtudio.DevFlow.Mcp</PackageId>
+    <Description>MCP server that lets AI agents inspect and drive LeXtudio DevFlow desktop agents over the DevFlow HTTP protocol.</Description>
+    <PackageTags>devflow;mcp;automation;ai;desktop</PackageTags>
+    <PackageIcon>company_logo_512.png</PackageIcon>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\images\company_logo_512.png" Pack="true" PackagePath="\" Visible="false" />
+    <None Include="README.md" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ModelContextProtocol" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LeXtudio.DevFlow.Broker\LeXtudio.DevFlow.Broker.csproj" />
+    <ProjectReference Include="..\LeXtudio.DevFlow.Driver\LeXtudio.DevFlow.Driver.csproj" />
+  </ItemGroup>
+
+</Project>

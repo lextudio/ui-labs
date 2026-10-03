@@ -81,6 +81,23 @@ public class LibreWinFormsAgentIntegrationTests
     }
 
     [Fact]
+    public async Task TapButton_AcceptsElementIdAsWellAsId()
+    {
+        // Upstream's own AgentClient sends "elementId" for every action, while this agent originally only
+        // accepted "id". Anything built on that library - the MCP server, for one - therefore failed to tap
+        // at all. Both spellings must drive the same handler.
+        if (SkipWhenUnsupported()) return;
+        await using var host = await StartHostWithElementAsync("ResponseLabel");
+        using var client = host.CreateClient();
+
+        var result = await DevFlowAssert.PostJsonAsync(
+            client, "/api/v1/ui/actions/tap", """{ "elementId": "ActionButton" }""", TestContext.Current.CancellationToken);
+
+        Assert.True(result.GetProperty("success").GetBoolean());
+        Assert.Equal("Button clicked", await DevFlowAssert.GetTextAsync(client, "ResponseLabel", TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public async Task FillAndClear_UpdateTheTextBox()
     {
         if (SkipWhenUnsupported()) return;

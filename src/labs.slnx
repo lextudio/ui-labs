@@ -15,6 +15,7 @@
   </Folder>
   <Folder Name="/DevFlow/">
     <Project Path="DevFlow/LeXtudio.DevFlow.Driver/LeXtudio.DevFlow.Driver.csproj" />
+    <Project Path="DevFlow/LeXtudio.DevFlow.Mcp/LeXtudio.DevFlow.Mcp.csproj" />
     <Project Path="DevFlow/LeXtudio.DevFlow.Agent.Core/LeXtudio.DevFlow.Agent.Core.csproj" />
     <Project Path="DevFlow/LeXtudio.DevFlow.Agent.Core.Tests/LeXtudio.DevFlow.Agent.Core.Tests.csproj" />
     <Project Path="DevFlow/LeXtudio.DevFlow.Agent.Wpf/LeXtudio.DevFlow.Agent.Wpf.csproj" />
