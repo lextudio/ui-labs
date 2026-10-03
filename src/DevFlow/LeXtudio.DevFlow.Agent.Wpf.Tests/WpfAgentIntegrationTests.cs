@@ -28,7 +28,7 @@ public class WpfAgentIntegrationTests
         using var treeResponse = await client.GetAsync("/api/v1/ui/tree");
         treeResponse.EnsureSuccessStatusCode();
         using var treeDoc = JsonDocument.Parse(await treeResponse.Content.ReadAsStreamAsync());
-        Assert.True(treeDoc.RootElement.GetProperty("elements").GetArrayLength() > 0);
+        Assert.True(treeDoc.RootElement.GetArrayLength() > 0);
 
         using var screenshotResponse = await client.GetAsync("/api/v1/ui/screenshot");
         screenshotResponse.EnsureSuccessStatusCode();

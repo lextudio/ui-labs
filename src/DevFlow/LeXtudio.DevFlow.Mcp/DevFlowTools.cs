@@ -42,9 +42,9 @@ public static class DevFlowTools
     {
         using var agent = await Session.GetAgentClientAsync(agentPort);
 
-        // GetTreeSnapshotAsync rather than GetTreeAsync: the desktop agents answer with the
-        // { "elements": [...] } envelope, while GetTreeAsync deserializes a bare JSON array and would
-        // silently report an empty tree against them.
+        // GetTreeSnapshotAsync tolerates both response shapes - the bare array the agents return by
+        // default and the { "elements": [...] } envelope - so this keeps working whichever the agent
+        // answers with, and it also surfaces the tree revision.
         var snapshot = await agent.GetTreeSnapshotAsync(depth, window);
 
         return snapshot is null || snapshot.Elements.Count == 0

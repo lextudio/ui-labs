@@ -36,9 +36,9 @@ public class LibreWinFormsAgentIntegrationTests
         await using var host = await StartHostWithElementAsync("MainForm");
         using var client = host.CreateClient();
 
-        var tree = await DevFlowAssert.GetJsonAsync(client, "/api/v1/ui/tree", TestContext.Current.CancellationToken);
+        var tree = await DevFlowAssert.GetJsonArrayAsync(client, "/api/v1/ui/tree", TestContext.Current.CancellationToken);
 
-        var ids = tree.GetProperty("elements").EnumerateArray()
+        var ids = tree.EnumerateArray()
             .SelectMany(Flatten)
             .Select(element => element.GetProperty("id").GetString())
             .ToHashSet(StringComparer.Ordinal);

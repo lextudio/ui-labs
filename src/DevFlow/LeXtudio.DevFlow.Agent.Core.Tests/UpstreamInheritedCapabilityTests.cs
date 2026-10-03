@@ -75,6 +75,54 @@ public sealed class UpstreamInheritedCapabilityTests
     }
 
     [Fact]
+    public async Task Tree_AnswersWithABareArraySoTheSharedClientCanReadIt()
+    {
+        // The shared AgentClient deserializes a bare array here and reads { "elements": [...] } only when
+        // envelope=true is requested. Answering with an object by default left that client reporting an
+        // empty tree against these agents, with no error to explain it.
+        using var service = new StubAgentService([AgentTestHarness.BuildCyclicTree()], new AgentOptions
+        {
+            Port = AgentTestHarness.GetFreePort(),
+        });
+        service.Start();
+
+        using var client = CreateClient(service.Port);
+        await AgentTestHarness.WaitForServerAsync(client, TimeSpan.FromSeconds(20), TestContext.Current.CancellationToken);
+
+        using var bare = await client.GetAsync("/api/v1/ui/tree", TestContext.Current.CancellationToken);
+        using var bareDoc = JsonDocument.Parse(await bare.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(JsonValueKind.Array, bareDoc.RootElement.ValueKind);
+
+        using var enveloped = await client.GetAsync("/api/v1/ui/tree?envelope=true", TestContext.Current.CancellationToken);
+        using var envelopeDoc = JsonDocument.Parse(await enveloped.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(JsonValueKind.Object, envelopeDoc.RootElement.ValueKind);
+        Assert.True(envelopeDoc.RootElement.TryGetProperty("elements", out _));
+        Assert.False(string.IsNullOrWhiteSpace(envelopeDoc.RootElement.GetProperty("revision").GetString()));
+    }
+
+    [Fact]
+    public async Task Tree_HonorsTheDepthParameter()
+    {
+        using var service = new StubAgentService([AgentTestHarness.BuildCyclicTree()], new AgentOptions
+        {
+            Port = AgentTestHarness.GetFreePort(),
+        });
+        service.Start();
+
+        using var client = CreateClient(service.Port);
+        await AgentTestHarness.WaitForServerAsync(client, TimeSpan.FromSeconds(20), TestContext.Current.CancellationToken);
+
+        using var response = await client.GetAsync("/api/v1/ui/tree?depth=1", TestContext.Current.CancellationToken);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+
+        foreach (var root in document.RootElement.EnumerateArray())
+        {
+            // The roots are kept; their subtree is what the depth limit removes.
+            Assert.Empty(root.GetProperty("children").EnumerateArray());
+        }
+    }
+
+    [Fact]
     public async Task UnsupportedCapability_BlamesThisBackendRatherThanTheHostPlatform()
     {
         using var service = new StubAgentService([], new AgentOptions { Port = AgentTestHarness.GetFreePort() });

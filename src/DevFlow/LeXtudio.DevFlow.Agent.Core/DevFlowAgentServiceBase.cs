@@ -360,7 +360,99 @@ public abstract class DevFlowAgentServiceBase : DevFlowAgentService
     private async Task<HttpResponse> HandleTreeAsync(HttpRequest request)
     {
         var tree = await BuildTreeAsync().ConfigureAwait(false);
-        return DevFlowJson.Json(new { elements = tree });
+
+        // The upstream contract answers with a bare JSON array by default and only wraps it in an object
+        // when asked, so that a client built on the shared AgentClient can deserialize the tree instead of
+        // silently seeing nothing. The revision hash comes from upstream's own VisualTreeRevision so both
+        // sides agree on when a captured tree went stale.
+        if (request.QueryParams.TryGetValue("depth", out var depthValue)
+            && int.TryParse(depthValue, out var maxDepth)
+            && maxDepth > 0)
+        {
+            tree = TrimTree(tree, maxDepth);
+        }
+
+        var envelope = request.QueryParams.TryGetValue("envelope", out var envelopeValue)
+            && bool.TryParse(envelopeValue, out var parsedEnvelope)
+            && parsedEnvelope;
+
+        return envelope
+            ? DevFlowJson.Json(new Dictionary<string, object?>
+            {
+                ["revision"] = VisualTreeRevision.ComputeTree(tree),
+                ["elements"] = tree,
+            })
+            : DevFlowJson.Json(tree);
+    }
+
+    /// <summary>
+    /// Drops descendants deeper than <paramref name="maxDepth"/>, counting the roots as depth 1.
+    /// </summary>
+    /// <remarks>
+    /// Applied here rather than in each agent so that <c>depth</c> behaves the same across the desktop
+    /// frameworks without every one of them having to grow a depth-aware tree walker.
+    /// </remarks>
+    private static List<ElementInfo> TrimTree(List<ElementInfo> tree, int maxDepth)
+    {
+        var trimmed = new List<ElementInfo>(tree.Count);
+        foreach (var element in tree)
+        {
+            trimmed.Add(TrimElement(element, maxDepth, depth: 1));
+        }
+
+        return trimmed;
+    }
+
+    private static ElementInfo TrimElement(ElementInfo element, int maxDepth, int depth)
+    {
+        var hasChildren = element.Children is { Count: > 0 };
+
+        if (!hasChildren)
+        {
+            return element;
+        }
+
+        // At the depth limit the element itself is still returned, but its subtree is dropped: a caller that
+        // asked for depth 1 wants the roots and no children, not the whole tree unchanged.
+        var children = depth >= maxDepth
+            ? new List<ElementInfo>()
+            : TrimChildren(element.Children!, maxDepth, depth + 1);
+
+        return Copy(element, children);
+    }
+
+    private static List<ElementInfo> TrimChildren(List<ElementInfo> children, int maxDepth, int depth)
+    {
+        var trimmed = new List<ElementInfo>(children.Count);
+        foreach (var child in children)
+        {
+            trimmed.Add(TrimElement(child, maxDepth, depth));
+        }
+
+        return trimmed;
+    }
+
+    private static ElementInfo Copy(ElementInfo element, List<ElementInfo> children)
+    {
+        return new ElementInfo
+        {
+            Id = element.Id,
+            ParentId = element.ParentId,
+            Type = element.Type,
+            FullType = element.FullType,
+            Framework = element.Framework,
+            AutomationId = element.AutomationId,
+            Text = element.Text,
+            Role = element.Role,
+            IsVisible = element.IsVisible,
+            IsEnabled = element.IsEnabled,
+            IsFocused = element.IsFocused,
+            Traits = element.Traits,
+            Gestures = element.Gestures,
+            Bounds = element.Bounds,
+            WindowBounds = element.WindowBounds,
+            Children = children,
+        };
     }
 
     private async Task<HttpResponse> HandleElementAsync(HttpRequest request)

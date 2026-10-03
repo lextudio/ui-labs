@@ -421,6 +421,23 @@ internal sealed class LibreWinFormsHost : IAsyncDisposable
 /// </summary>
 internal static class DevFlowAssert
 {
+    /// <summary>
+    /// Reads an endpoint whose payload is a bare JSON array, such as <c>/api/v1/ui/tree</c>.
+    /// </summary>
+    /// <remarks>
+    /// The tree endpoint answers with a bare array by default and only wraps it in an object when
+    /// <c>envelope=true</c> is passed, which is the shape the shared protocol client expects.
+    /// </remarks>
+    public static async Task<JsonElement> GetJsonArrayAsync(HttpClient client, string path, CancellationToken cancellationToken)
+    {
+        using var response = await client.GetAsync(path, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        using var document = await JsonDocument.ParseAsync(
+            await response.Content.ReadAsStreamAsync(cancellationToken),
+            cancellationToken: cancellationToken);
+        return document.RootElement.Clone();
+    }
+
     public static async Task<JsonElement> GetJsonAsync(HttpClient client, string path, CancellationToken cancellationToken)
     {
         using var response = await client.GetAsync(path, cancellationToken);

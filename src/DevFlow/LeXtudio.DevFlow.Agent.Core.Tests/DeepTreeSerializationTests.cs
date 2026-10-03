@@ -61,7 +61,7 @@ public class DeepTreeSerializationTests
 
         var json = await AgentTestHarness.GetJsonAsync(client, "/api/v1/ui/tree", TestContext.Current.CancellationToken);
 
-        Assert.Equal(RealisticTreeDepth, CountNestingLevels(json.GetProperty("elements")[0]));
+        Assert.Equal(RealisticTreeDepth, CountNestingLevels(json[0]));
     }
 
     [Fact]

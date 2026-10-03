@@ -36,7 +36,7 @@ public class WinFormsAgentIntegrationTests
         using var tree = await GetAsync(client, "/api/v1/ui/tree");
         tree.EnsureSuccessStatusCode();
         using var treeDoc = JsonDocument.Parse(await ReadAsStreamAsync(tree.Content));
-        Assert.True(treeDoc.RootElement.GetProperty("elements").GetArrayLength() > 0);
+        Assert.True(treeDoc.RootElement.GetArrayLength() > 0);
     }
 
     [Fact]

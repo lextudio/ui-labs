@@ -118,6 +118,10 @@
     <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Abstractions\Properties/InternalsVisibleTo.cs">
       <Link>Upstream\Properties/InternalsVisibleTo.cs</Link>
     </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Core\VisualTreeRevision.cs">
+      <!-- Shared with upstream so the tree envelope revision hash is computed the same way. -->
+      <Link>Upstream\VisualTreeRevision.cs</Link>
+    </Compile>
     <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Logging\ConsoleLogCapture.cs">
       <Link>Upstream\ConsoleLogCapture.cs</Link>
     </Compile>
