@@ -16,19 +16,27 @@ public sealed class WinFormsAgentService(AgentOptions? options = null) : DevFlow
     protected override string AgentName => "LeXtudio.DevFlow.Agent";
     protected override string FrameworkName => "winforms";
 
-    protected override object GetCapabilities() => new
+    protected override object GetCapabilities()
     {
-        screenshots = true,
-        elementScreenshots = true,
-        selectorScreenshots = true,
-        tap = true,
-        scroll = true,
-        structuredErrors = true,
-        appTheme = false,
-        webview = true,
-        webviewCdp = true,
-        multiWindow = true
-    };
+        // Microsoft.Web.WebView2 has no macOS or Linux runtime. This source is also compiled into
+        // LeXtudio.DevFlow.Agent.LibreWinForms, which runs on those platforms, so report the WebView
+        // surface only where it can actually exist instead of claiming support and returning no contexts.
+        var webViewAvailable = OperatingSystem.IsWindows();
+
+        return new
+        {
+            screenshots = true,
+            elementScreenshots = true,
+            selectorScreenshots = true,
+            tap = true,
+            scroll = true,
+            structuredErrors = true,
+            appTheme = false,
+            webview = webViewAvailable,
+            webviewCdp = webViewAvailable,
+            multiWindow = true
+        };
+    }
 
     protected override Task<string?> GetApplicationNameAsync() => Task.FromResult(Application.ProductName);
     protected override Task<List<ElementInfo>> BuildTreeAsync() => Task.FromResult(_walker.WalkTree());

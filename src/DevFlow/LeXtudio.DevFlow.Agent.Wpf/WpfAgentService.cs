@@ -29,20 +29,28 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
     protected override string AgentId => "LeXtudio.DevFlow.Agent";
     protected override string AgentName => "LeXtudio.DevFlow.Agent";
     protected override string FrameworkName => "wpf";
-    protected override object GetCapabilities() => new
+    protected override object GetCapabilities()
     {
-        screenshots = true,
-        elementScreenshots = true,
-        selectorScreenshots = true,
-        tap = true,
-        scroll = true,
-        drag = true,
-        structuredErrors = true,
-        appTheme = true,
-        webview = true,
-        webviewCdp = true,
-        multiWindow = true
-    };
+        // Microsoft.Web.WebView2 has no macOS or Linux runtime. This agent also backs LibreWPF, which runs
+        // on those platforms, so report the WebView surface only where it can actually exist instead of
+        // claiming support and then returning no contexts.
+        var webViewAvailable = OperatingSystem.IsWindows();
+
+        return new
+        {
+            screenshots = true,
+            elementScreenshots = true,
+            selectorScreenshots = true,
+            tap = true,
+            scroll = true,
+            drag = true,
+            structuredErrors = true,
+            appTheme = true,
+            webview = webViewAvailable,
+            webviewCdp = webViewAvailable,
+            multiWindow = true
+        };
+    }
 
     protected override Task<object?> GetThemeAsync()
         => Application.Current?.Dispatcher.InvokeAsync<object?>(BuildThemePayload).Task ?? Task.FromResult<object?>(null);

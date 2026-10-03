@@ -13,6 +13,14 @@
     <ProjectReference Include="..\LeXtudio.DevFlow.Agent.LibreWpf\LeXtudio.DevFlow.Agent.LibreWpf.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.Web.WebView2" />
+    <!-- WebView2 has no macOS/Linux runtime. The package is referenced so the Windows-only code in
+         MainWindow compiles, but the control is only created when OperatingSystem.IsWindows(). -->
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3405.78" />
+  </ItemGroup>
+
+  <!-- LibreWPF.Sdk turns off central package management, so the repository-wide versionless
+       GitVersion.MsBuild reference from Directory.Build.props has to be given a version here. -->
+  <ItemGroup>
+    <PackageReference Update="GitVersion.MsBuild" Version="6.7.0" />
   </ItemGroup>
 </Project>
