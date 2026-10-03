@@ -48,6 +48,19 @@ public abstract class DevFlowAgentServiceBase : DevFlowAgentService
     protected abstract string AgentId { get; }
     protected abstract string AgentName { get; }
     protected abstract override string FrameworkName { get; }
+
+    /// <summary>
+    /// Reports the UI framework this agent actually drives.
+    /// </summary>
+    /// <remarks>
+    /// Upstream defaults this to the host operating system (<c>appkit</c> on macOS, <c>winui</c> on
+    /// Windows), which mislabelled the desktop agents: the LibreWinForms agent on macOS described itself
+    /// as the <c>appkit</c> backend, and a WinForms agent on Windows would claim <c>winui</c>. The value
+    /// also surfaces in the reason text clients receive for an unavailable capability
+    /// ("Not supported by the '...' DevFlow backend"), so the mismatch was visible to anyone reading a
+    /// <c>not_supported</c> response. <see cref="FrameworkName"/> is already correct per agent, so reuse it.
+    /// </remarks>
+    protected override string UiFrameworkName => FrameworkName;
     protected abstract Task<List<ElementInfo>> BuildTreeAsync();
     protected abstract Task<ElementInfo?> FindElementAsync(string id);
     protected abstract Task<List<ElementInfo>> QueryElementsAsync(string? type = null, string? automationId = null, string? text = null, int maxResults = 50, int maxDepth = 24);
