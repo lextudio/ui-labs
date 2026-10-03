@@ -32,7 +32,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\LeXtudio.DevFlow.Agent.Uno\LeXtudio.DevFlow.Agent.Uno.csproj" />
-    <ProjectReference Include="..\..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Logging\Microsoft.Maui.DevFlow.Logging.csproj" />
   </ItemGroup>
 
   <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-windows10.0.19041.0'">
