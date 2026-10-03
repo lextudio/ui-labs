@@ -21,6 +21,16 @@
     <ProjectReference Include="..\LeXtudio.DevFlow.Inspector\LeXtudio.DevFlow.Inspector.csproj" />
   </ItemGroup>
 
+  <!--
+    Only broker-owned sources are compiled here. Everything the broker shares with the browser inspector
+    (the Flows recording types, LayoutDiagnosticsPolicy and the layout models, plus InspectorServer and its
+    inspector helpers) is compiled once, by LeXtudio.DevFlow.Inspector, and reached through the project
+    reference above.
+
+    Compiling those files into both packages would define the same types in two assemblies and make every
+    consumer that references both fail with CS0433. Several of them are also internal to the upstream CLI
+    assembly, which LeXtudio.DevFlow.Inspector reopens to this assembly via InternalsVisibleTo.
+  -->
   <ItemGroup>
     <Compile Include="..\..\..\external\maui-labs\src\Cli\Microsoft.Maui.Cli\DevFlow\Broker\BrokerServer.cs">
       <Link>Upstream\BrokerServer.cs</Link>
@@ -34,8 +44,14 @@
     <Compile Include="..\..\..\external\maui-labs\src\Cli\Microsoft.Maui.Cli\DevFlow\Broker\BrokerPaths.cs">
       <Link>Upstream\BrokerPaths.cs</Link>
     </Compile>
-    <Compile Include="..\..\..\external\maui-labs\src\Cli\Microsoft.Maui.Cli\DevFlow\Inspector\LocalOriginValidator.cs">
-      <Link>Upstream\LocalOriginValidator.cs</Link>
+    <Compile Include="..\..\..\external\maui-labs\src\Cli\Microsoft.Maui.Cli\DevFlow\Broker\AgentLifetimeGate.cs">
+      <Link>Upstream\AgentLifetimeGate.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\Cli\Microsoft.Maui.Cli\DevFlow\Broker\MutationLeaseRegistry.cs">
+      <Link>Upstream\MutationLeaseRegistry.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\Cli\Microsoft.Maui.Cli\DevFlow\Broker\BrokerFlowCoordinator.cs">
+      <Link>Upstream\BrokerFlowCoordinator.cs</Link>
     </Compile>
   </ItemGroup>
 </Project>
