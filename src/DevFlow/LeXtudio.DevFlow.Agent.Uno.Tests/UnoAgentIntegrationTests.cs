@@ -525,13 +525,14 @@ public class UnoAgentIntegrationTests
                 attemptCount++;
                 try
                 {
-                    using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/webview/cdp")
-                    {
-                        Content = new StringContent(payload, Encoding.UTF8, "application/json")
-                    };
                     using var perAttemptCts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
                     perAttemptCts.CancelAfter(TimeSpan.FromSeconds(10));
-                    response = await client.SendAsync(request, perAttemptCts.Token);
+                    response = await LeXtudio.DevFlow.Driver.DevFlowMutation.SendAsync(
+                        client,
+                        HttpMethod.Post,
+                        "/api/v1/webview/cdp",
+                        new StringContent(payload, Encoding.UTF8, "application/json"),
+                        perAttemptCts.Token);
                     if (response.IsSuccessStatusCode)
                     {
                         break;
