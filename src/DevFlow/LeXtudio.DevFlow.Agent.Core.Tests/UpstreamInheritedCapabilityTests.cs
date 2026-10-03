@@ -174,6 +174,24 @@ public sealed class UpstreamInheritedCapabilityTests
     }
 
     [Fact]
+    public async Task ElementProperty_AnswersFromTheSnapshot()
+    {
+        // The upstream base answers not_supported here until a platform overrides it, which left every
+        // property read unavailable and took devflow_assert with it. One implementation over the tree
+        // snapshot covers every desktop framework.
+        using var service = new StubAgentService([], new AgentOptions { Port = AgentTestHarness.GetFreePort() });
+        service.Start();
+
+        using var client = CreateClient(service.Port);
+        await AgentTestHarness.WaitForServerAsync(client, TimeSpan.FromSeconds(20), TestContext.Current.CancellationToken);
+
+        // An unknown property is a 404, which the shared client turns into null so a caller can tell
+        // "no such property" from "the property is null".
+        using var missing = await client.GetAsync("/api/v1/ui/elements/known/properties/NoSuchProperty", TestContext.Current.CancellationToken);
+        Assert.Equal(System.Net.HttpStatusCode.NotFound, missing.StatusCode);
+    }
+
+    [Fact]
     public async Task UnsupportedCapability_BlamesThisBackendRatherThanTheHostPlatform()
     {
         using var service = new StubAgentService([], new AgentOptions { Port = AgentTestHarness.GetFreePort() });

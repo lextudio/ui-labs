@@ -455,6 +455,146 @@ public abstract class DevFlowAgentServiceBase : DevFlowAgentService
         };
     }
 
+    /// <summary>
+    /// Serves <c>GET /api/v1/ui/elements/{id}/properties/{name}</c> from the tree snapshot.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The upstream base registers this route but answers not_supported until a platform overrides it,
+    /// because the live UI object is framework specific. Reading the <see cref="ElementInfo"/> the walk just
+    /// produced answers the properties an agent actually asserts on - text, visibility, enabled state,
+    /// opacity, automation id and the framework-specific extras - with one implementation for every desktop
+    /// framework rather than seven.
+    /// </para>
+    /// <para>
+    /// Values are formatted to strings because that is what the shared client compares against, and it keeps
+    /// a missing property distinguishable from a null one: unknown names return 404, which the client
+    /// surfaces as null.
+    /// </para>
+    /// </remarks>
+    protected override async Task<HttpResponse> HandleProperty(HttpRequest request)
+    {
+        if (!request.RouteParams.TryGetValue("id", out var id) || string.IsNullOrWhiteSpace(id))
+            return HttpResponse.Error("Element ID required");
+
+        if (!request.RouteParams.TryGetValue("name", out var propertyName) || string.IsNullOrWhiteSpace(propertyName))
+            return HttpResponse.Error("Property name required");
+
+        var element = await FindElementAsync(id).ConfigureAwait(false);
+        if (element is null)
+            return HttpResponse.NotFound($"Element '{id}' not found");
+
+        if (!TryFormatProperty(element, propertyName, out var value))
+            return HttpResponse.NotFound($"Property '{propertyName}' not found on element '{id}'");
+
+        return DevFlowJson.Json(new Dictionary<string, object?>
+        {
+            ["id"] = id,
+            ["property"] = propertyName,
+            ["value"] = value,
+        });
+    }
+
+    /// <summary>
+    /// Serves <c>GET /api/v1/ui/elements/{id}/properties</c> with the names this agent can answer for.
+    /// </summary>
+    protected override async Task<HttpResponse> HandlePropertyDescriptors(HttpRequest request)
+    {
+        if (!request.RouteParams.TryGetValue("id", out var id) || string.IsNullOrWhiteSpace(id))
+            return HttpResponse.Error("Element ID required");
+
+        var element = await FindElementAsync(id).ConfigureAwait(false);
+        if (element is null)
+            return HttpResponse.NotFound($"Element '{id}' not found");
+
+        return DevFlowJson.Json(new Dictionary<string, object?>
+        {
+            ["id"] = id,
+            ["properties"] = ReadableProperties(element),
+        });
+    }
+
+    /// <summary>
+    /// The property names <see cref="HandleProperty"/> can resolve for an element, framework extras included.
+    /// </summary>
+    private static IReadOnlyList<string> ReadableProperties(ElementInfo element)
+    {
+        var names = new List<string>
+        {
+            nameof(ElementInfo.Text),
+            nameof(ElementInfo.Value),
+            nameof(ElementInfo.AutomationId),
+            nameof(ElementInfo.Type),
+            nameof(ElementInfo.FullType),
+            nameof(ElementInfo.IsVisible),
+            nameof(ElementInfo.IsEnabled),
+            nameof(ElementInfo.IsFocused),
+            nameof(ElementInfo.Opacity),
+        };
+
+        if (element.FrameworkProperties is { Count: > 0 })
+        {
+            names.AddRange(element.FrameworkProperties.Keys);
+        }
+
+        return names;
+    }
+
+    /// <summary>
+    /// Resolves a property by name, case-insensitively, and formats it the way the shared client expects.
+    /// </summary>
+    private static bool TryFormatProperty(ElementInfo element, string propertyName, out string? value)
+    {
+        value = null;
+
+        // Framework properties are matched first: they are the framework-specific names a caller would ask
+        // for, and a collision with a protocol name would otherwise depend on dictionary ordering.
+        if (element.FrameworkProperties is not null)
+        {
+            foreach (var pair in element.FrameworkProperties)
+            {
+                if (string.Equals(pair.Key, propertyName, StringComparison.OrdinalIgnoreCase))
+                {
+                    value = pair.Value;
+                    return true;
+                }
+            }
+        }
+
+        switch (propertyName.ToLowerInvariant())
+        {
+            case "text":
+                value = element.Text;
+                return true;
+            case "value":
+                value = element.Value;
+                return true;
+            case "automationid":
+                value = element.AutomationId;
+                return true;
+            case "type":
+                value = element.Type;
+                return true;
+            case "fulltype":
+                value = element.FullType;
+                return true;
+            case "isvisible":
+                value = element.IsVisible.ToString();
+                return true;
+            case "isenabled":
+                value = element.IsEnabled.ToString();
+                return true;
+            case "isfocused":
+                value = element.IsFocused.ToString();
+                return true;
+            case "opacity":
+                value = element.Opacity.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
+                return true;
+            default:
+                return false;
+        }
+    }
+
     private async Task<HttpResponse> HandleElementAsync(HttpRequest request)
     {
         if (!request.RouteParams.TryGetValue("id", out var rawId) || string.IsNullOrWhiteSpace(rawId))

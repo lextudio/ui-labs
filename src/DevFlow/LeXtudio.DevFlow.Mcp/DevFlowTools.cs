@@ -134,12 +134,52 @@ public static class DevFlowTools
             : $"PNG ({png.Length} bytes), base64:\n{Convert.ToBase64String(png)}";
     }
 
-    // devflow_assert is intentionally absent for now. It would read element properties through
-    // /api/v1/ui/elements/{id}/properties/{name}, which the desktop agents do not implement yet: the
-    // upstream base registers the route but its handler answers not_supported because nothing overrides
-    // it. Advertising a tool that always fails would be worse than leaving it out - the same reasoning
-    // that keeps storage, sensor and job tools out of this surface. Adding it means implementing property
-    // reads per UI framework first.
+    [McpServerTool(Name = "devflow_assert"), Description(
+        "Assert that an element property equals an expected value, returning PASS or FAIL with the actual " +
+        "value. Prefer this over reading the tree and judging by eye: the comparison happens in the agent " +
+        "and reports both sides, so a failure says what it really was. Get devflow_element to discover the " +
+        "property names an agent supports.")]
+    public static async Task<string> Assert(
+        [Description("Property to check, for example Text, IsVisible or IsEnabled.")]
+        string propertyName,
+        [Description("Value the property is expected to have.")] string expectedValue,
+        [Description("Element ID from the visual tree. Provide either this or automationId.")]
+        string? elementId = null,
+        [Description("AutomationId of the element to resolve.")] string? automationId = null,
+        [Description("Agent HTTP port. Optional when only one agent is registered for this project.")]
+        int? agentPort = null)
+    {
+        using var agent = await Session.GetAgentClientAsync(agentPort);
+
+        var resolvedId = elementId;
+        if (resolvedId is null && automationId is not null)
+        {
+            var matches = await agent.QueryAsync(automationId: automationId);
+            if (matches.Count == 0)
+            {
+                return $"FAIL: no element has AutomationId '{automationId}'.";
+            }
+
+            resolvedId = matches[0].Id;
+        }
+
+        if (resolvedId is null)
+        {
+            return "FAIL: provide either elementId or automationId.";
+        }
+
+        var actual = await agent.GetPropertyAsync(resolvedId, propertyName);
+        if (actual is null)
+        {
+            return $"FAIL: '{resolvedId}' has no property '{propertyName}'. Read the element for the names it supports.";
+        }
+
+        var passed = string.Equals(actual, expectedValue, StringComparison.Ordinal);
+
+        return passed
+            ? $"PASS: {resolvedId}.{propertyName} == \"{expectedValue}\""
+            : $"FAIL: {resolvedId}.{propertyName} is \"{actual}\", expected \"{expectedValue}\"";
+    }
 
     private static class ToolJson
     {
