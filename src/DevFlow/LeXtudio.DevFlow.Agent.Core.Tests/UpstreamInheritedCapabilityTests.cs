@@ -80,7 +80,7 @@ public sealed class UpstreamInheritedCapabilityTests
         // The shared AgentClient deserializes a bare array here and reads { "elements": [...] } only when
         // envelope=true is requested. Answering with an object by default left that client reporting an
         // empty tree against these agents, with no error to explain it.
-        using var service = new StubAgentService([AgentTestHarness.BuildCyclicTree()], new AgentOptions
+        using var service = new StubAgentService([ShallowTree()], new AgentOptions
         {
             Port = AgentTestHarness.GetFreePort(),
         });
@@ -134,6 +134,16 @@ public sealed class UpstreamInheritedCapabilityTests
     private const string EmptyContentDigest =
         "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
+    /// <summary>A two-level tree: a root with one child, which is all the shape and depth checks need.</summary>
+    private static ElementInfo ShallowTree()
+    {
+        var root = BuildElement("root", 0, 0, 200, 100);
+        var child = BuildElement("child", 10, 10, 50, 20);
+        child.ParentId = "root";
+        root.Children = new List<ElementInfo> { child };
+        return root;
+    }
+
     private static ElementInfo BuildElement(string id, double x, double y, double width, double height)
         => new()
         {
@@ -154,7 +164,7 @@ public sealed class UpstreamInheritedCapabilityTests
     [Fact]
     public async Task Tree_HonorsTheDepthParameter()
     {
-        using var service = new StubAgentService([AgentTestHarness.BuildCyclicTree()], new AgentOptions
+        using var service = new StubAgentService([ShallowTree()], new AgentOptions
         {
             Port = AgentTestHarness.GetFreePort(),
         });

@@ -108,6 +108,24 @@ public class DeepTreeSerializationTests
             () => HttpResponse.Json(new { elements = new List<ElementInfo> { AgentTestHarness.BuildDeepChain(5000) } }));
     }
 
+    [Fact]
+    public void FlatteningASelfReferencingTreeTerminates()
+    {
+        // The agents serialize self-referencing trees on purpose, so any walk over the tree has to cope with
+        // a cycle. Without a visited set this recurses forever and takes the process down with a stack
+        // overflow, which is how the defect first surfaced: it killed the test host instead of failing one
+        // test, so the run reported less than the damage.
+        var root = AgentTestHarness.BuildCyclicTree();
+
+        var visited = StubAgentService.Flatten([root]).ToArray();
+
+        // root -> child -> grandchild -> root: three distinct elements, and the cycle back to root must not
+        // add it a second time.
+        Assert.Equal(3, visited.Length);
+        Assert.Equal(visited.Length, visited.Distinct().Count());
+        Assert.Equal(["root", "child", "grandchild"], visited.Select(element => element.Id));
+    }
+
     private static int CountNestingLevels(JsonElement element)
     {
         var levels = 0;

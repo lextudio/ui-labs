@@ -70,10 +70,27 @@ internal sealed class StubAgentService(List<ElementInfo> tree, AgentOptions? opt
 
     protected override Task<string?> GetApplicationNameAsync() => Task.FromResult<string?>("Stub");
 
+    /// <summary>
+    /// Walks a tree depth-first, visiting each element once.
+    /// </summary>
+    /// <remarks>
+    /// A cycle guard is not optional here: the agents serialize self-referencing trees on purpose, since a
+    /// real UI tree can contain one, and a plain recursive walk over such a tree never terminates. It first
+    /// showed up as a stack overflow that killed the whole test host rather than failing one test, which is
+    /// why the visited set is kept rather than trusting callers to hand over an acyclic tree.
+    /// </remarks>
     internal static IEnumerable<ElementInfo> Flatten(IEnumerable<ElementInfo> elements)
+        => Flatten(elements, new HashSet<ElementInfo>(ReferenceEqualityComparer.Instance));
+
+    private static IEnumerable<ElementInfo> Flatten(IEnumerable<ElementInfo> elements, HashSet<ElementInfo> visited)
     {
         foreach (var element in elements)
         {
+            if (!visited.Add(element))
+            {
+                continue;
+            }
+
             yield return element;
 
             if (element.Children is null)
@@ -81,7 +98,7 @@ internal sealed class StubAgentService(List<ElementInfo> tree, AgentOptions? opt
                 continue;
             }
 
-            foreach (var child in Flatten(element.Children))
+            foreach (var child in Flatten(element.Children, visited))
             {
                 yield return child;
             }
