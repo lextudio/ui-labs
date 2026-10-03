@@ -126,7 +126,8 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libxkbcommon0 libinput10 xvfb
+          sudo apt-get install -y libxkbcommon0 libinput10 xvfb \
+            libgl1 libglu1-mesa libglx-mesa0 libxi6 libxcursor1 libxrandr2 libxinerama1 libxxf86vm1
 
       - name: Start Xvfb
         if: runner.os == 'Linux'
