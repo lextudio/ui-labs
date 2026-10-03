@@ -4,6 +4,7 @@ using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
+using Xunit;
 
 namespace LeXtudio.DevFlow.Agent.LibreWinForms.Tests;
 
@@ -114,6 +115,15 @@ internal sealed class LibreWinFormsHost : IAsyncDisposable
         {
             var detail = $"Host output:\n{host.CapturedOutput}";
             await host.DisposeAsync();
+
+            // The app is windowed and cannot start where Silk.NET finds no usable platform, which is the
+            // case on a headless Linux runner even with Xvfb and the GL libraries present. That is an
+            // environment limitation rather than a defect, so report it as a skip instead of a failure.
+            if (host.CapturedOutput.Contains("Couldn't find a suitable window platform", StringComparison.Ordinal))
+            {
+                Assert.Skip("The LibreWinForms app needs a window platform that Silk.NET could not use on this machine.");
+            }
+
             throw new InvalidOperationException($"{ex.Message}\n{detail}", ex);
         }
 
