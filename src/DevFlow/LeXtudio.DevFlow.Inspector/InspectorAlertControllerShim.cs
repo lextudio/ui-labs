@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Maui.DevFlow.Driver;
 
@@ -109,11 +110,18 @@ internal sealed class InspectorAlertController
         try
         {
             using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
-            using var response = await http
-                .PostAsJsonAsync(
+
+            // Serialize before sending rather than using PostAsJsonAsync. JsonContent cannot always
+            // precompute its length, so PostAsJsonAsync may fall back to a chunked body, which the agent's
+            // HTTP server does not read: it fails to parse the payload and drops the connection without a
+            // response. A StringContent always carries a Content-Length. The request is also routed through
+            // DevFlowMutation because dismissing an alert is a mutation and the agent requires a lease.
+            var body = JsonSerializer.Serialize(new { buttonLabel }, CamelCase);
+            using var response = await LeXtudio.DevFlow.Driver.DevFlowMutation.SendAsync(
+                    http,
+                    HttpMethod.Post,
                     $"http://{_agentHost}:{_agentPort}/api/v1/alert/dismiss",
-                    new { buttonLabel },
-                    CamelCase)
+                    new StringContent(body, Encoding.UTF8, "application/json"))
                 .ConfigureAwait(false);
 
             if (!response.IsSuccessStatusCode)
