@@ -19,58 +19,13 @@ public class DevFlowProtocolParityTests
     /// Contract paths not yet served by the desktop agents. Desktop-only additions that are not in
     /// the contract are tracked separately in <see cref="DesktopAdditionsOutsideContract"/>.
     /// </summary>
+    /// <summary>
+    /// Contract paths no agent serves. The desktop agents inherit upstream's whole route table, so this
+    /// shrank to the extension namespace, which only mobile hosts with registered extensions implement.
+    /// </summary>
     private static readonly string[] ContractPathsNotYetServed =
     [
-        "/api/v1/agent/capabilities",
-        "/api/v1/agent/lease",
-        "/api/v1/agent/recording",
-        "/api/v1/device/app",
-        "/api/v1/device/battery",
-        "/api/v1/device/connectivity",
-        "/api/v1/device/display",
-        "/api/v1/device/geolocation",
-        "/api/v1/device/info",
-        "/api/v1/device/jobs",
-        "/api/v1/device/jobs/{identifier}/run",
-        "/api/v1/device/permissions",
-        "/api/v1/device/permissions/{name}",
-        "/api/v1/device/sensors",
-        "/api/v1/device/sensors/{name}/start",
-        "/api/v1/device/sensors/{name}/stop",
-        "/api/v1/device/version-tracking",
         "/api/v1/ext/{namespace}/{path}",
-        "/api/v1/logs",
-        "/api/v1/profiler/capabilities",
-        "/api/v1/profiler/hotspots",
-        "/api/v1/profiler/markers",
-        "/api/v1/profiler/sessions",
-        "/api/v1/profiler/sessions/{id}",
-        "/api/v1/profiler/sessions/{id}/samples",
-        "/api/v1/profiler/spans",
-        "/api/v1/storage/files",
-        "/api/v1/storage/files/{path}",
-        "/api/v1/storage/preferences",
-        "/api/v1/storage/preferences/{key}",
-        "/api/v1/storage/roots",
-        "/api/v1/storage/secure",
-        "/api/v1/storage/secure/{key}",
-        "/api/v1/ui/actions/gesture",
-        "/api/v1/ui/actions/navigate",
-        "/api/v1/ui/actions/resize",
-        "/api/v1/ui/diagnostics/layout",
-        "/api/v1/ui/diagnostics/layout/rules",
-        "/api/v1/ui/elements/{id}/properties",
-        "/api/v1/ui/elements/{id}/properties/{name}",
-        "/api/v1/webview/console",
-        "/api/v1/webview/dom",
-        "/api/v1/webview/dom/query",
-        "/api/v1/webview/evaluate",
-        "/api/v1/webview/input/click",
-        "/api/v1/webview/input/fill",
-        "/api/v1/webview/input/text",
-        "/api/v1/webview/navigate",
-        "/api/v1/webview/network",
-        "/api/v1/webview/source",
     ];
 
     /// <summary>
@@ -93,13 +48,42 @@ public class DevFlowProtocolParityTests
         "post /api/v1/ui/actions/right-tap",
         "post /api/v1/ui/assert",
         "post /api/v1/webview/cdp",
+        // Upstream registers these with different placeholder names than the contract declares
+        // ({permission} and {sensor} here, {name} in openapi.yaml). The paths match once the
+        // placeholders are normalized, so they are served; only the names differ.
+        "get /api/v1/device/permissions/{permission}",
+        "post /api/v1/device/sensors/{sensor}/start",
+        "post /api/v1/device/sensors/{sensor}/stop",
     ];
 
     private static IReadOnlySet<string> GetRegisteredOperations()
     {
-        using var service = new StubAgentService([], new AgentOptions { Port = AgentTestHarness.GetFreePort() });
+        // EnableLayoutDiagnostics defaults to false, and the layout diagnostics routes are only registered
+        // when it is on. Turn it on so the baseline reflects the whole contract surface rather than the
+        // default subset.
+        using var service = new StubAgentService([], new AgentOptions
+        {
+            Port = AgentTestHarness.GetFreePort(),
+            EnableLayoutDiagnostics = true,
+        });
         return DevFlowProtocolSpec.ToOperations(AgentTestHarness.GetRegisteredRoutes(service));
     }
+
+    /// <summary>
+    /// Replaces route placeholder names with a fixed token. Upstream and the contract disagree on some
+    /// placeholder names (for example {permission} versus {name}), which does not change which endpoint is
+    /// served, so comparisons normalize them instead of reporting a false mismatch.
+    /// </summary>
+    private static string NormalizePlaceholders(string operation)
+    {
+        var separator = operation.IndexOf(' ');
+        var method = separator < 0 ? operation : operation[..separator];
+        var path = separator < 0 ? string.Empty : operation[(separator + 1)..];
+        return $"{method} {System.Text.RegularExpressions.Regex.Replace(path, @"\{[^}]*\}", "{}")}";
+    }
+
+    private static IReadOnlySet<string> Normalized(IEnumerable<string> operations)
+        => operations.Select(NormalizePlaceholders).ToHashSet(StringComparer.Ordinal);
 
     [Fact]
     public void ContractSpec_IsDiscoverableFromTheSubmodule()
@@ -114,10 +98,11 @@ public class DevFlowProtocolParityTests
     [Fact]
     public void Agent_OnlyServesRoutesDeclaredInTheContractOrAllowListed()
     {
-        var declared = DevFlowProtocolSpec.GetDeclaredOperations();
-        var allowed = DesktopAdditionsOutsideContract.ToHashSet(StringComparer.Ordinal);
+        var declared = Normalized(DevFlowProtocolSpec.GetDeclaredOperations());
+        var allowed = Normalized(DesktopAdditionsOutsideContract);
 
         var unexpected = GetRegisteredOperations()
+            .Select(NormalizePlaceholders)
             .Where(op => !declared.Contains(op))
             .Where(op => !allowed.Contains(op))
             .OrderBy(op => op, StringComparer.Ordinal)
@@ -132,18 +117,25 @@ public class DevFlowProtocolParityTests
     [Fact]
     public void MissingContractPaths_MatchTheTrackedSyncBacklog()
     {
-        var declared = DevFlowProtocolSpec.GetDeclaredOperations();
-        var served = GetRegisteredOperations();
+        var declared = DevFlowProtocolSpec.GetDeclaredOperations()
+            .Select(op => op[(op.IndexOf(' ') + 1)..])
+            .Select(path => System.Text.RegularExpressions.Regex.Replace(path, @"\{[^}]*\}", "{}"))
+            .Distinct(StringComparer.Ordinal);
+
+        var served = GetRegisteredOperations()
+            .Select(op => op[(op.IndexOf(' ') + 1)..])
+            .Select(path => System.Text.RegularExpressions.Regex.Replace(path, @"\{[^}]*\}", "{}"))
+            .ToHashSet(StringComparer.Ordinal);
 
         var missingPaths = declared
-            .Select(op => op[(op.IndexOf(' ') + 1)..])
-            .Distinct(StringComparer.Ordinal)
-            .Where(path => !served.Any(op => op.EndsWith($" {path}", StringComparison.Ordinal)))
+            .Where(path => !served.Contains(path))
             .OrderBy(path => path, StringComparer.Ordinal);
 
-        var tracked = ContractPathsNotYetServed.ToHashSet(StringComparer.Ordinal);
+        var tracked = ContractPathsNotYetServed
+            .Select(path => System.Text.RegularExpressions.Regex.Replace(path, @"\{[^}]*\}", "{}"))
+            .OrderBy(p => p, StringComparer.Ordinal);
 
-        Assert.Equal(tracked.OrderBy(p => p, StringComparer.Ordinal), missingPaths);
+        Assert.Equal(tracked, missingPaths);
     }
 
     [Fact]

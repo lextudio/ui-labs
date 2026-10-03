@@ -6,10 +6,8 @@ using Microsoft.Maui.DevFlow.Agent.Core.Network;
 
 namespace LeXtudio.DevFlow.Agent.Core;
 
-public abstract class DevFlowAgentServiceBase : IDisposable
+public abstract class DevFlowAgentServiceBase : DevFlowAgentService
 {
-    private readonly AgentHttpServer _server;
-    private readonly NetworkRequestStore _networkStore = new();
     private bool _started;
 
     // Actions are discovered by reflecting over AppDomain.CurrentDomain.GetAssemblies(), but many
@@ -22,37 +20,34 @@ public abstract class DevFlowAgentServiceBase : IDisposable
     private int _cachedAssemblyCount = -1;
 
     protected DevFlowAgentServiceBase(AgentOptions? options = null)
+        : base(options)
     {
         Options = options ?? new AgentOptions();
-        _server = new AgentHttpServer(Options.Port);
-        DevFlowHttp.SetStore(_networkStore);
+
+        // Upstream registers the shared contract in its own constructor. Re-registering the same paths
+        // here overwrites those entries, because AgentHttpServer.Map* assigns into a dictionary, so the
+        // LeXtudio handlers keep their existing behavior while every route upstream adds beyond this set
+        // stays available. Routes upstream declares as protected or private (network, invoke, theme,
+        // webview) are replaced the same way rather than overridden.
         RegisterRoutes();
     }
 
-    /// <summary>
-    /// Shared store for HTTP traffic captured via <see cref="DevFlowHttp.CreateClient"/>
-    /// or <see cref="DevFlowHttpHandler"/>. Apps opt in per-HttpClient; nothing is
-    /// captured until an app constructs a client through one of those.
-    /// </summary>
-    protected NetworkRequestStore NetworkStore => _networkStore;
-
     protected AgentOptions Options { get; }
 
-    public bool IsRunning => _server.IsRunning;
-    public int Port => _server.Port;
-
+    /// <summary>
+    /// Starts the HTTP server. Upstream exposes only <c>StartServerOnly</c>, so this keeps the
+    /// parameterless entry point the desktop agents and their tests already call.
+    /// </summary>
     public void Start()
     {
         if (_started) return;
-        _server.Start();
+        StartServerOnly(_dispatcher);
         _started = true;
     }
 
-    public Task StopAsync() => _server.StopAsync();
-
     protected abstract string AgentId { get; }
     protected abstract string AgentName { get; }
-    protected abstract string FrameworkName { get; }
+    protected abstract override string FrameworkName { get; }
     protected abstract Task<List<ElementInfo>> BuildTreeAsync();
     protected abstract Task<ElementInfo?> FindElementAsync(string id);
     protected abstract Task<List<ElementInfo>> QueryElementsAsync(string? type = null, string? automationId = null, string? text = null, int maxResults = 50, int maxDepth = 24);
@@ -116,7 +111,7 @@ public abstract class DevFlowAgentServiceBase : IDisposable
             DeltaY = deltaY
         };
 
-    private void RegisterRoutes()
+    private new void RegisterRoutes()
     {
         _server.MapGet("/api/v1/agent/status", HandleStatusAsync);
         _server.MapGet("/api/v1/ui/tree", HandleTreeAsync);
@@ -311,8 +306,8 @@ public abstract class DevFlowAgentServiceBase : IDisposable
             ? parsedStatus
             : null;
 
-        var entries = _networkStore.GetRecent(count, host, method, status).Select(e => e.ToSummary());
-        return Task.FromResult(DevFlowJson.Json(new { requests = entries, total = _networkStore.Count }));
+        var entries = NetworkStore.GetRecent(count, host, method, status).Select(e => e.ToSummary());
+        return Task.FromResult(DevFlowJson.Json(new { requests = entries, total = NetworkStore.Count }));
     }
 
     private Task<HttpResponse> HandleNetworkDetailAsync(HttpRequest request)
@@ -321,7 +316,7 @@ public abstract class DevFlowAgentServiceBase : IDisposable
             return Task.FromResult(HttpResponse.Error("Missing required route parameter 'id'", 400));
 
         var id = Uri.UnescapeDataString(rawId);
-        var entry = _networkStore.GetById(id);
+        var entry = NetworkStore.GetById(id);
         return Task.FromResult(entry != null
             ? DevFlowJson.Json(entry)
             : HttpResponse.Error($"Network request '{id}' not found", 404));
@@ -329,7 +324,7 @@ public abstract class DevFlowAgentServiceBase : IDisposable
 
     private Task<HttpResponse> HandleNetworkClearAsync(HttpRequest request)
     {
-        _networkStore.Clear();
+        NetworkStore.Clear();
         return Task.FromResult(DevFlowJson.Json(new { success = true }));
     }
 
@@ -822,13 +817,13 @@ public abstract class DevFlowAgentServiceBase : IDisposable
         public JsonElement? Params { get; set; }
     }
 
-    private sealed class BatchRequest
+    private new sealed class BatchRequest
     {
         public bool ContinueOnError { get; set; }
         public List<BatchActionRequest> Actions { get; set; } = [];
     }
 
-    private sealed class BatchActionRequest
+    private new sealed class BatchActionRequest
     {
         public string? Action { get; set; }
         public string? Type { get; set; }
@@ -1105,7 +1100,12 @@ public abstract class DevFlowAgentServiceBase : IDisposable
         }
     }
 
-    public void Dispose()
+    /// <summary>
+    /// Stops the HTTP server as part of the base disposal chain. Declaring a <c>Dispose</c> here instead
+    /// would hide the base implementation, which unsubscribes events, stops the auto UI hooks, and
+    /// releases the profiler loop, so none of that would ever run.
+    /// </summary>
+    protected override void DisposeBackendResources()
     {
         _ = _server.StopAsync();
     }
