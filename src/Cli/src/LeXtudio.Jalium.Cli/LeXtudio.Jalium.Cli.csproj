@@ -22,5 +22,7 @@
     <ProjectReference Include="../../../../src/DevFlow/LeXtudio.DevFlow.Driver/LeXtudio.DevFlow.Driver.csproj" />
     <ProjectReference Include="../../../../src/DevFlow/LeXtudio.DevFlow.Inspector/LeXtudio.DevFlow.Inspector.csproj" />
     <ProjectReference Include="../../../../src/DevFlow/LeXtudio.DevFlow.Broker/LeXtudio.DevFlow.Broker.csproj" />
+    <ProjectReference Include="../../../../src/DevFlow/LeXtudio.DevFlow.Mcp/LeXtudio.DevFlow.Mcp.csproj" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" />
   </ItemGroup>
 </Project>

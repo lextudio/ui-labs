@@ -9,6 +9,8 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using LeXtudio.DevFlow.Driver;
+using LeXtudio.DevFlow.Mcp;
+using Microsoft.Extensions.Logging;
 using Microsoft.Maui.Cli.DevFlow.Broker;
 using Microsoft.Maui.Cli.DevFlow.Inspector;
 
@@ -134,7 +136,7 @@ namespace LeXtudio.LibreWpf.Cli
         {
             if (tokens.Count == 0)
             {
-                return WriteResult("devflow", "Usage: dotnet librewpf devflow <status|screenshot|tap|webview|extensions|inspector|broker|network|ui|alert> [options]", options);
+                return WriteResult("devflow", "Usage: dotnet librewpf devflow <status|screenshot|tap|webview|extensions|inspector|broker|network|ui|alert>|mcp [options]", options);
             }
 
             var subcommand = tokens.Dequeue().ToLowerInvariant();
@@ -150,9 +152,10 @@ namespace LeXtudio.LibreWpf.Cli
                 "network" => RunDevFlowNetwork(tokens, options),
                 "ui" => RunDevFlowUi(tokens, options),
                 "alert" => RunDevFlowAlert(tokens, options),
-                "help" => WriteResult("devflow", "Usage: dotnet librewpf devflow <status|screenshot|tap|webview|extensions|inspector|broker|network|ui|alert> [options]", options),
-                "--help" => WriteResult("devflow", "Usage: dotnet librewpf devflow <status|screenshot|tap|webview|extensions|inspector|broker|network|ui|alert> [options]", options),
-                "-h" => WriteResult("devflow", "Usage: dotnet librewpf devflow <status|screenshot|tap|webview|extensions|inspector|broker|network|ui|alert> [options]", options),
+                "mcp" => RunDevFlowMcp(tokens, options),
+                "help" => WriteResult("devflow", "Usage: dotnet librewpf devflow <status|screenshot|tap|webview|extensions|inspector|broker|network|ui|alert>|mcp [options]", options),
+                "--help" => WriteResult("devflow", "Usage: dotnet librewpf devflow <status|screenshot|tap|webview|extensions|inspector|broker|network|ui|alert>|mcp [options]", options),
+                "-h" => WriteResult("devflow", "Usage: dotnet librewpf devflow <status|screenshot|tap|webview|extensions|inspector|broker|network|ui|alert>|mcp [options]", options),
                 _ => UnknownDevFlowSubcommand(subcommand)
             };
         }
@@ -967,6 +970,55 @@ namespace LeXtudio.LibreWpf.Cli
             }
 
             return 0;
+        }
+
+        /// <summary>
+        /// Serves the MCP endpoint over stdio so an AI agent can drive the app.
+        /// </summary>
+        /// <remarks>
+        /// stdio is the transport an MCP client launches the process with, so nothing here may write to
+        /// stdout: a stray line corrupts the JSON-RPC framing. Diagnostics therefore go to stderr.
+        /// </remarks>
+        public static int RunDevFlowMcp(Queue<string> tokens, OutputOptions options)
+        {
+            int? port = null;
+            var host = "localhost";
+            while (tokens.Count > 0)
+            {
+                var token = tokens.Dequeue();
+                switch (token)
+                {
+                    case "--port" when tokens.Count > 0:
+                        if (!int.TryParse(tokens.Dequeue(), out var parsed))
+                        {
+                            return WriteResult("devflow mcp", "--port needs a number.", options);
+                        }
+
+                        port = parsed;
+                        break;
+                    case "--host" when tokens.Count > 0:
+                        host = tokens.Dequeue();
+                        break;
+                    default:
+                        return WriteResult("devflow mcp", $"Unknown option '{token}'.", options);
+                }
+            }
+
+            using var loggerFactory = LoggerFactory.Create(builder =>
+            {
+                builder.AddConsole(logging => logging.LogToStandardErrorThreshold = LogLevel.Trace);
+                builder.SetMinimumLevel(LogLevel.Warning);
+            });
+
+            try
+            {
+                DevFlowMcpServer.RunAsync(port, host, loggerFactory: loggerFactory).GetAwaiter().GetResult();
+                return 0;
+            }
+            catch (OperationCanceledException)
+            {
+                return 0;
+            }
         }
     }
 }
