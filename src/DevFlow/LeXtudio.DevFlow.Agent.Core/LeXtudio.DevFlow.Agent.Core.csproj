@@ -22,49 +22,127 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Core\AgentHttpServer.cs">
-      <Link>AgentHttpServer.cs</Link>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Abstractions\AgentExtension.cs">
+      <Link>Upstream\AgentExtension.cs</Link>
     </Compile>
-    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Core\AgentOptions.cs">
-      <Link>AgentOptions.cs</Link>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Abstractions\AgentHttpServer.cs">
+      <Link>Upstream\AgentHttpServer.cs</Link>
     </Compile>
-    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Core\AgentExtension.cs">
-      <Link>AgentExtension.cs</Link>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Abstractions\AgentJson.cs">
+      <Link>Upstream\AgentJson.cs</Link>
     </Compile>
-    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Core\DevFlowActionAttribute.cs">
-      <Link>DevFlowActionAttribute.cs</Link>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Abstractions\AgentJsonContext.cs">
+      <Link>Upstream\AgentJsonContext.cs</Link>
     </Compile>
-    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Core\ElementInfo.cs">
-      <Link>ElementInfo.cs</Link>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Abstractions\AgentOptions.cs">
+      <Link>Upstream\AgentOptions.cs</Link>
     </Compile>
-    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Core\BrokerRegistration.cs">
-      <Link>BrokerRegistration.cs</Link>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Abstractions\BrokerRegistration.cs">
+      <Link>Upstream\BrokerRegistration.cs</Link>
     </Compile>
-    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Core\Network\DevFlowHttp.cs">
-      <Link>Network\DevFlowHttp.cs</Link>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Abstractions\Css/CssSelectorEngine.cs">
+      <Link>Upstream\Css/CssSelectorEngine.cs</Link>
     </Compile>
-    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Core\Network\DevFlowHttpHandler.cs">
-      <Link>Network\DevFlowHttpHandler.cs</Link>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Abstractions\Css/ElementInfoOps.cs">
+      <Link>Upstream\Css/ElementInfoOps.cs</Link>
     </Compile>
-    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Core\Network\NetworkRequestEntry.cs">
-      <Link>Network\NetworkRequestEntry.cs</Link>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Abstractions\Css/SelectorPreprocessor.cs">
+      <Link>Upstream\Css/SelectorPreprocessor.cs</Link>
     </Compile>
-    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Core\Network\NetworkRequestStore.cs">
-      <Link>Network\NetworkRequestStore.cs</Link>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Abstractions\DevFlowActionAttribute.cs">
+      <Link>Upstream\DevFlowActionAttribute.cs</Link>
     </Compile>
-    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Core\Css\CssSelectorEngine.cs">
-      <Link>Css\CssSelectorEngine.cs</Link>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Abstractions\DevFlowAgentHost.cs">
+      <Link>Upstream\DevFlowAgentHost.cs</Link>
     </Compile>
-    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Core\Css\ElementInfoOps.cs">
-      <Link>Css\ElementInfoOps.cs</Link>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Abstractions\DevFlowAgentService.Handlers.cs">
+      <Link>Upstream\DevFlowAgentService.Handlers.cs</Link>
     </Compile>
-    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Core\Css\SelectorPreprocessor.cs">
-      <Link>Css\SelectorPreprocessor.cs</Link>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Abstractions\DevFlowAgentService.Invoke.cs">
+      <Link>Upstream\DevFlowAgentService.Invoke.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Abstractions\DevFlowAgentService.MutationLease.cs">
+      <Link>Upstream\DevFlowAgentService.MutationLease.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Abstractions\DevFlowAgentService.cs">
+      <Link>Upstream\DevFlowAgentService.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Abstractions\ElementInfo.cs">
+      <Link>Upstream\ElementInfo.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Abstractions\FileStoragePathResolver.cs">
+      <Link>Upstream\FileStoragePathResolver.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Abstractions\IAgentDispatcher.cs">
+      <Link>Upstream\IAgentDispatcher.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Abstractions\MutationLeaseCoordinator.cs">
+      <Link>Upstream\MutationLeaseCoordinator.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Abstractions\MutationRecording.cs">
+      <Link>Upstream\MutationRecording.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Abstractions\Network/DevFlowHttp.cs">
+      <Link>Upstream\Network/DevFlowHttp.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Abstractions\Network/DevFlowHttpHandler.cs">
+      <Link>Upstream\Network/DevFlowHttpHandler.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Abstractions\Network/NetworkRequestEntry.cs">
+      <Link>Upstream\Network/NetworkRequestEntry.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Abstractions\Network/NetworkRequestStore.cs">
+      <Link>Upstream\Network/NetworkRequestStore.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Abstractions\Profiling/IMarkerPublisher.cs">
+      <Link>Upstream\Profiling/IMarkerPublisher.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Abstractions\Profiling/INativeFrameStatsProvider.cs">
+      <Link>Upstream\Profiling/INativeFrameStatsProvider.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Abstractions\Profiling/IProfilerCollector.cs">
+      <Link>Upstream\Profiling/IProfilerCollector.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Abstractions\Profiling/ProfilerContracts.cs">
+      <Link>Upstream\Profiling/ProfilerContracts.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Abstractions\Profiling/ProfilerRingBuffer.cs">
+      <Link>Upstream\Profiling/ProfilerRingBuffer.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Abstractions\Profiling/ProfilerSessionStore.cs">
+      <Link>Upstream\Profiling/ProfilerSessionStore.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Abstractions\Profiling/RuntimeProfilerCollector.cs">
+      <Link>Upstream\Profiling/RuntimeProfilerCollector.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Abstractions\Properties/InternalsVisibleTo.cs">
+      <Link>Upstream\Properties/InternalsVisibleTo.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Logging\ConsoleLogCapture.cs">
+      <Link>Upstream\ConsoleLogCapture.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Logging\FileLogEntry.cs">
+      <Link>Upstream\FileLogEntry.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Logging\FileLogJsonContext.cs">
+      <Link>Upstream\FileLogJsonContext.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Logging\FileLogProvider.cs">
+      <Link>Upstream\FileLogProvider.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Logging\FileLogReader.cs">
+      <Link>Upstream\FileLogReader.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Logging\FileLogWriter.cs">
+      <Link>Upstream\FileLogWriter.cs</Link>
     </Compile>
   </ItemGroup>
 
+
   <ItemGroup>
     <PackageReference Include="Fizzler" />
+    <!-- Required by the linked Agent.Abstractions screenshot scaling/coding paths. -->
+    <PackageReference Include="SkiaSharp" />
   </ItemGroup>
 
   <ItemGroup>

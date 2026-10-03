@@ -161,8 +161,8 @@ public abstract class DevFlowAgentServiceBase : IDisposable
     {
         var alert = WindowsAlertDetector.Detect();
         return Task.FromResult(alert != null
-            ? HttpResponse.Json(new { present = true, message = alert.Message, buttons = alert.Buttons.Select(b => b.Text) })
-            : HttpResponse.Json(new { present = false }));
+            ? DevFlowJson.Json(new { present = true, message = alert.Message, buttons = alert.Buttons.Select(b => b.Text) })
+            : DevFlowJson.Json(new { present = false }));
     }
 
     private Task<HttpResponse> HandleAlertDismissAsync(HttpRequest request)
@@ -170,7 +170,7 @@ public abstract class DevFlowAgentServiceBase : IDisposable
         var body = request.BodyAs<AlertDismissRequest>();
         var dismissed = WindowsAlertDetector.Dismiss(body?.ButtonLabel);
         return Task.FromResult(dismissed
-            ? HttpResponse.Json(new { success = true })
+            ? DevFlowJson.Json(new { success = true })
             : HttpResponse.Error("No alert dialog detected to dismiss.", 404));
     }
 
@@ -188,7 +188,7 @@ public abstract class DevFlowAgentServiceBase : IDisposable
         try
         {
             var results = CssSelectorEngine.Query(tree, selector);
-            return HttpResponse.Json(new { elements = results, count = results.Count });
+            return DevFlowJson.Json(new { elements = results, count = results.Count });
         }
         catch (Exception ex)
         {
@@ -209,7 +209,7 @@ public abstract class DevFlowAgentServiceBase : IDisposable
 
         // Deepest match last; report topmost-most-specific first.
         hits.Reverse();
-        return HttpResponse.Json(new { elements = hits, topmost = hits.FirstOrDefault() });
+        return DevFlowJson.Json(new { elements = hits, topmost = hits.FirstOrDefault() });
     }
 
     private static void CollectHits(ElementInfo element, double x, double y, List<ElementInfo> hits)
@@ -281,7 +281,7 @@ public abstract class DevFlowAgentServiceBase : IDisposable
         if (body.TextContains != null && !matches.Any(m => m.Text != null && m.Text.Contains(body.TextContains, StringComparison.Ordinal)))
             failures.Add($"expected an element with text containing '{body.TextContains}'");
 
-        return HttpResponse.Json(new
+        return DevFlowJson.Json(new
         {
             success = failures.Count == 0,
             selector = body.Selector,
@@ -312,7 +312,7 @@ public abstract class DevFlowAgentServiceBase : IDisposable
             : null;
 
         var entries = _networkStore.GetRecent(count, host, method, status).Select(e => e.ToSummary());
-        return Task.FromResult(HttpResponse.Json(new { requests = entries, total = _networkStore.Count }));
+        return Task.FromResult(DevFlowJson.Json(new { requests = entries, total = _networkStore.Count }));
     }
 
     private Task<HttpResponse> HandleNetworkDetailAsync(HttpRequest request)
@@ -323,14 +323,14 @@ public abstract class DevFlowAgentServiceBase : IDisposable
         var id = Uri.UnescapeDataString(rawId);
         var entry = _networkStore.GetById(id);
         return Task.FromResult(entry != null
-            ? HttpResponse.Json(entry)
+            ? DevFlowJson.Json(entry)
             : HttpResponse.Error($"Network request '{id}' not found", 404));
     }
 
     private Task<HttpResponse> HandleNetworkClearAsync(HttpRequest request)
     {
         _networkStore.Clear();
-        return Task.FromResult(HttpResponse.Json(new { success = true }));
+        return Task.FromResult(DevFlowJson.Json(new { success = true }));
     }
 
     private async Task<HttpResponse> HandleStatusAsync(HttpRequest request)
@@ -346,13 +346,13 @@ public abstract class DevFlowAgentServiceBase : IDisposable
             application = await GetApplicationNameAsync().ConfigureAwait(false),
             capabilities = GetCapabilities()
         };
-        return HttpResponse.Json(status);
+        return DevFlowJson.Json(status);
     }
 
     private async Task<HttpResponse> HandleTreeAsync(HttpRequest request)
     {
         var tree = await BuildTreeAsync().ConfigureAwait(false);
-        return HttpResponse.Json(new { elements = tree });
+        return DevFlowJson.Json(new { elements = tree });
     }
 
     private async Task<HttpResponse> HandleElementAsync(HttpRequest request)
@@ -362,7 +362,7 @@ public abstract class DevFlowAgentServiceBase : IDisposable
 
         var id = Uri.UnescapeDataString(rawId);
         var element = await FindElementAsync(id).ConfigureAwait(false);
-        return element is null ? HttpResponse.NotFound($"Element '{id}' not found") : HttpResponse.Json(element);
+        return element is null ? HttpResponse.NotFound($"Element '{id}' not found") : DevFlowJson.Json(element);
     }
 
     private async Task<HttpResponse> HandleQueryAsync(HttpRequest request)
@@ -377,7 +377,7 @@ public abstract class DevFlowAgentServiceBase : IDisposable
             return HttpResponse.Error("At least one query parameter required: type, automationId, text", 400);
 
         var results = await QueryElementsAsync(type, automationId, text, maxResults, maxDepth).ConfigureAwait(false);
-        return HttpResponse.Json(results);
+        return DevFlowJson.Json(results);
     }
 
     private static int QueryInt(HttpRequest request, string name, int defaultValue, int min, int max)
@@ -401,7 +401,7 @@ public abstract class DevFlowAgentServiceBase : IDisposable
     private async Task<HttpResponse> HandleWebViewContextsAsync(HttpRequest request)
     {
         var contexts = await GetWebViewContextsAsync().ConfigureAwait(false);
-        return HttpResponse.Json(contexts ?? new { contexts = Array.Empty<object>() });
+        return DevFlowJson.Json(contexts ?? new { contexts = Array.Empty<object>() });
     }
 
     private async Task<HttpResponse> HandleWebViewScreenshotAsync(HttpRequest request)
@@ -418,7 +418,7 @@ public abstract class DevFlowAgentServiceBase : IDisposable
             return HttpResponse.Error("Request must include a JSON body with a 'method' field", 400);
 
         var result = await SendWebViewCdpCommandAsync(payload.Context, payload.Method, payload.Params).ConfigureAwait(false);
-        return result != null ? HttpResponse.Json(result) : HttpResponse.Error("WebView CDP command failed", 500);
+        return result != null ? DevFlowJson.Json(result) : HttpResponse.Error("WebView CDP command failed", 500);
     }
 
     private async Task<HttpResponse> HandleTapAsync(HttpRequest request)
@@ -428,7 +428,7 @@ public abstract class DevFlowAgentServiceBase : IDisposable
             return HttpResponse.Error("Request must include a JSON body with an 'id' field", 400);
 
         var result = await TryTapResponseAsync(payload.Id).ConfigureAwait(false);
-        return result != null ? HttpResponse.Json(result) : HttpResponse.Error($"Tap target '{payload.Id}' could not be activated", 404);
+        return result != null ? DevFlowJson.Json(result) : HttpResponse.Error($"Tap target '{payload.Id}' could not be activated", 404);
     }
 
     /// <summary>
@@ -443,7 +443,7 @@ public abstract class DevFlowAgentServiceBase : IDisposable
 
         var result = await TryRightTapResponseAsync(payload.Id).ConfigureAwait(false);
         return result != null
-            ? HttpResponse.Json(result)
+            ? DevFlowJson.Json(result)
             : HttpResponse.Error($"Right-tap target '{payload.Id}' could not be activated", 404);
     }
 
@@ -457,7 +457,7 @@ public abstract class DevFlowAgentServiceBase : IDisposable
             return HttpResponse.Error("Request must include a JSON body with an 'id' field", 400);
 
         var result = await TryScrollResponseAsync(payload.Id, payload.DeltaX, payload.DeltaY).ConfigureAwait(false);
-        return result != null ? HttpResponse.Json(result) : HttpResponse.Error($"Scroll target '{payload.Id}' could not be scrolled", 404);
+        return result != null ? DevFlowJson.Json(result) : HttpResponse.Error($"Scroll target '{payload.Id}' could not be scrolled", 404);
     }
 
     private async Task<HttpResponse> HandleDragAsync(HttpRequest request)
@@ -468,7 +468,7 @@ public abstract class DevFlowAgentServiceBase : IDisposable
 
         var result = await TryDragResponseAsync(payload).ConfigureAwait(false);
         return result != null
-            ? HttpResponse.Json(result)
+            ? DevFlowJson.Json(result)
             : HttpResponse.Error("Drag is not supported by this agent", 501);
     }
 
@@ -481,7 +481,7 @@ public abstract class DevFlowAgentServiceBase : IDisposable
 
         var result = await TryMoveResponseAsync(payload).ConfigureAwait(false);
         return result != null
-            ? HttpResponse.Json(result)
+            ? DevFlowJson.Json(result)
             : HttpResponse.Error("Mouse move is not supported by this agent", 501);
     }
 
@@ -515,7 +515,7 @@ public abstract class DevFlowAgentServiceBase : IDisposable
 
         var result = await TryClickResponseAsync(payload).ConfigureAwait(false);
         return result != null
-            ? HttpResponse.Json(result)
+            ? DevFlowJson.Json(result)
             : HttpResponse.Error("Click is not supported by this agent", 501);
     }
 
@@ -537,7 +537,7 @@ public abstract class DevFlowAgentServiceBase : IDisposable
 
         var result = await TryPressResponseAsync(payload).ConfigureAwait(false);
         return result != null
-            ? HttpResponse.Json(result)
+            ? DevFlowJson.Json(result)
             : HttpResponse.Error("Press is not supported by this agent", 501);
     }
 
@@ -557,7 +557,7 @@ public abstract class DevFlowAgentServiceBase : IDisposable
 
         var result = await TryDragMoveResponseAsync(payload).ConfigureAwait(false);
         return result != null
-            ? HttpResponse.Json(result)
+            ? DevFlowJson.Json(result)
             : HttpResponse.Error("Drag-move is not supported by this agent", 501);
     }
 
@@ -576,7 +576,7 @@ public abstract class DevFlowAgentServiceBase : IDisposable
 
         var result = await TryReleaseResponseAsync(payload).ConfigureAwait(false);
         return result != null
-            ? HttpResponse.Json(result)
+            ? DevFlowJson.Json(result)
             : HttpResponse.Error("Release is not supported by this agent", 501);
     }
 
@@ -597,7 +597,7 @@ public abstract class DevFlowAgentServiceBase : IDisposable
 
         var result = await TryKeyDownResponseAsync(payload.Key).ConfigureAwait(false);
         return result != null
-            ? HttpResponse.Json(result)
+            ? DevFlowJson.Json(result)
             : HttpResponse.Error("Keydown is not supported by this agent", 501);
     }
 
@@ -616,7 +616,7 @@ public abstract class DevFlowAgentServiceBase : IDisposable
 
         var result = await TryKeyUpResponseAsync(payload.Key).ConfigureAwait(false);
         return result != null
-            ? HttpResponse.Json(result)
+            ? DevFlowJson.Json(result)
             : HttpResponse.Error("Keyup is not supported by this agent", 501);
     }
 
@@ -645,7 +645,7 @@ public abstract class DevFlowAgentServiceBase : IDisposable
             return HttpResponse.Error("elementId and text are required", 400);
 
         var result = await TryFillResponseAsync(payload.ElementId, payload.Text).ConfigureAwait(false);
-        return result != null ? HttpResponse.Json(result) : HttpResponse.Error("Element does not accept text input", 404);
+        return result != null ? DevFlowJson.Json(result) : HttpResponse.Error("Element does not accept text input", 404);
     }
 
     private async Task<HttpResponse> HandleClearAsync(HttpRequest request)
@@ -655,7 +655,7 @@ public abstract class DevFlowAgentServiceBase : IDisposable
             return HttpResponse.Error("elementId is required", 400);
 
         var result = await TryClearResponseAsync(payload.ElementId).ConfigureAwait(false);
-        return result != null ? HttpResponse.Json(result) : HttpResponse.Error("Element does not accept text input", 404);
+        return result != null ? DevFlowJson.Json(result) : HttpResponse.Error("Element does not accept text input", 404);
     }
 
     private async Task<HttpResponse> HandleKeyAsync(HttpRequest request)
@@ -665,7 +665,7 @@ public abstract class DevFlowAgentServiceBase : IDisposable
             return HttpResponse.Error("key or text is required", 400);
 
         var result = await TryKeyAsync(payload.ElementId, payload.Key, payload.Text).ConfigureAwait(false);
-        return result != null ? HttpResponse.Json(result) : HttpResponse.Error("Key action failed", 404);
+        return result != null ? DevFlowJson.Json(result) : HttpResponse.Error("Key action failed", 404);
     }
 
     private async Task<HttpResponse> HandleFocusAsync(HttpRequest request)
@@ -675,13 +675,13 @@ public abstract class DevFlowAgentServiceBase : IDisposable
             return HttpResponse.Error("elementId is required", 400);
 
         var result = await TryFocusResponseAsync(payload.ElementId).ConfigureAwait(false);
-        return result != null ? HttpResponse.Json(result) : HttpResponse.Error("Element could not be focused", 404);
+        return result != null ? DevFlowJson.Json(result) : HttpResponse.Error("Element could not be focused", 404);
     }
 
     private async Task<HttpResponse> HandleBackAsync(HttpRequest request)
     {
         var result = await TryBackResponseAsync().ConfigureAwait(false);
-        return result != null ? HttpResponse.Json(result) : HttpResponse.Error("Back navigation failed", 404);
+        return result != null ? DevFlowJson.Json(result) : HttpResponse.Error("Back navigation failed", 404);
     }
 
     private async Task<HttpResponse> HandleBatchAsync(HttpRequest request)
@@ -736,13 +736,13 @@ public abstract class DevFlowAgentServiceBase : IDisposable
                 break;
         }
 
-        return HttpResponse.Json(new { success = allSucceeded, results });
+        return DevFlowJson.Json(new { success = allSucceeded, results });
     }
 
     private async Task<HttpResponse> HandleThemeGetAsync(HttpRequest request)
     {
         var theme = await GetThemeAsync().ConfigureAwait(false);
-        return theme != null ? HttpResponse.Json(theme) : HttpResponse.Error("Theme information unavailable", 500);
+        return theme != null ? DevFlowJson.Json(theme) : HttpResponse.Error("Theme information unavailable", 500);
     }
 
     private async Task<HttpResponse> HandleThemeSetAsync(HttpRequest request)
@@ -752,7 +752,7 @@ public abstract class DevFlowAgentServiceBase : IDisposable
             return HttpResponse.Error("theme is required", 400);
 
         var result = await SetThemeAsync(payload.Theme).ConfigureAwait(false);
-        return result != null ? HttpResponse.Json(result) : HttpResponse.Error("Theme could not be changed", 400);
+        return result != null ? DevFlowJson.Json(result) : HttpResponse.Error("Theme could not be changed", 400);
     }
 
     private sealed class TapRequest
@@ -1070,7 +1070,7 @@ public abstract class DevFlowAgentServiceBase : IDisposable
             })
         });
 
-        return HttpResponse.Json(new { actions = result });
+        return DevFlowJson.Json(new { actions = result });
     }
 
     private async Task<HttpResponse> HandleInvokeActionAsync(HttpRequest request)
@@ -1088,7 +1088,7 @@ public abstract class DevFlowAgentServiceBase : IDisposable
             var args = ConvertInvokeArgs(action.Method.GetParameters(), body?.Args);
             var (success, returnValue, returnType, error, exception) = await InvokeMethodAsync(action, args).ConfigureAwait(false);
             return success
-                ? HttpResponse.Json(new { success = true, action = action.Name, returnValue, returnType })
+                ? DevFlowJson.Json(new { success = true, action = action.Name, returnValue, returnType })
                 : HttpResponse.Error(
                     $"Action '{actionName}' failed: {error}",
                     400,

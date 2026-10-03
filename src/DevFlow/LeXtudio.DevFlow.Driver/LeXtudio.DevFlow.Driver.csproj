@@ -16,28 +16,40 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Driver\AgentClient.cs">
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Client\AgentClient.cs">
       <Link>Upstream\AgentClient.cs</Link>
     </Compile>
-    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Driver\DevFlowDriverJson.cs">
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Client\DevFlowClientJson.cs">
       <Link>Upstream\DevFlowDriverJson.cs</Link>
     </Compile>
-    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Driver\ElementInfo.cs">
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Client\ElementInfo.cs">
       <Link>Upstream\ElementInfo.cs</Link>
     </Compile>
-    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Driver\ScreenshotResult.cs">
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Client\ScreenshotResult.cs">
       <Link>Upstream\ScreenshotResult.cs</Link>
     </Compile>
-    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Driver\ThemeModels.cs">
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Client\ThemeModels.cs">
       <Link>Upstream\ThemeModels.cs</Link>
     </Compile>
-    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Driver\ExtensionModels.cs">
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Client\ExtensionModels.cs">
       <Link>Upstream\ExtensionModels.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Client\MutationLease.cs">
+      <Link>MutationLease.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Client\ElementTreeSnapshot.cs">
+      <Link>ElementTreeSnapshot.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Client\LayoutDiagnosticsModels.cs">
+      <Link>LayoutDiagnosticsModels.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Client\NotSupportedByAgentException.cs">
+      <Link>NotSupportedByAgentException.cs</Link>
     </Compile>
     <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Driver\AlertInfo.cs">
       <Link>Upstream\AlertInfo.cs</Link>
     </Compile>
-    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Driver\RecordingState.cs">
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Client\RecordingState.cs">
       <Link>Upstream\RecordingState.cs</Link>
     </Compile>
   </ItemGroup>
