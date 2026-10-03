@@ -168,7 +168,9 @@ namespace LeXtudio.WinForms.Cli.UnitTests
                     }
 
                     using var treeDoc = JsonDocument.Parse(await treeResponse.Content.ReadAsStreamAsync());
-                    if (treeDoc.RootElement.TryGetProperty("elements", out var elements) && elements.GetArrayLength() > 0)
+                    // The tree endpoint answers with a bare array by default and only wraps it in an object
+                    // when envelope=true is passed, which is the shape the shared protocol client expects.
+                    if (treeDoc.RootElement.ValueKind == JsonValueKind.Array && treeDoc.RootElement.GetArrayLength() > 0)
                     {
                         return true;
                     }
