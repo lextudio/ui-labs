@@ -640,7 +640,7 @@ namespace LeXtudio.Wpf.Cli
             try
             {
                 using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
-                using var response = http.DeleteAsync($"http://{host}:{port}/api/v1/network/requests").GetAwaiter().GetResult();
+                using var response = DevFlowMutation.Delete(http, $"http://{host}:{port}/api/v1/network/requests");
                 return WriteResult("devflow", response.IsSuccessStatusCode ? "Network log cleared." : "Failed to clear network log.", options);
             }
             catch (Exception ex)
@@ -754,7 +754,7 @@ namespace LeXtudio.Wpf.Cli
                 var payload = JsonSerializer.Serialize(new { selector, exists, count, textEquals, textContains },
                     new JsonSerializerOptions { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull });
                 using var content = new StringContent(payload, System.Text.Encoding.UTF8, "application/json");
-                using var response = http.PostAsync($"http://{host}:{port}/api/v1/ui/assert", content).GetAwaiter().GetResult();
+                using var response = DevFlowMutation.Post(http, $"http://{host}:{port}/api/v1/ui/assert", content);
                 var body = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
                 Console.WriteLine(JsonSerializer.Serialize(JsonDocument.Parse(body).RootElement, new JsonSerializerOptions { WriteIndented = true }));
                 return response.IsSuccessStatusCode ? 0 : 1;
@@ -814,7 +814,7 @@ namespace LeXtudio.Wpf.Cli
                 var payload = JsonSerializer.Serialize(new { buttonLabel },
                     new JsonSerializerOptions { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull });
                 using var content = new StringContent(payload, System.Text.Encoding.UTF8, "application/json");
-                using var response = http.PostAsync($"http://{host}:{port}/api/v1/alert/dismiss", content).GetAwaiter().GetResult();
+                using var response = DevFlowMutation.Post(http, $"http://{host}:{port}/api/v1/alert/dismiss", content);
                 var body = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
                 return WriteResult("devflow", response.IsSuccessStatusCode ? "Alert dismissed." : $"Failed to dismiss alert: {body}", options);
             }

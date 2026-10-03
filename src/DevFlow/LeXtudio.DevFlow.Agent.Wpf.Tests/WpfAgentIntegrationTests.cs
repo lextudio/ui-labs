@@ -49,7 +49,12 @@ public class WpfAgentIntegrationTests
 
         Assert.True(status.GetProperty("running").GetBoolean());
 
-        using var tapResponse = await client.PostAsync("/api/v1/ui/actions/tap", new StringContent("{ \"id\": \"ActionButton\" }", System.Text.Encoding.UTF8, "application/json"));
+        using var tapResponse = await LeXtudio.DevFlow.Driver.DevFlowMutation.SendAsync(
+            client,
+            HttpMethod.Post,
+            "/api/v1/ui/actions/tap",
+            new StringContent("{ \"id\": \"ActionButton\" }", System.Text.Encoding.UTF8, "application/json"),
+            TestContext.Current.CancellationToken);
         tapResponse.EnsureSuccessStatusCode();
 
         using var elementResponse = await client.GetAsync("/api/v1/ui/elements/ResponseText");

@@ -19,6 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\LeXtudio.DevFlow.Driver\LeXtudio.DevFlow.Driver.csproj" />
     <ProjectReference Include="..\LeXtudio.DevFlow.Agent.MewUI\LeXtudio.DevFlow.Agent.MewUI.csproj" />
   </ItemGroup>
 

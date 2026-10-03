@@ -47,7 +47,9 @@ public sealed class AgentClient : IDisposable
     public async Task<bool> TapAsync(string elementId, CancellationToken cancellationToken = default)
     {
         var content = JsonContent.Create(new { id = elementId }, options: _jsonOptions);
-        using var response = await _http.PostAsync(new Uri(_baseUrl + "/api/v1/ui/actions/tap"), content, cancellationToken).ConfigureAwait(false);
+        using var response = await DevFlowMutation
+            .SendAsync(_http, HttpMethod.Post, _baseUrl + "/api/v1/ui/actions/tap", content, cancellationToken)
+            .ConfigureAwait(false);
         return response.IsSuccessStatusCode;
     }
 
@@ -73,7 +75,9 @@ public sealed class AgentClient : IDisposable
     public async Task<JsonElement?> SendWebViewCdpCommandAsync(string method, JsonElement? @params = null, string? contextId = null, CancellationToken cancellationToken = default)
     {
         var payload = JsonContent.Create(new { context = contextId, method, @params }, options: _jsonOptions);
-        using var response = await _http.PostAsync(new Uri(_baseUrl + "/api/v1/webview/cdp"), payload, cancellationToken).ConfigureAwait(false);
+        using var response = await DevFlowMutation
+            .SendAsync(_http, HttpMethod.Post, _baseUrl + "/api/v1/webview/cdp", payload, cancellationToken)
+            .ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
         using var document = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken).ConfigureAwait(false);
         return document.RootElement.Clone();
@@ -90,7 +94,14 @@ public sealed class AgentClient : IDisposable
     public async Task<(bool Success, JsonElement Result)> CallExtensionAsync(string name, JsonElement[]? args = null, CancellationToken cancellationToken = default)
     {
         var payload = JsonContent.Create(new { args }, options: _jsonOptions);
-        using var response = await _http.PostAsync(new Uri(_baseUrl + $"/api/v1/invoke/actions/{Uri.EscapeDataString(name)}"), payload, cancellationToken).ConfigureAwait(false);
+        using var response = await DevFlowMutation
+            .SendAsync(
+                _http,
+                HttpMethod.Post,
+                _baseUrl + $"/api/v1/invoke/actions/{Uri.EscapeDataString(name)}",
+                payload,
+                cancellationToken)
+            .ConfigureAwait(false);
         using var document = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken).ConfigureAwait(false);
         return (response.IsSuccessStatusCode, document.RootElement.Clone());
     }

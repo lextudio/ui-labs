@@ -424,7 +424,8 @@ internal static class DevFlowAssert
     public static async Task<JsonElement> PostJsonAsync(HttpClient client, string path, string body, CancellationToken cancellationToken)
     {
         using var content = new StringContent(body, Encoding.UTF8, "application/json");
-        using var response = await client.PostAsync(path, content, cancellationToken);
+        using var response = await LeXtudio.DevFlow.Driver.DevFlowMutation.SendAsync(
+            client, HttpMethod.Post, path, content, cancellationToken);
         response.EnsureSuccessStatusCode();
         using var document = await JsonDocument.ParseAsync(
             await response.Content.ReadAsStreamAsync(cancellationToken),

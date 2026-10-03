@@ -17,6 +17,7 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit.v3.mtp-v2" />
     <PackageReference Include="xunit.runner.visualstudio" />
+    <ProjectReference Include="..\LeXtudio.DevFlow.Driver\LeXtudio.DevFlow.Driver.csproj" />
     <ProjectReference Include="..\LeXtudio.DevFlow.Agent.Wpf\LeXtudio.DevFlow.Agent.Wpf.csproj" />
   </ItemGroup>
 

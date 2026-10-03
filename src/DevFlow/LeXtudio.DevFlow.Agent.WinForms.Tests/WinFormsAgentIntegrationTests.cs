@@ -471,8 +471,12 @@ public class WinFormsAgentIntegrationTests
     }
 
     private static Task<HttpResponseMessage> GetAsync(HttpClient client, string requestUri) => client.GetAsync(requestUri, TestContext.Current.CancellationToken);
-    private static Task<HttpResponseMessage> PostAsync(HttpClient client, string requestUri, HttpContent content) => client.PostAsync(requestUri, content, TestContext.Current.CancellationToken);
-    private static Task<HttpResponseMessage> PutAsync(HttpClient client, string requestUri, HttpContent content) => client.PutAsync(requestUri, content, TestContext.Current.CancellationToken);
+    private static Task<HttpResponseMessage> PostAsync(HttpClient client, string requestUri, HttpContent content)
+        => LeXtudio.DevFlow.Driver.DevFlowMutation.SendAsync(
+            client, HttpMethod.Post, requestUri, content, TestContext.Current.CancellationToken);
+    private static Task<HttpResponseMessage> PutAsync(HttpClient client, string requestUri, HttpContent content)
+        => LeXtudio.DevFlow.Driver.DevFlowMutation.SendAsync(
+            client, HttpMethod.Put, requestUri, content, TestContext.Current.CancellationToken);
     private static Task<Stream> ReadAsStreamAsync(HttpContent content) => content.ReadAsStreamAsync(TestContext.Current.CancellationToken);
     private static Task<byte[]> ReadAsByteArrayAsync(HttpContent content) => content.ReadAsByteArrayAsync(TestContext.Current.CancellationToken);
     private static Task Delay(int millisecondsTimeout) => Task.Delay(millisecondsTimeout, TestContext.Current.CancellationToken);
