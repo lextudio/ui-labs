@@ -2,8 +2,27 @@ namespace LeXtudio.DevFlow.Agent.Core;
 
 public static class WindowsNativeActions
 {
-    public static bool TryTap<TTarget>(TTarget target, Func<TTarget, WindowsScreenPoint?> pointResolver)
-        => TryTap(() => pointResolver(target));
+    /// <summary>
+    /// Attempts a native tap, optionally gated on the target being able to receive the click.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="canDeliver"/> exists because sending the click is not the same as the click landing.
+    /// On a headless Windows runner the input APIs succeed while nothing receives them, so an unguarded
+    /// native tap reports success and the caller's semantic fallback never runs. Gating on the target window
+    /// being foreground keeps native input on a real desktop and lets the fallback take over when it cannot work.
+    /// </remarks>
+    public static bool TryTap<TTarget>(
+        TTarget target,
+        Func<TTarget, WindowsScreenPoint?> pointResolver,
+        Func<TTarget, bool>? canDeliver = null)
+    {
+        if (canDeliver is not null && !canDeliver(target))
+        {
+            return false;
+        }
+
+        return TryTap(() => pointResolver(target));
+    }
 
     public static bool TryTap(Func<WindowsScreenPoint?> pointResolver)
     {

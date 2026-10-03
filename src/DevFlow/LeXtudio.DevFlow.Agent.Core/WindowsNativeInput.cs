@@ -47,6 +47,17 @@ public static class WindowsNativeInput
         return GetForegroundWindow() == hwnd;
     }
 
+    /// <summary>
+    /// Whether <paramref name="hwnd"/> is the window that would receive synthetic input right now.
+    /// </summary>
+    /// <remarks>
+    /// SendInput, mouse_event and SetCursorPos all deliver to the foreground window's input queue, so a
+    /// click aimed at a background window is not merely lost - it lands on whatever is in front. Callers use
+    /// this to skip the native path instead of reporting a click that went nowhere.
+    /// </remarks>
+    public static bool IsForegroundWindow(IntPtr hwnd)
+        => OperatingSystem.IsWindows() && hwnd != IntPtr.Zero && GetForegroundWindow() == hwnd;
+
     public static bool TrySendClick(int x, int y)
     {
         if (!OperatingSystem.IsWindows())

@@ -255,6 +255,13 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
         }).Task ?? Task.FromResult(false);
     }
 
+    /// <summary>
+    /// Whether synthetic input aimed inside this window can reach it; see the WinForms agent for why.
+    /// </summary>
+    private static bool CanWindowReceiveNativeInput(Window? window)
+        => window is { IsLoaded: true } && WindowsNativeInput.IsForegroundWindow(
+            new System.Windows.Interop.WindowInteropHelper(window).Handle);
+
     protected override async Task<object?> TryTapResponseAsync(string elementId)
     {
         // macOS has no in-process native tap (WindowsNativeActions is Windows-only and
@@ -285,7 +292,7 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
                 return null;
 
             return ActionSimulationExecutor.Execute(
-                () => target is FrameworkElement fe && WindowsNativeActions.TryTap(fe, TryGetScreenPoint) ? CreateSuccessResult(SimulationModes.Native, elementId) : null,
+                () => target is FrameworkElement fe && WindowsNativeActions.TryTap(fe, TryGetScreenPoint, fe => CanWindowReceiveNativeInput(Window.GetWindow(fe))) ? CreateSuccessResult(SimulationModes.Native, elementId) : null,
                 () => TryInvokeOnElement(target) ? CreateSuccessResult(SimulationModes.Semantic, elementId) : null);
         }).Task.ConfigureAwait(false);
     }
@@ -383,7 +390,7 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
                 return null;
 
             return ActionSimulationExecutor.Execute(
-                () => target is FrameworkElement fe && WindowsNativeActions.TryTap(fe, TryGetScreenPoint) ? CreateSuccessResult(SimulationModes.Native, elementId) : null,
+                () => target is FrameworkElement fe && WindowsNativeActions.TryTap(fe, TryGetScreenPoint, fe => CanWindowReceiveNativeInput(Window.GetWindow(fe))) ? CreateSuccessResult(SimulationModes.Native, elementId) : null,
                 () =>
                 {
                     var success = target switch

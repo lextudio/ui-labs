@@ -219,7 +219,7 @@ public sealed class MewUIAgentService : DevFlowAgentServiceBase
                 return;
 
             result = ActionSimulationExecutor.Execute(
-                () => WindowsNativeActions.TryTap(target, TryGetWindowsScreenPoint) ? CreateSuccessResult(SimulationModes.Native, elementId) : null,
+                () => WindowsNativeActions.TryTap(target, TryGetWindowsScreenPoint, _ => CanAppReceiveNativeInput()) ? CreateSuccessResult(SimulationModes.Native, elementId) : null,
                 () => TryInvokeOnElement(target) ? CreateSuccessResult(SimulationModes.Reflection, elementId) : null);
         });
         return Task.FromResult(result);
@@ -349,7 +349,7 @@ public sealed class MewUIAgentService : DevFlowAgentServiceBase
         app.Dispatcher.Invoke(() =>
         {
             var target = _treeWalker.FindElementObjectById(elementId);
-            if (target != null && WindowsNativeActions.TryTap(target, TryGetWindowsScreenPoint))
+            if (target != null && WindowsNativeActions.TryTap(target, TryGetWindowsScreenPoint, _ => CanAppReceiveNativeInput()))
             {
                 result = CreateSuccessResult(SimulationModes.Native, elementId);
                 return;
@@ -495,6 +495,24 @@ public sealed class MewUIAgentService : DevFlowAgentServiceBase
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Whether synthetic input can reach the app window; see the WinForms agent for why this matters.
+    /// </summary>
+    /// <remarks>
+    /// Checks the window that owns the coordinates rather than the element: the element may not be realized
+    /// yet, while the window decides where input is delivered.
+    /// </remarks>
+    private static bool CanAppReceiveNativeInput()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return false;
+        }
+
+        var window = Application.Current?.AllWindows.FirstOrDefault(w => w.Handle != 0);
+        return window is not null && WindowsNativeInput.IsForegroundWindow(window.Handle);
     }
 
     private static WindowsScreenPoint? TryGetWindowsScreenPoint(object target)

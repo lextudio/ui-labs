@@ -102,6 +102,26 @@ public sealed class WinFormsAgentService(AgentOptions? options = null) : DevFlow
         });
     }
 
+    /// <summary>
+    /// Whether synthetic input aimed at this control can actually reach it.
+    /// </summary>
+    /// <remarks>
+    /// A windowed app on a session with no foreground window - a CI runner, a locked desktop - still gets a
+    /// successful SetCursorPos and mouse_event, so without this check the native tap reports success, the
+    /// semantic fallback never runs, and the click silently does nothing.
+    /// </remarks>
+    private static bool CanReceiveNativeInput(Control control)
+    {
+        if (!control.IsHandleCreated)
+        {
+            return false;
+        }
+
+        var window = control.FindForm();
+        return window is { IsHandleCreated: true }
+            && WindowsNativeInput.IsForegroundWindow(window.Handle);
+    }
+
     protected override Task<object?> TryTapResponseAsync(string elementId)
     {
         return InvokeOnUiThread<object?>(() =>
@@ -111,7 +131,7 @@ public sealed class WinFormsAgentService(AgentOptions? options = null) : DevFlow
                 return null;
 
             return ActionSimulationExecutor.Execute(
-                () => WindowsNativeActions.TryTap(control, TryGetScreenPoint) ? CreateSuccessResult(SimulationModes.Native, elementId) : null,
+                () => WindowsNativeActions.TryTap(control, TryGetScreenPoint, CanReceiveNativeInput) ? CreateSuccessResult(SimulationModes.Native, elementId) : null,
                 () =>
                 {
                     if (control is Button button)
@@ -211,7 +231,7 @@ public sealed class WinFormsAgentService(AgentOptions? options = null) : DevFlow
                 return null;
 
             return ActionSimulationExecutor.Execute(
-                () => WindowsNativeActions.TryTap(control, TryGetScreenPoint) ? CreateSuccessResult(SimulationModes.Native, elementId) : null,
+                () => WindowsNativeActions.TryTap(control, TryGetScreenPoint, CanReceiveNativeInput) ? CreateSuccessResult(SimulationModes.Native, elementId) : null,
                 () =>
                 {
                     _ = control.Focus();
