@@ -40,6 +40,10 @@ jobs:
         run: dotnet test src/DevFlow/LeXtudio.DevFlow.Agent.Core.Tests/LeXtudio.DevFlow.Agent.Core.Tests.csproj --configuration Release --no-restore
 
       - name: Restore CLI unit tests
+        # bash -e aborts on the first failing command. The Windows default shell is
+        # PowerShell, which ignores a native command's exit code and returns the last one, which
+{indent}  # let failing dotnet test runs report success.
+{indent}  shell: bash
         run: |
           dotnet restore src/Cli/src/LeXtudio.Wpf.Cli.UnitTests/LeXtudio.Wpf.Cli.UnitTests.csproj
           dotnet restore src/Cli/src/LeXtudio.LibreWpf.Cli.UnitTests/LeXtudio.LibreWpf.Cli.UnitTests.csproj
@@ -56,6 +60,9 @@ jobs:
 
       - name: Restore WinForms agent tests
         run: dotnet restore src/DevFlow/LeXtudio.DevFlow.Agent.WinForms.Tests/LeXtudio.DevFlow.Agent.WinForms.Tests.csproj
+
+      - name: Restore LibreWinForms agent tests
+        run: dotnet restore src/DevFlow/LeXtudio.DevFlow.Agent.LibreWinForms.Tests/LeXtudio.DevFlow.Agent.LibreWinForms.Tests.csproj
 
       - name: Restore Uno agent tests
         run: dotnet restore src/DevFlow/LeXtudio.DevFlow.Agent.Uno.Tests/LeXtudio.DevFlow.Agent.Uno.Tests.csproj
@@ -81,10 +88,20 @@ jobs:
       - name: Run WinForms agent tests
         run: dotnet test src/DevFlow/LeXtudio.DevFlow.Agent.WinForms.Tests/LeXtudio.DevFlow.Agent.WinForms.Tests.csproj --configuration Release --no-restore
 
+      # Windows has native WinForms, so the LibreWinForms port needs no GLFW or Vulkan here; the Linux
+      # runner is the one that has to install them, and the macOS runner covers the port on a non-Windows
+      # platform.
+      - name: Run LibreWinForms agent tests
+        run: dotnet test src/DevFlow/LeXtudio.DevFlow.Agent.LibreWinForms.Tests/LeXtudio.DevFlow.Agent.LibreWinForms.Tests.csproj --configuration Release --no-restore
+
       - name: Run Jalium agent tests
         run: dotnet test src/DevFlow/LeXtudio.DevFlow.Agent.Jalium.Tests/LeXtudio.DevFlow.Agent.Jalium.Tests.csproj --configuration Release --no-restore
 
       - name: Run CLI unit tests
+        # bash -e aborts on the first failing command. The Windows default shell is
+        # PowerShell, which ignores a native command's exit code and returns the last one, which
+{indent}  # let failing dotnet test runs report success.
+{indent}  shell: bash
         run: |
           dotnet test src/Cli/src/LeXtudio.Wpf.Cli.UnitTests/LeXtudio.Wpf.Cli.UnitTests.csproj --configuration Release --no-restore
           dotnet test src/Cli/src/LeXtudio.LibreWpf.Cli.UnitTests/LeXtudio.LibreWpf.Cli.UnitTests.csproj --configuration Release --no-restore
@@ -149,6 +166,10 @@ jobs:
         run: dotnet restore src/DevFlow/LeXtudio.DevFlow.Agent.LibreWinForms.Tests/LeXtudio.DevFlow.Agent.LibreWinForms.Tests.csproj
 
       - name: Restore MewUI CLI unit tests
+        # bash -e aborts on the first failing command. The Windows default shell is
+        # PowerShell, which ignores a native command's exit code and returns the last one, which
+{indent}  # let failing dotnet test runs report success.
+{indent}  shell: bash
         run: |
           dotnet restore src/Cli/src/LeXtudio.MewUI.Cli.UnitTests/LeXtudio.MewUI.Cli.UnitTests.csproj
           dotnet restore src/Cli/src/LeXtudio.Uno.Cli.UnitTests/LeXtudio.Uno.Cli.UnitTests.csproj
