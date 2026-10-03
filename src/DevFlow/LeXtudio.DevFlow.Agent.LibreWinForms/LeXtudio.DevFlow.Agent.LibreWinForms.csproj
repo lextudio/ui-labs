@@ -1,0 +1,57 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>LeXtudio.DevFlow.Agent.LibreWinForms</AssemblyName>
+    <RootNamespace>LeXtudio.DevFlow.Agent.WinForms</RootNamespace>
+    <IsPackable>true</IsPackable>
+    <PackageId>LeXtudio.DevFlow.Agent.LibreWinForms</PackageId>
+    <PackageIcon>company_logo_512.png</PackageIcon>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <DefineConstants>$(DefineConstants);LIBREWINFORMS</DefineConstants>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+  </PropertyGroup>
+
+  <!--
+    This package references the LibreWinForms runtime packages directly instead of using
+    LibreWinForms.Sdk. LibreWinForms.Sdk 0.1.0-preview.57 and later add an unconditional
+    `TargetFramework != net11.0` build error, which would force this agent onto a .NET 11 preview SDK;
+    the SDK's own default runtime (preview.45) only implements 456 types and is missing
+    Application.OpenForms, Control.DrawToBitmap and Application.ProductName, which this agent needs.
+
+    Referencing the packages directly keeps the agent usable from net10.0 while still using the current
+    runtime, and matches how LeXtudio.DevFlow.Agent.ProGPU consumes ProGPU in this repository. The package
+    multi-targets net10.0 and net11.0 so consumers on either framework can take it.
+
+    LibreWinForms.Sdk remains the right choice for LibreWinForms *applications*: it supplies the
+    ProGPU platform bootstrap module initializer that a host app needs at startup.
+  -->
+  <ItemGroup>
+    <PackageReference Include="LibreWinForms.System.Windows.Forms" Version="0.1.0-preview.65" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\..\images\company_logo_512.png" Pack="true" PackagePath="\" Visible="false" />
+    <None Include="README.md" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LeXtudio.DevFlow.Agent.Core\LeXtudio.DevFlow.Agent.Core.csproj" />
+    <ProjectReference Include="..\LeXtudio.DevFlow.Analyzers\LeXtudio.DevFlow.Analyzers.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\LeXtudio.DevFlow.Agent.WinForms\**\*.cs" Link="Shared\%(Filename)%(Extension)" Exclude="..\LeXtudio.DevFlow.Agent.WinForms\obj\**\*.cs" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <GitVersionTargetFramework>net10.0</GitVersionTargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Update="GitVersion.MsBuild" Version="6.7.0" />
+  </ItemGroup>
+
+</Project>

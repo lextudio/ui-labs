@@ -16,6 +16,7 @@
   <Folder Name="/DevFlow/">
     <Project Path="DevFlow/LeXtudio.DevFlow.Driver/LeXtudio.DevFlow.Driver.csproj" />
     <Project Path="DevFlow/LeXtudio.DevFlow.Agent.Core/LeXtudio.DevFlow.Agent.Core.csproj" />
+    <Project Path="DevFlow/LeXtudio.DevFlow.Agent.Core.Tests/LeXtudio.DevFlow.Agent.Core.Tests.csproj" />
     <Project Path="DevFlow/LeXtudio.DevFlow.Agent.Wpf/LeXtudio.DevFlow.Agent.Wpf.csproj" />
     <Project Path="DevFlow/LeXtudio.DevFlow.Agent.Wpf.Tests/LeXtudio.DevFlow.Agent.Wpf.Tests.csproj" />
     <Project Path="DevFlow/WpfDevFlowTestApp/WpfDevFlowTestApp.csproj" />
@@ -25,6 +26,9 @@
     <Project Path="DevFlow/LeXtudio.DevFlow.Agent.WinForms/LeXtudio.DevFlow.Agent.WinForms.csproj" />
     <Project Path="DevFlow/LeXtudio.DevFlow.Agent.WinForms.Tests/LeXtudio.DevFlow.Agent.WinForms.Tests.csproj" />
     <Project Path="DevFlow/WinFormsDevFlowTestApp/WinFormsDevFlowTestApp.csproj" />
+    <Project Path="DevFlow/LeXtudio.DevFlow.Agent.LibreWinForms/LeXtudio.DevFlow.Agent.LibreWinForms.csproj" />
+    <Project Path="DevFlow/LeXtudio.DevFlow.Agent.LibreWinForms.Tests/LeXtudio.DevFlow.Agent.LibreWinForms.Tests.csproj" />
+    <Project Path="DevFlow/LibreWinFormsDevFlowTestApp/LibreWinFormsDevFlowTestApp.csproj" />
     <Project Path="DevFlow/LeXtudio.DevFlow.Agent.Jalium/LeXtudio.DevFlow.Agent.Jalium.csproj" />
     <Project Path="DevFlow/LeXtudio.DevFlow.Agent.Jalium.Tests/LeXtudio.DevFlow.Agent.Jalium.Tests.csproj" />
     <Project Path="DevFlow/JaliumDevFlowTestApp/JaliumDevFlowTestApp.csproj" />

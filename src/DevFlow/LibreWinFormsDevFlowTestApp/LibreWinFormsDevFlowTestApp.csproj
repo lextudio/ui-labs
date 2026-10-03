@@ -1,0 +1,23 @@
+<Project Sdk="LibreWinForms.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!-- LibreWinForms.Sdk 0.1.0-preview.57+ requires net11.0, so the host app targets net11.0 while the
+         agent library multi-targets net10.0 and net11.0. -->
+    <TargetFramework>net11.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>LibreWinFormsDevFlowTestApp</AssemblyName>
+    <RootNamespace>LibreWinFormsDevFlowTestApp</RootNamespace>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <!-- LibreWinForms.Sdk forces UseWindowsForms=false (it supplies its own source-built
+         System.Windows.Forms), but derives LibreWinFormsUseSystemWindowsForms from it, and that property
+         gates both the canonical WinForms PackageReference and generation of ApplicationConfiguration. -->
+    <LibreWinFormsUseSystemWindowsForms>true</LibreWinFormsUseSystemWindowsForms>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LeXtudio.DevFlow.Agent.LibreWinForms\LeXtudio.DevFlow.Agent.LibreWinForms.csproj" />
+  </ItemGroup>
+
+</Project>
