@@ -162,6 +162,10 @@ jobs:
         run: dotnet test src/DevFlow/LeXtudio.DevFlow.Agent.Core.Tests/LeXtudio.DevFlow.Agent.Core.Tests.csproj --configuration Release --no-restore
 
       - name: Run LibreWinForms agent tests
+        # The app is windowed and Silk.NET finds no usable window platform on a headless Linux
+        # runner, so every case would be skipped and `dotnet test` reports "Zero tests ran" as a
+        # failure. The suite runs on the macOS job instead.
+        if: runner.os == 'macOS'
         run: dotnet test src/DevFlow/LeXtudio.DevFlow.Agent.LibreWinForms.Tests/LeXtudio.DevFlow.Agent.LibreWinForms.Tests.csproj --configuration Release --no-restore
 
       - name: Run Uno CLI unit tests
