@@ -431,9 +431,21 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
         }).Task ?? Task.FromResult<object?>(null);
     }
 
-    protected override Task<object?> TryKeyAsync(string? elementId, string? key, string? text)
+    protected override async Task<object?> TryKeyAsync(string? elementId, string? key, string? text)
     {
-        return Application.Current?.Dispatcher.InvokeAsync<object?>(() =>
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher is null)
+            return null;
+
+        // Without a target element, a key goes to the focused window, as a user's key press does.
+        if (string.IsNullOrWhiteSpace(elementId) && NativeKeyboard.IsAvailable && NativeKeyboard.CanSend(key))
+        {
+            await dispatcher.InvokeAsync(BringApplicationToForeground).Task.ConfigureAwait(false);
+            if (await Task.Run(() => NativeKeyboard.TrySendChord(key!)).ConfigureAwait(false))
+                return CreateSuccessResult(SimulationModes.Native, elementId, key: key, text: text);
+        }
+
+        return await dispatcher.InvokeAsync<object?>(() =>
         {
             var keyValue = key ?? text ?? string.Empty;
             var normalized = keyValue.Trim().ToLowerInvariant();
@@ -457,7 +469,23 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
             };
 
             return ok ? CreateSuccessResult(SimulationModes.PropertyMutation, elementId, key: keyValue, text: text) : null;
-        }).Task ?? Task.FromResult<object?>(null);
+        }).Task.ConfigureAwait(false);
+    }
+
+    /// <summary>Gives the application the keyboard focus unless one of its windows has it already.</summary>
+    private static void BringApplicationToForeground()
+    {
+        var app = Application.Current;
+        if (app == null || !OperatingSystem.IsWindows())
+            return;
+
+        var windows = app.Windows.OfType<Window>().ToList();
+        if (windows.Any(w => WindowsNativeInput.IsForegroundWindow(new System.Windows.Interop.WindowInteropHelper(w).Handle)))
+            return;
+
+        var target = windows.FirstOrDefault(w => w.IsActive) ?? app.MainWindow;
+        if (target != null)
+            WindowsNativeInput.TryBringToForeground(new System.Windows.Interop.WindowInteropHelper(target).Handle);
     }
 
     protected override Task<bool> TryBackAsync()

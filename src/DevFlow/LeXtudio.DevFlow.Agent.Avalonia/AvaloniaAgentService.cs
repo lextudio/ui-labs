@@ -437,9 +437,17 @@ public sealed class AvaloniaAgentService : DevFlowAgentServiceBase
                 : null);
     }
 
-    protected override Task<object?> TryKeyAsync(string? elementId, string? key, string? text)
+    protected override async Task<object?> TryKeyAsync(string? elementId, string? key, string? text)
     {
-        return RunOnUIThreadAsync<object?>(() =>
+        // Without a target element, a key goes to the focused window, as a user's key press does.
+        if (string.IsNullOrWhiteSpace(elementId) && NativeKeyboard.IsAvailable && NativeKeyboard.CanSend(key))
+        {
+            await RunOnUIThreadAsync(ActivateMainWindowIfNoneIsActive).ConfigureAwait(false);
+            if (await Task.Run(() => NativeKeyboard.TrySendChord(key!)).ConfigureAwait(false))
+                return CreateSuccessResult(SimulationModes.Native, elementId, key: key, text: text);
+        }
+
+        return await RunOnUIThreadAsync<object?>(() =>
         {
             var keyValue = key ?? text ?? string.Empty;
             var normalized = keyValue.Trim().ToLowerInvariant();
@@ -477,7 +485,17 @@ public sealed class AvaloniaAgentService : DevFlowAgentServiceBase
             }
 
             return null;
-        });
+        }).ConfigureAwait(false);
+    }
+
+    /// <summary>Gives the application the keyboard focus unless one of its windows has it already.</summary>
+    private static bool ActivateMainWindowIfNoneIsActive()
+    {
+        if (AvaloniaVisualTreeWalker.GetWindows().Any(w => w.IsActive))
+            return true;
+
+        AvaloniaVisualTreeWalker.GetMainWindow()?.Activate();
+        return true;
     }
 
     protected override Task<bool> TryBackAsync()

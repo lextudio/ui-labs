@@ -203,6 +203,29 @@ public static class LinuxNativeInput
         }
     }
 
+    /// <summary>
+    /// Presses the keys named by X keysym names (e.g. "Control_L", "Tab") in order, then releases them in
+    /// reverse order - a key chord.
+    /// </summary>
+    public static bool TrySendKeysymChord(IReadOnlyList<string> keysymNames)
+        => WithDisplay(display =>
+        {
+            var codes = new List<byte>();
+            foreach (var name in keysymNames)
+            {
+                var code = XKeysymToKeycode(display, XStringToKeysym(name));
+                if (code == 0)
+                    return false;
+                codes.Add(code);
+            }
+
+            foreach (var code in codes)
+                XTestFakeKeyEvent(display, code, true, 0);
+            for (var i = codes.Count - 1; i >= 0; i--)
+                XTestFakeKeyEvent(display, codes[i], false, 0);
+            return true;
+        });
+
     private static bool SendKeysym(uint keysym)
     {
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
