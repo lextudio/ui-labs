@@ -34,5 +34,8 @@
     <Project Path="DevFlow/LeXtudio.DevFlow.Agent.Jalium.Tests/LeXtudio.DevFlow.Agent.Jalium.Tests.csproj" />
     <Project Path="DevFlow/JaliumDevFlowTestApp/JaliumDevFlowTestApp.csproj" />
     <Project Path="DevFlow/LeXtudio.DevFlow.Agent.ProGPU/LeXtudio.DevFlow.Agent.ProGPU.csproj" />
+    <Project Path="DevFlow/LeXtudio.DevFlow.Agent.Avalonia/LeXtudio.DevFlow.Agent.Avalonia.csproj" />
+    <Project Path="DevFlow/LeXtudio.DevFlow.Agent.Avalonia.Tests/LeXtudio.DevFlow.Agent.Avalonia.Tests.csproj" />
+    <Project Path="DevFlow/AvaloniaDevFlowTestApp/AvaloniaDevFlowTestApp.csproj" />
   </Folder>
 </Solution>

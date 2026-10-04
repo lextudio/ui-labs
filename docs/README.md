@@ -1,6 +1,6 @@
 # WPF Labs Docs
 
-This folder contains quick-start documentation for DevFlow integration and CLI usage across WPF, Uno/WinUI 3, MewUI, and Jalium projects.
+This folder contains quick-start documentation for DevFlow integration and CLI usage across WPF, Uno/WinUI 3, MewUI, Jalium, and Avalonia projects.
 
 ## DevFlow Guides
 
@@ -8,6 +8,7 @@ This folder contains quick-start documentation for DevFlow integration and CLI u
 - [Uno / WinUI 3 DevFlow Guide](./devflow/howto-uno.md)
 - [MewUI DevFlow Guide](./devflow/howto-mewui.md)
 - [Jalium DevFlow Guide](./devflow/howto-jalium.md)
+- [Avalonia DevFlow Guide](./devflow/howto-avalonia.md)
 
 ## CLI Guides
 

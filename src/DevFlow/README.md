@@ -1,8 +1,8 @@
 # Desktop DevFlow
 
-A Windows desktop DevFlow product designed for classic WPF and WinForms applications, with additional Uno, MewUI, LibreWPF, and Jalium coverage.
+A Windows desktop DevFlow product designed for classic WPF and WinForms applications, with additional Uno, MewUI, LibreWPF, Jalium, and Avalonia coverage.
 
-This folder contains the shared DevFlow runtime packages for WPF, WinForms, WinUI 3, Uno Platform, MewUI, LibreWPF, and Jalium applications.
+This folder contains the shared DevFlow runtime packages for WPF, WinForms, WinUI 3, Uno Platform, MewUI, LibreWPF, Jalium, and Avalonia applications.
 
 Each package has its own package-specific README for the most relevant installation and usage guidance:
 
@@ -13,6 +13,7 @@ Each package has its own package-specific README for the most relevant installat
 - `LeXtudio.DevFlow.Agent.MewUI/README.md`
 - `LeXtudio.DevFlow.Agent.LibreWpf/README.md`
 - `LeXtudio.DevFlow.Agent.Jalium/README.md`
+- `LeXtudio.DevFlow.Agent.Avalonia/README.md`
 - `LeXtudio.DevFlow.Driver/README.md`
 - `LeXtudio.DevFlow.Inspector/README.md`
 - `LeXtudio.DevFlow.Broker/README.md`
@@ -64,6 +65,7 @@ dotnet add package LeXtudio.DevFlow.Driver
 - `LeXtudio.DevFlow.Agent.MewUI` — MewUI runtime support via NuGet-deployed Aprillz.MewUI packages
 - `LeXtudio.DevFlow.Agent.LibreWpf` — LibreWPF runtime support, sharing the WPF visual tree walker via linked source
 - `LeXtudio.DevFlow.Agent.Jalium` — Jalium runtime support via Jalium.UI.Controls
+- `LeXtudio.DevFlow.Agent.Avalonia` — Avalonia desktop runtime support (Windows, macOS, Linux), including OS-level pointer input for drags
 - `LeXtudio.DevFlow.Driver` — HTTP client for querying a running DevFlow agent
 - `LeXtudio.DevFlow.Inspector` — browser-based live UI inspector server, hosted by each CLI's `devflow inspector` command
 - `LeXtudio.DevFlow.Broker` — multi-agent broker daemon for discovery/registration, hosted by each CLI's `devflow broker` command

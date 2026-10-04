@@ -1,6 +1,6 @@
 # UI Labs
 
-Initially this repo contains the CLI/DevFlow proof-of-concept and supporting tooling for the WPF tooling research project. Now experiments on other UI frameworks like WinForms, WinUI 3, Uno Platform, MewUI, LibreWPF, and Jalium are also included for comparison and validation purposes.
+Initially this repo contains the CLI/DevFlow proof-of-concept and supporting tooling for the WPF tooling research project. Now experiments on other UI frameworks like WinForms, WinUI 3, Uno Platform, MewUI, LibreWPF, Jalium, and Avalonia are also included for comparison and validation purposes.
 
 This project is not affiliated with, endorsed by, or sponsored by Microsoft, or other vendors of the frameworks.
 
@@ -14,6 +14,7 @@ This project is not affiliated with, endorsed by, or sponsored by Microsoft, or 
 - [![LeXtudio.DevFlow.Agent.LibreWpf](https://img.shields.io/nuget/v/LeXtudio.DevFlow.Agent.LibreWpf.svg?label=LeXtudio.DevFlow.Agent.LibreWpf)](https://www.nuget.org/packages/LeXtudio.DevFlow.Agent.LibreWpf)
 - [![LeXtudio.DevFlow.Agent.LibreWinForms](https://img.shields.io/nuget/v/LeXtudio.DevFlow.Agent.LibreWinForms.svg?label=LeXtudio.DevFlow.Agent.LibreWinForms)](https://www.nuget.org/packages/LeXtudio.DevFlow.Agent.LibreWinForms)
 - [![LeXtudio.DevFlow.Agent.Jalium](https://img.shields.io/nuget/v/LeXtudio.DevFlow.Agent.Jalium.svg?label=LeXtudio.DevFlow.Agent.Jalium)](https://www.nuget.org/packages/LeXtudio.DevFlow.Agent.Jalium)
+- [![LeXtudio.DevFlow.Agent.Avalonia](https://img.shields.io/nuget/v/LeXtudio.DevFlow.Agent.Avalonia.svg?label=LeXtudio.DevFlow.Agent.Avalonia)](https://www.nuget.org/packages/LeXtudio.DevFlow.Agent.Avalonia)
 - [![LeXtudio.DevFlow.Driver](https://img.shields.io/nuget/v/LeXtudio.DevFlow.Driver.svg?label=LeXtudio.DevFlow.Driver)](https://www.nuget.org/packages/LeXtudio.DevFlow.Driver)
 - [![LeXtudio.DevFlow.Inspector](https://img.shields.io/nuget/v/LeXtudio.DevFlow.Inspector.svg?label=LeXtudio.DevFlow.Inspector)](https://www.nuget.org/packages/LeXtudio.DevFlow.Inspector)
 - [![LeXtudio.DevFlow.Broker](https://img.shields.io/nuget/v/LeXtudio.DevFlow.Broker.svg?label=LeXtudio.DevFlow.Broker)](https://www.nuget.org/packages/LeXtudio.DevFlow.Broker)
@@ -28,7 +29,7 @@ This project is not affiliated with, endorsed by, or sponsored by Microsoft, or 
 
 - `src/DevFlow/`
   - `LeXtudio.DevFlow.Agent.Core/` — shared DevFlow core service layer (HTTP server, CSS selector/query engine, network capture, Win32 alert detection).
-  - `LeXtudio.DevFlow.Agent.XXX/` — plain runtime implementation for DevFlow for XXX UI framework (WPF, WinForms, Uno, MewUI, LibreWPF, Jalium).
+  - `LeXtudio.DevFlow.Agent.XXX/` — plain runtime implementation for DevFlow for XXX UI framework (WPF, WinForms, Uno, MewUI, LibreWPF, Jalium, Avalonia).
   - `LeXtudio.DevFlow.Agent.XXX.Tests/` — integration tests covering DevFlow status, tree, screenshot, tap, and scroll behavior.
   - `XXXDevFlowTestApp/` — a small sample app instrumented with DevFlow for runtime validation for XXX UI framework.
   - `LeXtudio.DevFlow.Driver/` — HTTP client for querying a running DevFlow agent.
@@ -40,7 +41,7 @@ This project is not affiliated with, endorsed by, or sponsored by Microsoft, or 
 
 ## Key goals
 
-- Build DevFlow agents that expose runtime UI state for WinForms, WPF, WinUI 3, Uno Platform, MewUI, LibreWPF, and Jalium apps via HTTP.
+- Build DevFlow agents that expose runtime UI state for WinForms, WPF, WinUI 3, Uno Platform, MewUI, LibreWPF, Jalium, and Avalonia apps via HTTP.
 - Reuse shared DevFlow infrastructure where it makes sense, while keeping platform code in focused runtime packages.
 - Validate the approach with an end-to-end integration test and a live sample app.
 
@@ -60,7 +61,7 @@ Every agent (regardless of UI framework) exposes the same HTTP surface, reachabl
 | `webview` | WebView context listing, screenshot, and CDP command execution (WPF/WinForms/LibreWPF) |
 | `batch` / `commands` | Scripted multi-command execution over stdin and machine-readable command schema discovery |
 
-## How to use DevFlow with WPF/WinForms/WinUI 3/Uno Platform/MewUI/LibreWPF/Jalium
+## How to use DevFlow with WPF/WinForms/WinUI 3/Uno Platform/MewUI/LibreWPF/Jalium/Avalonia
 
 ### Build all relevant projects
 
@@ -146,6 +147,15 @@ dotnet run --no-build
 
 The sample app starts DevFlow on port `9223` by default and exposes the same shared DevFlow HTTP API used by the other runtime agents.
 
+### Run the Avalonia sample app
+
+```powershell
+cd src\DevFlow\AvaloniaDevFlowTestApp
+dotnet run --no-build
+```
+
+The sample app starts DevFlow on port `9223` by default (or on `DEVFLOW_AGENT_PORT`) and exposes the same shared DevFlow HTTP API used by the other runtime agents.
+
 ### Run WPF integration tests
 
 ```powershell
@@ -173,6 +183,15 @@ dotnet test --project LeXtudio.DevFlow.Agent.WinForms.Tests.csproj
 cd src\DevFlow\LeXtudio.DevFlow.Agent.MewUI.Tests
 dotnet test --project LeXtudio.DevFlow.Agent.MewUI.Tests.csproj
 ```
+
+### Run Avalonia integration tests
+
+```powershell
+cd src\DevFlow\LeXtudio.DevFlow.Agent.Avalonia.Tests
+dotnet test --project LeXtudio.DevFlow.Agent.Avalonia.Tests.csproj
+```
+
+On Linux the tests need an X display (for example `Xvfb :99` with `DISPLAY=:99`); the native pointer input test uses XTest and is skipped on other platforms.
 
 ## Use in your projects
 
@@ -227,6 +246,13 @@ dotnet add package LeXtudio.DevFlow.Agent.Jalium
 dotnet add package LeXtudio.DevFlow.Driver
 ```
 
+### Install packages to an Avalonia project
+
+```powershell
+dotnet add package LeXtudio.DevFlow.Agent.Avalonia
+dotnet add package LeXtudio.DevFlow.Driver
+```
+
 ## Install WPF CLI tool
 
 ```powershell
@@ -271,7 +297,7 @@ dotnet jalex --help
 
 ## Notes
 
-- The DevFlow agent is intentionally lightweight and focused on WPF/WinForms/WinUI 3/Uno Platform/MewUI/LibreWPF/Jalium runtime automation.
+- The DevFlow agent is intentionally lightweight and focused on WPF/WinForms/WinUI 3/Uno Platform/MewUI/LibreWPF/Jalium/Avalonia runtime automation.
 - The host app and test app demonstrate live UI tree inspection, screenshot capture, tap, and scroll interaction, plus the extensions/inspector/broker/network/ui/alert feature set described above.
 - Documentation for the DevFlow plan is available under `docs/devflow/`.
 

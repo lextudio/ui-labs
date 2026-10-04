@@ -73,6 +73,9 @@ jobs:
       - name: Restore Jalium agent tests
         run: dotnet restore src/DevFlow/LeXtudio.DevFlow.Agent.Jalium.Tests/LeXtudio.DevFlow.Agent.Jalium.Tests.csproj
 
+      - name: Restore Avalonia agent tests
+        run: dotnet restore src/DevFlow/LeXtudio.DevFlow.Agent.Avalonia.Tests/LeXtudio.DevFlow.Agent.Avalonia.Tests.csproj
+
       - name: Run Uno agent tests
         run: dotnet test src/DevFlow/LeXtudio.DevFlow.Agent.Uno.Tests/LeXtudio.DevFlow.Agent.Uno.Tests.csproj --configuration Release --no-restore
 
@@ -96,6 +99,9 @@ jobs:
 
       - name: Run Jalium agent tests
         run: dotnet test src/DevFlow/LeXtudio.DevFlow.Agent.Jalium.Tests/LeXtudio.DevFlow.Agent.Jalium.Tests.csproj --configuration Release --no-restore
+
+      - name: Run Avalonia agent tests
+        run: dotnet test src/DevFlow/LeXtudio.DevFlow.Agent.Avalonia.Tests/LeXtudio.DevFlow.Agent.Avalonia.Tests.csproj --configuration Release --no-restore
 
       - name: Run CLI unit tests
         # bash -e aborts on the first failing command. The Windows default shell is
@@ -145,7 +151,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libxkbcommon0 libinput10 xvfb \
             libglfw3 libgl1 libglu1-mesa libglx-mesa0 libxi6 libxcursor1 libxrandr2 libxinerama1 libxxf86vm1 \
-            libvulkan1 mesa-vulkan-drivers
+            libvulkan1 mesa-vulkan-drivers libxtst6
 
       - name: Start Xvfb
         if: runner.os == 'Linux'
@@ -158,6 +164,9 @@ jobs:
 
       - name: Restore MewUI agent tests
         run: dotnet restore src/DevFlow/LeXtudio.DevFlow.Agent.MewUI.Tests/LeXtudio.DevFlow.Agent.MewUI.Tests.csproj
+
+      - name: Restore Avalonia agent tests
+        run: dotnet restore src/DevFlow/LeXtudio.DevFlow.Agent.Avalonia.Tests/LeXtudio.DevFlow.Agent.Avalonia.Tests.csproj
 
       - name: Restore Core contract tests
         run: dotnet restore src/DevFlow/LeXtudio.DevFlow.Agent.Core.Tests/LeXtudio.DevFlow.Agent.Core.Tests.csproj
@@ -179,6 +188,10 @@ jobs:
 
       - name: Run MewUI agent tests
         run: dotnet test src/DevFlow/LeXtudio.DevFlow.Agent.MewUI.Tests/LeXtudio.DevFlow.Agent.MewUI.Tests.csproj --configuration Release --no-restore
+
+      # Uses the Xvfb display started above on Linux; its native pointer input test injects through XTest.
+      - name: Run Avalonia agent tests
+        run: dotnet test src/DevFlow/LeXtudio.DevFlow.Agent.Avalonia.Tests/LeXtudio.DevFlow.Agent.Avalonia.Tests.csproj --configuration Release --no-restore
 
       - name: Run Core contract tests
         run: dotnet test src/DevFlow/LeXtudio.DevFlow.Agent.Core.Tests/LeXtudio.DevFlow.Agent.Core.Tests.csproj --configuration Release --no-restore
