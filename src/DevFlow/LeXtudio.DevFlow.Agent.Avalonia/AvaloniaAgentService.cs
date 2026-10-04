@@ -276,15 +276,12 @@ public sealed class AvaloniaAgentService : DevFlowAgentServiceBase
 
     protected override async Task<object?> TryTapResponseAsync(string elementId)
     {
-        // macOS has no in-process native input, so a real click goes through cliclick, as in the WPF agent.
-        // Only the point is resolved on the UI thread; the click runs off it so the app keeps pumping.
-        if (OperatingSystem.IsMacOS() && CliclickInput.IsAvailable)
-        {
-            var point = await RunOnUIThreadAsync<PixelPoint?>(() =>
-                ResolveElementObject(elementId) is Visual visual ? TryGetScreenCenter(visual) : null).ConfigureAwait(false);
-            if (point is { } p && await Task.Run(() => CliclickInput.TryClick(p.X, p.Y, 1)).ConfigureAwait(false))
-                return CreateSuccessResult(SimulationModes.Native, elementId);
-        }
+        // Like the WPF agent: a real click on the element's centre where the platform can inject one, so
+        // the element sees the pointer events a user's click produces. Only the point is resolved on the
+        // UI thread; the click runs off it so the app keeps pumping and receives the events.
+        var point = await RunOnUIThreadAsync(() => ResolveClickablePoint(elementId)).ConfigureAwait(false);
+        if (point is { } p && await Task.Run(() => TryNativeClick(p.X, p.Y, rightButton: false)).ConfigureAwait(false))
+            return CreateSuccessResult(SimulationModes.Native, elementId);
 
         return await RunOnUIThreadAsync<object?>(() =>
         {
@@ -294,6 +291,72 @@ public sealed class AvaloniaAgentService : DevFlowAgentServiceBase
 
             return TryInvokeOnElement(target) ? CreateSuccessResult(SimulationModes.Semantic, elementId) : null;
         }).ConfigureAwait(false);
+    }
+
+    protected override async Task<object?> TryRightTapResponseAsync(string elementId)
+    {
+        var point = await RunOnUIThreadAsync(() => ResolveClickablePoint(elementId)).ConfigureAwait(false);
+        if (point is { } p && await Task.Run(() => TryNativeClick(p.X, p.Y, rightButton: true)).ConfigureAwait(false))
+            return CreateSuccessResult(SimulationModes.Native, elementId);
+
+        // Without native input: what a right click leads to, a context request.
+        return await RunOnUIThreadAsync<object?>(() =>
+        {
+            if (ResolveElementObject(elementId) is not Control control)
+                return null;
+
+            control.RaiseEvent(new ContextRequestedEventArgs());
+            return CreateSuccessResult(SimulationModes.Semantic, elementId);
+        }).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The screen point a native click on the element should go to: its centre, provided the element is
+    /// what the pointer would hit there. Null if the element is hidden or covered, or there is no native
+    /// input on this platform. Must be called on the UI thread.
+    /// </summary>
+    private PixelPoint? ResolveClickablePoint(string elementId)
+    {
+        if (!CanInjectNativeClicks || ResolveElementObject(elementId) is not Visual visual)
+            return null;
+
+        if (TryGetScreenCenter(visual) is not { } center || TopLevel.GetTopLevel(visual) is not { } topLevel)
+            return null;
+
+        var local = visual.TranslatePoint(new Point(visual.Bounds.Width / 2d, visual.Bounds.Height / 2d), topLevel);
+        if (local is not { } hitPoint || topLevel.InputHitTest(hitPoint) is not Visual hit)
+            return null;
+
+        return hit == visual || visual.IsVisualAncestorOf(hit) ? center : null;
+    }
+
+    private static bool CanInjectNativeClicks
+        => OperatingSystem.IsWindows()
+            || (OperatingSystem.IsLinux() && LinuxNativeInput.IsAvailable)
+            || (OperatingSystem.IsMacOS() && CliclickInput.IsAvailable);
+
+    private static bool TryNativeClick(double x, double y, bool rightButton)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var ix = (int)Math.Round(x);
+            var iy = (int)Math.Round(y);
+            return rightButton ? WindowsNativeInput.TrySendRightClick(ix, iy) : WindowsNativeInput.TrySendClick(ix, iy);
+        }
+
+        if (OperatingSystem.IsLinux())
+            return rightButton ? LinuxNativeInput.TryMouseRightClick(x, y) : LinuxNativeInput.TryMouseClick(x, y, 1);
+
+        if (OperatingSystem.IsMacOS())
+        {
+            if (!rightButton)
+                return CliclickInput.TryClick(x, y, 1);
+
+            return CliclickInput.TryPressDown(x, y, CliclickInput.MouseButton.Right)
+                && CliclickInput.TryRelease(x, y, CliclickInput.MouseButton.Right);
+        }
+
+        return false;
     }
 
     /// <summary>

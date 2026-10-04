@@ -297,6 +297,32 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
         }).Task.ConfigureAwait(false);
     }
 
+    protected override async Task<object?> TryRightTapResponseAsync(string elementId)
+    {
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher is null)
+            return null;
+
+        return await dispatcher.InvokeAsync<object?>(() =>
+        {
+            if (ResolveElementObject(elementId) is not FrameworkElement fe)
+                return null;
+
+            return ActionSimulationExecutor.Execute(
+                () => CanWindowReceiveNativeInput(Window.GetWindow(fe)) && WindowsNativeActions.TryRightTap(fe, TryGetScreenPoint) ? CreateSuccessResult(SimulationModes.Native, elementId) : null,
+                () =>
+                {
+                    // Without native input: what a right click leads to, the element's context menu.
+                    if (fe.ContextMenu is not { } menu)
+                        return null;
+
+                    menu.PlacementTarget = fe;
+                    menu.IsOpen = true;
+                    return CreateSuccessResult(SimulationModes.Semantic, elementId);
+                });
+        }).Task.ConfigureAwait(false);
+    }
+
     protected override Task<bool> TryScrollAsync(string elementId, double deltaX, double deltaY)
     {
         return Application.Current?.Dispatcher.InvokeAsync(() =>

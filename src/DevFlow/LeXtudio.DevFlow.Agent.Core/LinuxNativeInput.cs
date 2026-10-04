@@ -19,6 +19,9 @@ public static class LinuxNativeInput
     /// <summary>X11 button number for the left mouse button.</summary>
     private const uint Button1 = 1;
 
+    /// <summary>X11 button number for the right mouse button.</summary>
+    private const uint Button3 = 3;
+
     /// <summary>
     /// Moves the pointer to an absolute screen position via XTest.
     /// </summary>
@@ -58,6 +61,16 @@ public static class LinuxNativeInput
                 XTestFakeButtonEvent(display, Button1, false, 0);
             }
 
+            return true;
+        });
+
+    /// <summary>Clicks the right button at an absolute screen position.</summary>
+    public static bool TryMouseRightClick(double x, double y)
+        => WithDisplay(display =>
+        {
+            XTestFakeMotionEvent(display, -1, (int)Math.Round(x), (int)Math.Round(y), 0);
+            XTestFakeButtonEvent(display, Button3, true, 0);
+            XTestFakeButtonEvent(display, Button3, false, 0);
             return true;
         });
 
