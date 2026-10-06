@@ -38,6 +38,7 @@ public class MewUIAgentIntegrationTests
 
         using var client = new HttpClient { BaseAddress = new Uri($"http://localhost:{port}") };
         await PollAgentStatusAsync(client, TimeSpan.FromSeconds(20));
+        await WaitForElementAsync(client, "ActionButton", TimeSpan.FromSeconds(60));
 
         using var tapResponse = await PostAsync(client, "/api/v1/ui/actions/tap", new StringContent("{ \"id\": \"ActionButton\" }", Encoding.UTF8, "application/json"));
         tapResponse.EnsureSuccessStatusCode();
@@ -222,6 +223,41 @@ public class MewUIAgentIntegrationTests
         }
 
         throw new InvalidOperationException("Agent status endpoint did not become available in time.");
+    }
+
+    /// <summary>
+    /// Waits until the agent can read <paramref name="elementId"/>, which proves the UI thread is running queued work.
+    /// </summary>
+    /// <remarks>
+    /// The status endpoint answers without touching the UI thread, so it can succeed while the dispatcher is not
+    /// draining work. On a macOS runner that made the first UI action hang; the agent now times out instead, and this
+    /// retries until the UI thread responds.
+    /// </remarks>
+    private static async Task WaitForElementAsync(HttpClient client, string elementId, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+
+        while (DateTime.UtcNow < deadline)
+        {
+            try
+            {
+                using var response = await GetAsync(client, $"/api/v1/ui/elements/{elementId}");
+                if (response.IsSuccessStatusCode)
+                {
+                    return;
+                }
+            }
+            catch (HttpRequestException)
+            {
+            }
+            catch (TaskCanceledException)
+            {
+            }
+
+            await Delay(250);
+        }
+
+        throw new InvalidOperationException($"Element '{elementId}' did not become available in time.");
     }
 
     private static int GetFreePort()

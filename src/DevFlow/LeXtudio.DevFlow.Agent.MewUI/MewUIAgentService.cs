@@ -46,7 +46,7 @@ public sealed class MewUIAgentService : DevFlowAgentServiceBase
 
         var app = Application.Current;
         object? result = null;
-        app.Dispatcher.Invoke(() => result = BuildThemePayload(app));
+        InvokeOnUiThread(app, () => result = BuildThemePayload(app));
         return Task.FromResult(result);
     }
 
@@ -60,7 +60,7 @@ public sealed class MewUIAgentService : DevFlowAgentServiceBase
 
         var app = Application.Current;
         object? result = null;
-        app.Dispatcher.Invoke(() =>
+        InvokeOnUiThread(app, () =>
         {
             app.SetThemeMode(variant);
             result = BuildThemePayload(app);
@@ -129,7 +129,7 @@ public sealed class MewUIAgentService : DevFlowAgentServiceBase
             return Task.FromResult(new List<ElementInfo>());
 
         var result = default(List<ElementInfo>);
-        app.Dispatcher.Invoke(() => result = _treeWalker.WalkTree());
+        InvokeOnUiThread(app, () => result = _treeWalker.WalkTree());
         return Task.FromResult(result!);
     }
 
@@ -143,7 +143,7 @@ public sealed class MewUIAgentService : DevFlowAgentServiceBase
             return Task.FromResult<ElementInfo?>(null);
 
         var result = default(ElementInfo?);
-        app.Dispatcher.Invoke(() => result = _treeWalker.FindElementById(id));
+        InvokeOnUiThread(app, () => result = _treeWalker.FindElementById(id));
         return Task.FromResult(result);
     }
 
@@ -157,7 +157,7 @@ public sealed class MewUIAgentService : DevFlowAgentServiceBase
             return Task.FromResult(new List<ElementInfo>());
 
         List<ElementInfo> result = [];
-        app.Dispatcher.Invoke(() =>
+        InvokeOnUiThread(app, () =>
         {
             var roots = _treeWalker.WalkTree();
             var all = new List<ElementInfo>();
@@ -184,7 +184,7 @@ public sealed class MewUIAgentService : DevFlowAgentServiceBase
             return Task.FromResult<byte[]?>(null);
 
         var result = default(byte[]?);
-        app.Dispatcher.Invoke(() => result = CaptureScreenshotOnUiThread(elementId));
+        InvokeOnUiThread(app, () => result = CaptureScreenshotOnUiThread(elementId));
         return Task.FromResult(result);
     }
 
@@ -198,7 +198,7 @@ public sealed class MewUIAgentService : DevFlowAgentServiceBase
             return Task.FromResult(false);
 
         var result = false;
-        app.Dispatcher.Invoke(() => result = TryTap(elementId));
+        InvokeOnUiThread(app, () => result = TryTap(elementId));
         return Task.FromResult(result);
     }
 
@@ -212,7 +212,7 @@ public sealed class MewUIAgentService : DevFlowAgentServiceBase
             return Task.FromResult<object?>(null);
 
         object? result = null;
-        app.Dispatcher.Invoke(() =>
+        InvokeOnUiThread(app, () =>
         {
             var target = _treeWalker.FindElementObjectById(elementId);
             if (target == null)
@@ -235,7 +235,7 @@ public sealed class MewUIAgentService : DevFlowAgentServiceBase
             return Task.FromResult(false);
 
         var result = false;
-        app.Dispatcher.Invoke(() => result = TryScroll(elementId, deltaX, deltaY));
+        InvokeOnUiThread(app, () => result = TryScroll(elementId, deltaX, deltaY));
         return Task.FromResult(result);
     }
 
@@ -249,7 +249,7 @@ public sealed class MewUIAgentService : DevFlowAgentServiceBase
             return Task.FromResult<object?>(null);
 
         object? result = null;
-        app.Dispatcher.Invoke(() =>
+        InvokeOnUiThread(app, () =>
         {
             if (TryScroll(elementId, deltaX, deltaY))
                 result = CreateSuccessResult(SimulationModes.Semantic, elementId, deltaX: deltaX, deltaY: deltaY);
@@ -267,7 +267,7 @@ public sealed class MewUIAgentService : DevFlowAgentServiceBase
             return Task.FromResult(false);
 
         var result = false;
-        app.Dispatcher.Invoke(() =>
+        InvokeOnUiThread(app, () =>
         {
             var target = _treeWalker.FindElementObjectById(elementId);
             result = target != null && TrySetTextValue(target, text);
@@ -285,7 +285,7 @@ public sealed class MewUIAgentService : DevFlowAgentServiceBase
             return Task.FromResult<object?>(null);
 
         object? result = null;
-        app.Dispatcher.Invoke(() =>
+        InvokeOnUiThread(app, () =>
         {
             var target = _treeWalker.FindElementObjectById(elementId);
             if (target == null)
@@ -316,7 +316,7 @@ public sealed class MewUIAgentService : DevFlowAgentServiceBase
             return Task.FromResult(false);
 
         var result = false;
-        app.Dispatcher.Invoke(() =>
+        InvokeOnUiThread(app, () =>
         {
             var target = _treeWalker.FindElementObjectById(elementId);
             if (target is Control control)
@@ -346,7 +346,7 @@ public sealed class MewUIAgentService : DevFlowAgentServiceBase
             return Task.FromResult<object?>(null);
 
         object? result = null;
-        app.Dispatcher.Invoke(() =>
+        InvokeOnUiThread(app, () =>
         {
             var target = _treeWalker.FindElementObjectById(elementId);
             if (target != null && WindowsNativeActions.TryTap(target, TryGetWindowsScreenPoint, _ => CanAppReceiveNativeInput()))
@@ -384,7 +384,7 @@ public sealed class MewUIAgentService : DevFlowAgentServiceBase
             return Task.FromResult<object?>(null);
 
         object? result = null;
-        app.Dispatcher.Invoke(() =>
+        InvokeOnUiThread(app, () =>
         {
             var keyValue = key ?? text ?? string.Empty;
             var normalized = keyValue.Trim().ToLowerInvariant();
@@ -439,7 +439,7 @@ public sealed class MewUIAgentService : DevFlowAgentServiceBase
             return Task.FromResult(false);
 
         var result = false;
-        app.Dispatcher.Invoke(() =>
+        InvokeOnUiThread(app, () =>
         {
             var windows = app.AllWindows;
             if (windows.Count > 1)
@@ -463,7 +463,7 @@ public sealed class MewUIAgentService : DevFlowAgentServiceBase
             return Task.FromResult<object?>(null);
 
         object? result = null;
-        app.Dispatcher.Invoke(() =>
+        InvokeOnUiThread(app, () =>
         {
             var windows = app.AllWindows;
             if (windows.Count > 1)
@@ -495,6 +495,56 @@ public sealed class MewUIAgentService : DevFlowAgentServiceBase
         }
 
         return false;
+    }
+
+    private static readonly TimeSpan UiThreadTimeout = TimeSpan.FromSeconds(15);
+
+    /// <summary>
+    /// Runs <paramref name="action"/> on the UI thread, failing instead of waiting forever.
+    /// </summary>
+    /// <remarks>
+    /// Dispatcher.Invoke has no timeout. On a macOS CI runner the queued work item was seen to never run,
+    /// which left the HTTP request hanging until the client gave up after 100 seconds. A bounded wait turns
+    /// that into a prompt error the caller can see and retry.
+    /// </remarks>
+    private static void InvokeOnUiThread(Application app, Action action)
+    {
+        var dispatcher = app.Dispatcher
+            ?? throw new InvalidOperationException("The MewUI application has no dispatcher.");
+        if (dispatcher.IsOnUIThread)
+        {
+            action();
+            return;
+        }
+
+        Exception? failure = null;
+        // Not disposed: after a timeout the work item may still run later and signal it.
+        var done = new System.Threading.ManualResetEventSlim(false);
+        dispatcher.BeginInvoke(() =>
+        {
+            try
+            {
+                action();
+            }
+            catch (Exception ex)
+            {
+                failure = ex;
+            }
+            finally
+            {
+                done.Set();
+            }
+        });
+
+        if (!done.Wait(UiThreadTimeout))
+        {
+            throw new TimeoutException($"The MewUI UI thread did not run the queued work within {UiThreadTimeout.TotalSeconds:0} seconds.");
+        }
+
+        if (failure is not null)
+        {
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
+        }
     }
 
     /// <summary>
