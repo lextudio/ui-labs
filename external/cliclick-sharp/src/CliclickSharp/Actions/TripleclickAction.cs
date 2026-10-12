@@ -11,7 +11,7 @@ public class TripleclickAction : MouseBaseAction, IAction
     {
         for (int i = 0; i < 3; i++)
         {
-            IntPtr downEvent = CoreGraphics.CGEventCreateMouseEvent(
+            IntPtr downEvent = CoreGraphics.CreateMouseEvent(
                 IntPtr.Zero,
                 CGEventType.kCGEventLeftMouseDown,
                 point,
@@ -20,7 +20,7 @@ public class TripleclickAction : MouseBaseAction, IAction
             CoreGraphics.CGEventPost(CGEventTapLocation.kCGHIDEventTap, downEvent);
             CoreGraphics.CFRelease(downEvent);
 
-            IntPtr upEvent = CoreGraphics.CGEventCreateMouseEvent(
+            IntPtr upEvent = CoreGraphics.CreateMouseEvent(
                 IntPtr.Zero,
                 CGEventType.kCGEventLeftMouseUp,
                 point,

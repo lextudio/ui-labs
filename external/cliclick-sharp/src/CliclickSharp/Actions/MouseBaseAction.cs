@@ -25,7 +25,7 @@ public abstract partial class MouseBaseAction
     /// <summary>Posts one mouse event of <paramref name="type"/> carrying this action's button.</summary>
     protected void PostMouseEvent(CGEventType type, CGPoint point)
     {
-        IntPtr mouseEvent = CoreGraphics.CGEventCreateMouseEvent(
+        IntPtr mouseEvent = CoreGraphics.CreateMouseEvent(
             IntPtr.Zero,
             type,
             point,

@@ -131,6 +131,31 @@ public static class CoreGraphics
     public static extern IntPtr CGEventCreateMouseEvent(IntPtr source, CGEventType type, CGPoint mousePoint, CGMouseButton button);
 
     [DllImport(CoreGraphicsLibrary)]
+    public static extern ulong CGEventSourceFlagsState(int stateID);
+
+    [DllImport(CoreGraphicsLibrary)]
+    public static extern void CGEventSetFlags(IntPtr eventRef, ulong flags);
+
+    // kCGEventSourceStateCombinedSessionState: the modifier state of the whole login session,
+    // including keys held by another process (e.g. a separate "kd:ctrl" invocation).
+    private const int kCGEventSourceStateCombinedSessionState = 0;
+
+    /// <summary>
+    /// Creates a mouse event that carries the modifier keys currently held in the session. A
+    /// NULL-source mouse event otherwise carries no modifier flags, so a key held by another
+    /// invocation (kd:ctrl, then dd/du) was not part of the click: apps that read modifiers from
+    /// the mouse event (AppKit, and LibreWPF's Keyboard.Modifiers) saw a plain click, and a held
+    /// modifier could even appear released.
+    /// </summary>
+    public static IntPtr CreateMouseEvent(IntPtr source, CGEventType type, CGPoint mousePoint, CGMouseButton button)
+    {
+        var mouseEvent = CGEventCreateMouseEvent(source, type, mousePoint, button);
+        if (mouseEvent != IntPtr.Zero)
+            CGEventSetFlags(mouseEvent, CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState));
+        return mouseEvent;
+    }
+
+    [DllImport(CoreGraphicsLibrary)]
     public static extern IntPtr CGEventCreateKeyboardEvent(IntPtr source, ushort keyCode, bool keyDown);
 
     [DllImport(CoreGraphicsLibrary)]

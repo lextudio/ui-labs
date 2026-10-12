@@ -9,7 +9,7 @@ public class ClickAction : MouseBaseAction, IAction
 
     protected override void PerformActionAtPoint(CGPoint point)
     {
-        IntPtr downEvent = CoreGraphics.CGEventCreateMouseEvent(
+        IntPtr downEvent = CoreGraphics.CreateMouseEvent(
             IntPtr.Zero,
             CGEventType.kCGEventLeftMouseDown,
             point,
@@ -19,7 +19,7 @@ public class ClickAction : MouseBaseAction, IAction
 
         Thread.Sleep(15);
 
-        IntPtr upEvent = CoreGraphics.CGEventCreateMouseEvent(
+        IntPtr upEvent = CoreGraphics.CreateMouseEvent(
             IntPtr.Zero,
             CGEventType.kCGEventLeftMouseUp,
             point,
