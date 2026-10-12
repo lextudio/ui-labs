@@ -8,12 +8,19 @@ Param(
         "src\DevFlow\LeXtudio.DevFlow.Agent.WinForms\LeXtudio.DevFlow.Agent.WinForms.csproj",
         "src\DevFlow\LeXtudio.DevFlow.Agent.Uno\LeXtudio.DevFlow.Agent.Uno.csproj",
         "src\DevFlow\LeXtudio.DevFlow.Agent.MewUI\LeXtudio.DevFlow.Agent.MewUI.csproj",
+        "src\DevFlow\LeXtudio.DevFlow.Agent.LibreWinForms\LeXtudio.DevFlow.Agent.LibreWinForms.csproj",
+        "src\DevFlow\LeXtudio.DevFlow.Agent.Jalium\LeXtudio.DevFlow.Agent.Jalium.csproj",
+        "src\DevFlow\LeXtudio.DevFlow.Agent.ProGPU\LeXtudio.DevFlow.Agent.ProGPU.csproj",
         "src\DevFlow\LeXtudio.DevFlow.Driver\LeXtudio.DevFlow.Driver.csproj",
+        "src\DevFlow\LeXtudio.DevFlow.Broker\LeXtudio.DevFlow.Broker.csproj",
+        "src\DevFlow\LeXtudio.DevFlow.Inspector\LeXtudio.DevFlow.Inspector.csproj",
+        "src\DevFlow\LeXtudio.DevFlow.Mcp\LeXtudio.DevFlow.Mcp.csproj",
         "src\Cli\src\LeXtudio.Wpf.Cli\LeXtudio.Wpf.Cli.csproj",
         "src\Cli\src\LeXtudio.LibreWpf.Cli\LeXtudio.LibreWpf.Cli.csproj",
         "src\Cli\src\LeXtudio.WinForms.Cli\LeXtudio.WinForms.Cli.csproj",
         "src\Cli\src\LeXtudio.MewUI.Cli\LeXtudio.MewUI.Cli.csproj",
-        "src\Cli\src\LeXtudio.Uno.Cli\LeXtudio.Uno.Cli.csproj"
+        "src\Cli\src\LeXtudio.Uno.Cli\LeXtudio.Uno.Cli.csproj",
+        "src\Cli\src\LeXtudio.Jalium.Cli\LeXtudio.Jalium.Cli.csproj"
     )
 )
 
