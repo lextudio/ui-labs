@@ -50,6 +50,7 @@ public static class MacOSWindowOrigin
 
     private static readonly IntPtr _clsNSApp = objc_getClass("NSApplication");
     private static readonly IntPtr _selSharedApp = sel_registerName("sharedApplication");
+    private static readonly IntPtr _selKeyWindow = sel_registerName("keyWindow");
     private static readonly IntPtr _selWindows = sel_registerName("windows");
     private static readonly IntPtr _selCount = sel_registerName("count");
     private static readonly IntPtr _selObjectAtIndex = sel_registerName("objectAtIndex:");
@@ -85,6 +86,18 @@ public static class MacOSWindowOrigin
         return IntPtr.Zero;
     }
 
+    /// <summary>Gets the key window's content origin, which matters while a WPF modal dialog owns input.</summary>
+    public static (double X, double Y)? TryGetKeyWindowContentOrigin()
+    {
+        try
+        {
+            var app = msgSend(_clsNSApp, _selSharedApp);
+            var keyWindow = app == IntPtr.Zero ? IntPtr.Zero : msgSend(app, _selKeyWindow);
+            return keyWindow == IntPtr.Zero ? null : TryGetContentOrigin(keyWindow);
+        }
+        catch { return null; }
+    }
+
     /// <summary>
     /// Height (points) of the PRIMARY display — NSScreen.screens[0], the menu-bar screen whose
     /// Cocoa frame origin is (0,0). This is the flip reference for Cocoa↔Quartz global coordinates.
@@ -111,7 +124,11 @@ public static class MacOSWindowOrigin
     /// </summary>
     public static (double X, double Y)? TryGetContentOrigin()
     {
-        var nsWindow = GetMainNSWindow();
+        return TryGetContentOrigin(GetMainNSWindow());
+    }
+
+    private static (double X, double Y)? TryGetContentOrigin(IntPtr nsWindow)
+    {
         if (nsWindow == IntPtr.Zero) return null;
         try
         {

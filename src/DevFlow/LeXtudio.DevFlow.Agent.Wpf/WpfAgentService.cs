@@ -264,6 +264,23 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
 
     protected override async Task<object?> TryTapResponseAsync(string elementId)
     {
+        // A native click on a modal LibreWPF button can be acknowledged by macOS before WPF
+        // receives it. Toggle controls and ButtonBase have precise semantic equivalents, so use
+        // them rather than reporting a successful but ineffective native click.
+        var semanticDispatcher = Application.Current?.Dispatcher;
+        if (semanticDispatcher is not null)
+        {
+            var toggleResult = await semanticDispatcher.InvokeAsync<object?>(() =>
+            {
+                var target = ResolveElementObject(elementId);
+                return target is (ToggleButton or ButtonBase) && TryInvokeOnElement(target)
+                    ? CreateSuccessResult(SimulationModes.Semantic, elementId)
+                    : null;
+            }).Task.ConfigureAwait(false);
+            if (toggleResult is not null)
+                return toggleResult;
+        }
+
         // macOS has no in-process native tap (WindowsNativeActions is Windows-only and
         // MacOSNativeInput is disabled), so a tap there was always the semantic fallback: a raised
         // Click event that toggles no CheckBox, runs no Command and "clicks" disabled buttons.
@@ -1136,6 +1153,18 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
         {
             var center = new Point(element.ActualWidth / 2d, element.ActualHeight / 2d);
             var screen = element.PointToScreen(center);
+            if (OperatingSystem.IsMacOS()
+                && Window.GetWindow(element) is { } window
+                && MacOSWindowOrigin.TryGetKeyWindowContentOrigin() is { } nativeOrigin)
+            {
+                // LibreWPF's portable presentation source can temporarily expose client-relative
+                // PointToScreen values.  Calibrate against the key NSWindow's actual content
+                // origin; using the delta keeps this correct once the source has an origin too.
+                var reportedOrigin = window.PointToScreen(new Point());
+                screen = new Point(
+                    screen.X + nativeOrigin.X - reportedOrigin.X,
+                    screen.Y + nativeOrigin.Y - reportedOrigin.Y);
+            }
             return new WindowsScreenPoint((int)Math.Round(screen.X), (int)Math.Round(screen.Y));
         }
         catch
@@ -1165,9 +1194,19 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
     {
         try
         {
+            if (target is ToggleButton toggleButton)
+            {
+                toggleButton.IsChecked = toggleButton.IsChecked != true;
+                return true;
+            }
+
             if (target is ButtonBase buttonBase)
             {
-                buttonBase.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, buttonBase));
+                // Raising Click alone skips ButtonBase's normal OnClick path on LibreWPF. Invoke
+                // that path so IsDefault/Command processing and the control's XAML Click handler
+                // observe the same transition as a real button activation.
+                typeof(ButtonBase).GetMethod("OnClick", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                    .Invoke(buttonBase, null);
                 return true;
             }
 
