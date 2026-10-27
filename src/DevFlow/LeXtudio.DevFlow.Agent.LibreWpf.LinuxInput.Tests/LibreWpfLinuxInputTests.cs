@@ -110,7 +110,7 @@ public class LibreWpfLinuxInputTests
         throw new Xunit.Sdk.XunitException($"The button never reported a (new) click; ResponseText is '{text}'.");
     }
 
-    private static async Task<JsonDocument> PostAsync(HttpClient client, string path, object body)
+    private static async Task<JsonElement> PostAsync(HttpClient client, string path, object body)
     {
         using var response = await LeXtudio.DevFlow.Driver.DevFlowMutation.SendAsync(
             client,
@@ -120,7 +120,8 @@ public class LibreWpfLinuxInputTests
             TestContext.Current.CancellationToken);
         var raw = await response.Content.ReadAsStringAsync();
         Assert.True(response.IsSuccessStatusCode, $"{path} returned {(int)response.StatusCode}: {raw}");
-        return JsonDocument.Parse(raw);
+        using var doc = JsonDocument.Parse(raw);
+        return doc.RootElement.Clone();
     }
 
     private static async Task PollStatusAsync(HttpClient client)
