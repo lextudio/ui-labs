@@ -33,7 +33,7 @@ public class LibreWpfLinuxInputTests
         await PollStatusAsync(client);
 
         var (cx, cy) = await GetButtonCenterAsync(client);
-        using var click = await PostAsync(client, "/api/v1/ui/actions/click", new { x = cx, y = cy, global = false });
+        var click = await PostAsync(client, "/api/v1/ui/actions/click", new { x = cx, y = cy, global = false });
         Assert.True(click.GetProperty("ok").GetBoolean(), click.ToString());
 
         await WaitForClickedAsync(client, null);
@@ -52,7 +52,7 @@ public class LibreWpfLinuxInputTests
         // The native click response echoes the screen point it resolved the window point to, which is
         // the only reliable way to get screen coordinates without guessing the window origin.
         var (cx, cy) = await GetButtonCenterAsync(client);
-        using var first = await PostAsync(client, "/api/v1/ui/actions/click", new { x = cx, y = cy, global = false });
+        var first = await PostAsync(client, "/api/v1/ui/actions/click", new { x = cx, y = cy, global = false });
         Assert.True(first.GetProperty("ok").GetBoolean(), first.ToString());
         var screenX = first.GetProperty("x").GetDouble();
         var screenY = first.GetProperty("y").GetDouble();
@@ -61,15 +61,15 @@ public class LibreWpfLinuxInputTests
         // The text is a time of day with second resolution; leave room for it to change.
         await Task.Delay(1500);
 
-        using var press = await PostAsync(client, "/api/v1/ui/actions/press", new { x = screenX, y = screenY });
+        var press = await PostAsync(client, "/api/v1/ui/actions/press", new { x = screenX, y = screenY });
         Assert.True(press.GetProperty("ok").GetBoolean(), press.ToString());
         Assert.Equal("xtest", press.GetProperty("mode").GetString());
 
-        using var move = await PostAsync(client, "/api/v1/ui/actions/drag-move", new { x = screenX + 2, y = screenY + 1 });
+        var move = await PostAsync(client, "/api/v1/ui/actions/drag-move", new { x = screenX + 2, y = screenY + 1 });
         Assert.True(move.GetProperty("ok").GetBoolean(), move.ToString());
         Assert.Equal("xtest", move.GetProperty("mode").GetString());
 
-        using var release = await PostAsync(client, "/api/v1/ui/actions/release", new { x = screenX, y = screenY });
+        var release = await PostAsync(client, "/api/v1/ui/actions/release", new { x = screenX, y = screenY });
         Assert.True(release.GetProperty("ok").GetBoolean(), release.ToString());
         Assert.Equal("xtest", release.GetProperty("mode").GetString());
 
