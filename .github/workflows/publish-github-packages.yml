@@ -1,0 +1,104 @@
+name: Publish DevFlow GitHub Packages
+
+# Packs the DevFlow agent packages and replaces them in the lextudio GitHub Packages feed, so
+# consumers (AvalonDock, OpenDevelop) can pin a build of this tree instead of the nuget.org release.
+# The version comes from GitVersion (tag prefix v, ContinuousDeployment): a checkout with full history
+# yields a prerelease above the last tag, so it never collides with a nuget.org release.
+on:
+  push:
+    branches: [ master, ci/linux-input-github-packages ]
+    paths:
+      - 'src/DevFlow/**'
+      - 'external/cliclick-sharp/dist/**'
+      - '.github/workflows/publish-github-packages.yml'
+  workflow_dispatch:
+
+# Two runs pushing the same versions would race on upload; queue them.
+concurrency:
+  group: publish-devflow-github-packages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  FEED: https://nuget.pkg.github.com/lextudio/index.json
+
+jobs:
+  publish:
+    name: Pack and publish
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '11.0.100-rc.1.26425.128'
+
+      - name: Pack
+        run: |
+          mkdir -p dist
+          projects=(
+            src/DevFlow/LeXtudio.DevFlow.Agent.Core/LeXtudio.DevFlow.Agent.Core.csproj
+            src/DevFlow/LeXtudio.DevFlow.Agent.Wpf/LeXtudio.DevFlow.Agent.Wpf.csproj
+            src/DevFlow/LeXtudio.DevFlow.Agent.LibreWpf/LeXtudio.DevFlow.Agent.LibreWpf.csproj
+            src/DevFlow/LeXtudio.DevFlow.Agent.WinForms/LeXtudio.DevFlow.Agent.WinForms.csproj
+            src/DevFlow/LeXtudio.DevFlow.Agent.LibreWinForms/LeXtudio.DevFlow.Agent.LibreWinForms.csproj
+            src/DevFlow/LeXtudio.DevFlow.Driver/LeXtudio.DevFlow.Driver.csproj
+          )
+          for project in "${projects[@]}"; do
+            dotnet pack "${project}" -c Release -o dist
+          done
+          ls -l dist
+
+      - name: Check the packages share one version
+        run: |
+          versions="$(ls dist/*.nupkg | sed -E 's|.*/||; s|^LeXtudio\.DevFlow\.[A-Za-z.]+\.([0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?)\.nupkg$|\1|' | sort -u)"
+          echo "versions: ${versions}"
+          if [ "$(echo "${versions}" | wc -l)" -ne 1 ]; then
+            echo "Packages carry different versions" >&2
+            exit 1
+          fi
+          echo "PACKAGE_VERSION=${versions}" >> "$GITHUB_ENV"
+
+      - name: Replace the packages in GitHub Packages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          deleted=()
+          failed() {
+            if [ ${#deleted[@]} -gt 0 ]; then
+              echo "Replacement failed after deleting: ${deleted[*]}. Re-run this workflow." >&2
+            fi
+          }
+          trap failed ERR
+          # GitHub Packages versions are immutable: delete this version of each package, then push.
+          for package in dist/*.nupkg; do
+            name="$(basename "${package}" ".${PACKAGE_VERSION}.nupkg")"
+            err="$(mktemp)"
+            if ! ids="$(gh api --paginate "/orgs/lextudio/packages/nuget/${name}/versions?per_page=100" \
+              --jq '.[] | select(.name == "'"${PACKAGE_VERSION}"'") | .id' 2>"${err}")"; then
+              if grep -q 'HTTP 404' "${err}"; then continue; fi
+              cat "${err}" >&2
+              exit 1
+            fi
+            for id in ${ids}; do
+              gh api --method DELETE "/orgs/lextudio/packages/nuget/${name}/versions/${id}"
+              deleted+=("${name}")
+            done
+          done
+          for package in dist/*.nupkg; do
+            dotnet nuget push "${package}" --source "${FEED}" --api-key "${GH_TOKEN}"
+          done
+          echo "Published ${PACKAGE_VERSION}:" | tee -a "${GITHUB_STEP_SUMMARY}"
+          ls dist/*.nupkg | sed 's|^|- |' | tee -a "${GITHUB_STEP_SUMMARY}"
