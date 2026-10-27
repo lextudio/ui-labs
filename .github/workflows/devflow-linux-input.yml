@@ -1,0 +1,56 @@
+name: DevFlow Linux input
+
+# Proves the XTest-backed pointer path of the LibreWPF agent on a real LibreWPF window: a native
+# click, and a press / drag-move / release held across three requests. X11 only (Xvfb here, XWayland
+# elsewhere), left button only; a pure Wayland session has no DISPLAY and is out of scope.
+on:
+  push:
+    branches: [ master, ci/linux-input-github-packages ]
+    paths:
+      - 'src/DevFlow/**'
+      - '.github/workflows/devflow-linux-input.yml'
+  pull_request:
+    branches: [ master ]
+    paths:
+      - 'src/DevFlow/**'
+      - '.github/workflows/devflow-linux-input.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: devflow-linux-input-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  linux-input:
+    name: LibreWPF XTest input (Linux x64)
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '11.0.100-rc.1.26425.128'
+
+      - name: Install Linux GUI dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxkbcommon0 libinput10 xvfb libxtst6 \
+            libglfw3 libgl1 libglu1-mesa libglx-mesa0 libxi6 libxcursor1 libxrandr2 libxinerama1 libxxf86vm1 \
+            libvulkan1 mesa-vulkan-drivers
+
+      - name: Start Xvfb
+        run: |
+          Xvfb :99 -screen 0 1280x1024x24 &
+          echo "DISPLAY=:99" >> "$GITHUB_ENV"
+
+      - name: Build the LibreWPF test app
+        run: dotnet build src/DevFlow/LibreWpfDevFlowTestApp/LibreWpfDevFlowTestApp.csproj -c Debug
+
+      - name: Run the Linux input tests
+        run: dotnet test --project src/DevFlow/LeXtudio.DevFlow.Agent.LibreWpf.LinuxInput.Tests/LeXtudio.DevFlow.Agent.LibreWpf.LinuxInput.Tests.csproj -c Debug

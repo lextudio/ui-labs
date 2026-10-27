@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Plain net10.0 on purpose: the suite is an HTTP client that launches LibreWpfDevFlowTestApp as a
+       separate process, so it builds on a stock SDK and needs no WPF reference. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
+    <UseMSBuildTestInfrastructure>true</UseMSBuildTestInfrastructure>
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+    <IsPackable>false</IsPackable>
+    <AssemblyName>LeXtudio.DevFlow.Agent.LibreWpf.LinuxInput.Tests</AssemblyName>
+    <RootNamespace>LeXtudio.DevFlow.Agent.LibreWpf.LinuxInput.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit.v3.mtp-v2" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <ProjectReference Include="..\LeXtudio.DevFlow.Driver\LeXtudio.DevFlow.Driver.csproj" />
+  </ItemGroup>
+
+</Project>
