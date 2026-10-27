@@ -82,18 +82,20 @@ jobs:
             fi
           }
           trap failed ERR
+          # Git Bash on Windows rewrites a leading slash in an argument into a filesystem path, so the
+          # API endpoints below have none.
           # GitHub Packages versions are immutable: delete this version of each package, then push.
           for package in dist/*.nupkg; do
             name="$(basename "${package}" ".${PACKAGE_VERSION}.nupkg")"
             err="$(mktemp)"
-            if ! ids="$(gh api --paginate "/orgs/lextudio/packages/nuget/${name}/versions?per_page=100" \
+            if ! ids="$(gh api --paginate "orgs/lextudio/packages/nuget/${name}/versions?per_page=100" \
               --jq '.[] | select(.name == "'"${PACKAGE_VERSION}"'") | .id' 2>"${err}")"; then
               if grep -q 'HTTP 404' "${err}"; then continue; fi
               cat "${err}" >&2
               exit 1
             fi
             for id in ${ids}; do
-              gh api --method DELETE "/orgs/lextudio/packages/nuget/${name}/versions/${id}"
+              gh api --method DELETE "orgs/lextudio/packages/nuget/${name}/versions/${id}"
               deleted+=("${name}")
             done
           done
