@@ -2,8 +2,10 @@ name: Publish DevFlow GitHub Packages
 
 # Packs the DevFlow agent packages and replaces them in the lextudio GitHub Packages feed, so
 # consumers (AvalonDock, OpenDevelop) can pin a build of this tree instead of the nuget.org release.
-# The version comes from GitVersion (tag prefix v, ContinuousDeployment): a checkout with full history
-# yields a prerelease above the last tag, so it never collides with a nuget.org release.
+# The version is FORCED to the one on nuget.org (the newest stable LeXtudio.DevFlow.Agent.Core there, or the
+# `version` input): consumers keep one version number, NuGet package source mapping decides which feed
+# serves it, and the GitHub copy is replaced in place on every run (the same approach as the OpenAvalon
+# LibreWPF packages, which also reuse the nuget.org version number).
 on:
   push:
     branches: [ master, ci/linux-input-github-packages ]
@@ -12,6 +14,10 @@ on:
       - 'external/cliclick-sharp/dist/**'
       - '.github/workflows/publish-github-packages.yml'
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Package version to publish (default: the newest stable LeXtudio.DevFlow.Agent.Core on nuget.org)'
+        default: ''
 
 # Two runs pushing the same versions would race on upload; queue them.
 concurrency:
@@ -45,6 +51,22 @@ jobs:
         with:
           dotnet-version: '11.0.100-rc.1.26425.128'
 
+      - name: Resolve the version (nuget.org)
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          version="${INPUT_VERSION}"
+          if [ -z "${version}" ]; then
+            version="$(curl -fsSL https://api.nuget.org/v3-flatcontainer/lextudio.devflow.agent.core/index.json \
+              | python -c "import json,sys; v=[x for x in json.load(sys.stdin)['versions'] if '-' not in x]; print(sorted(v,key=lambda s:[int(p) for p in s.split('.')])[-1])")"
+          fi
+          if ! echo "${version}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "Cannot resolve a stable version: '${version}'" >&2
+            exit 1
+          fi
+          echo "Forcing package version ${version}"
+          echo "FORCED_VERSION=${version}" >> "$GITHUB_ENV"
+
       - name: Pack
         run: |
           mkdir -p dist
@@ -57,7 +79,10 @@ jobs:
             src/DevFlow/LeXtudio.DevFlow.Driver/LeXtudio.DevFlow.Driver.csproj
           )
           for project in "${projects[@]}"; do
-            dotnet pack "${project}" -c Release -o dist
+            # GitVersion would derive a prerelease from the tree; the version is forced instead.
+            dotnet pack "${project}" -c Release -o dist \
+              -p:GitVersionTaskEnabled=false -p:UpdateVersionProperties=false \
+              -p:Version="${FORCED_VERSION}" -p:PackageVersion="${FORCED_VERSION}" -p:InformationalVersion="${FORCED_VERSION}"
           done
           ls -l dist
 
@@ -67,6 +92,10 @@ jobs:
           echo "versions: ${versions}"
           if [ "$(echo "${versions}" | wc -l)" -ne 1 ]; then
             echo "Packages carry different versions" >&2
+            exit 1
+          fi
+          if [ "${versions}" != "${FORCED_VERSION}" ]; then
+            echo "Packages carry ${versions}, not the forced ${FORCED_VERSION}" >&2
             exit 1
           fi
           echo "PACKAGE_VERSION=${versions}" >> "$GITHUB_ENV"
