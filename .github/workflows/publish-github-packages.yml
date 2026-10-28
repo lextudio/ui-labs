@@ -11,7 +11,7 @@ on:
     branches: [ master, ci/linux-input-github-packages ]
     paths:
       - 'src/DevFlow/**'
-      - 'external/cliclick-sharp/dist/**'
+      - 'external/cliclick-sharp/**'
       - '.github/workflows/publish-github-packages.yml'
   workflow_dispatch:
     inputs:
@@ -50,6 +50,26 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '11.0.100-rc.1.26425.128'
+
+      # The CliclickSharp binary the Core package carries is built here from the checked-in source, not taken
+      # from the committed dist/: that copy had no Windows option handling (`-w` was taken as a command, so
+      # no held drag ever ran on Windows). The Windows runner has the C++ toolchain Native AOT needs.
+      # dist/CliclickSharp (the macOS universal binary) is left as committed.
+      - name: Build CliclickSharp for Windows (Native AOT)
+        run: |
+          dotnet publish external/cliclick-sharp/src/CliclickSharp/CliclickSharp.csproj \
+            -c Release -r win-x64 -p:PublishAot=true -p:OutputType=Exe --self-contained \
+            -o external/cliclick-sharp/dist/win-x64-build
+          cp external/cliclick-sharp/dist/win-x64-build/CliclickSharp.exe external/cliclick-sharp/dist/CliclickSharp.exe
+          cp external/cliclick-sharp/dist/win-x64-build/CliclickSharp.exe external/cliclick-sharp/dist/win-x64/CliclickSharp.exe
+          rm -rf external/cliclick-sharp/dist/win-x64-build
+          ls -l external/cliclick-sharp/dist/CliclickSharp.exe
+
+      # The regression this build exists for: options before commands must be parsed, not run as commands.
+      - name: Smoke-test CliclickSharp options
+        run: |
+          external/cliclick-sharp/dist/CliclickSharp.exe -w 20 p p
+          echo "exit code: $?"
 
       - name: Resolve the version (nuget.org)
         env:
