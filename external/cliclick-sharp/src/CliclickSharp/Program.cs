@@ -11,10 +11,7 @@ public class Program
 
     public static int Main(string[] args)
     {
-        if (OperatingSystem.IsWindows())
-            return WindowsCommandExecutor.Execute(args);
-
-        if (!CoreGraphics.AXIsProcessTrusted())
+        if (!OperatingSystem.IsWindows() && !CoreGraphics.AXIsProcessTrusted())
         {
             Console.Error.WriteLine(
                 "cliclick requires accessibility permissions. " +
@@ -152,6 +149,13 @@ public class Program
             Console.Error.WriteLine("No commands specified");
             return 1;
         }
+
+        // Options are parsed above on every platform; handing Windows the raw args made "-w" the
+        // first command, which failed and aborted every gesture before its button press.
+        // SendInput has no event-coalescing floor to respect, so "-w" is honored exactly there
+        // instead of being raised to MinimumWaitTime.
+        if (OperatingSystem.IsWindows())
+            return WindowsCommandExecutor.Execute(commands, (int)options.WaitTime, restorePosition);
 
         if (restorePosition)
         {

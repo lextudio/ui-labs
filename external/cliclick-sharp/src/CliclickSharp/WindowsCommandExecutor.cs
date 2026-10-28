@@ -25,15 +25,24 @@ internal static class WindowsCommandExecutor
     const int SmCxVirtualScreen = 78;
     const int SmCyVirtualScreen = 79;
 
-    public static int Execute(IEnumerable<string> commands)
+    public static int Execute(IReadOnlyList<string> commands, int waitTime, bool restorePosition)
     {
-        foreach (var command in commands)
+        var hasInitial = GetCursorPos(out var initial);
+        for (var i = 0; i < commands.Count; i++)
         {
+            var command = commands[i];
             var result = ExecuteOne(command);
             Log($"command={command} ok={result}");
             if (!result)
                 return 1;
+
+            // Same "-w" contract as the macOS path: a pause between commands, never after the last.
+            if (waitTime > 0 && i < commands.Count - 1)
+                Thread.Sleep(waitTime);
         }
+
+        if (restorePosition && hasInitial)
+            Move(initial.X, initial.Y);
 
         return 0;
     }
