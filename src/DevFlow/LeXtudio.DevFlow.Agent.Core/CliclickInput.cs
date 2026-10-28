@@ -20,6 +20,14 @@ public static class CliclickInput
     {
         if (OperatingSystem.IsWindows())
         {
+            // Windows on Arm: the native arm64 build, not the x64 one under emulation.
+            if (System.Runtime.InteropServices.RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.Arm64)
+            {
+                var bundledArm64 = Path.Combine(AppContext.BaseDirectory, "CliclickSharp.arm64.exe");
+                if (File.Exists(bundledArm64))
+                    return bundledArm64;
+            }
+
             var bundledWindows = Path.Combine(AppContext.BaseDirectory, "CliclickSharp.exe");
             if (File.Exists(bundledWindows))
                 return bundledWindows;

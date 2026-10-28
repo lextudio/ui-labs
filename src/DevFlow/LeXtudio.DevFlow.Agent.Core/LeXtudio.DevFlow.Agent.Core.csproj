@@ -165,6 +165,14 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Visible>false</Visible>
     </None>
+    <!-- The native arm64 build for Windows on Arm (built by the publish workflow on an arm64 runner). The
+         x64 build runs there under emulation, one more variable for an input tool; CliclickInput prefers
+         this file when the OS is arm64. Absent in a local build, hence the condition. -->
+    <None Include="..\..\..\external\cliclick-sharp\dist\CliclickSharp.arm64.exe" Pack="true" PackagePath="build\;buildTransitive\" Condition="Exists('..\..\..\external\cliclick-sharp\dist\CliclickSharp.arm64.exe')">
+      <Link>CliclickSharp.arm64.exe</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Visible>false</Visible>
+    </None>
     <!-- buildTransitive/ as well as build/: build/ is imported only by DIRECT package references, so a
          consumer that references an agent package (which depends on this one) would never import these
          targets and would silently fall back to whatever `cliclick` is on PATH - the original, whose

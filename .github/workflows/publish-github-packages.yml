@@ -32,8 +32,34 @@ env:
   FEED: https://nuget.pkg.github.com/lextudio/index.json
 
 jobs:
+  # Windows on Arm: build the input helper natively on an arm64 runner (Native AOT needs the arm64 C++ toolchain).
+  cliclick-arm64:
+    name: Build CliclickSharp (win-arm64)
+    runs-on: windows-11-arm
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '11.0.100-rc.1.26425.128'
+      - name: Publish (Native AOT)
+        run: |
+          dotnet publish external/cliclick-sharp/src/CliclickSharp/CliclickSharp.csproj \
+            -c Release -r win-arm64 -p:PublishAot=true -p:OutputType=Exe --self-contained \
+            -o out
+          ls -l out/CliclickSharp.exe
+          out/CliclickSharp.exe -w 20 p p
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cliclick-win-arm64
+          path: out/CliclickSharp.exe
+          if-no-files-found: error
+
   publish:
     name: Pack and publish
+    needs: cliclick-arm64
     runs-on: windows-latest
     defaults:
       run:
@@ -77,6 +103,13 @@ jobs:
         run: |
           external/cliclick-sharp/dist/CliclickSharp.exe -w 20 p p
           echo "exit code: $?"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: cliclick-win-arm64
+          path: arm64-helper
+      - name: Place the arm64 helper
+        run: cp arm64-helper/CliclickSharp.exe external/cliclick-sharp/dist/CliclickSharp.arm64.exe
 
       - name: Resolve the version (nuget.org)
         env:

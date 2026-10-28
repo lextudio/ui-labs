@@ -22,4 +22,11 @@
       <Visible>false</Visible>
     </None>
   </ItemGroup>
+  <ItemGroup Condition="Exists('$(MSBuildThisFileDirectory)CliclickSharp.arm64.exe')">
+    <None Include="$(MSBuildThisFileDirectory)CliclickSharp.arm64.exe">
+      <Link>CliclickSharp.arm64.exe</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Visible>false</Visible>
+    </None>
+  </ItemGroup>
 </Project>
