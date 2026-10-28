@@ -27,6 +27,13 @@ internal static class WindowsCommandExecutor
 
     public static int Execute(IReadOnlyList<string> commands, int waitTime, bool restorePosition)
     {
+        // The applications this drives are per-monitor DPI aware and report physical pixels. A process
+        // that is not aware gets virtualized coordinates (GetSystemMetrics and SetCursorPos work in the
+        // scaled space), so on a display scaled above 100% every click landed off its target.
+        // -4 is DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2.
+        var dpiAware = SetProcessDpiAwarenessContext(new IntPtr(-4));
+        Log($"dpiAwareness set={dpiAware}");
+
         var hasInitial = GetCursorPos(out var initial);
         for (var i = 0; i < commands.Count; i++)
         {
@@ -208,6 +215,7 @@ internal static class WindowsCommandExecutor
     [StructLayout(LayoutKind.Sequential)] struct INPUT { public uint type; public MOUSEINPUT mi; }
     [StructLayout(LayoutKind.Sequential)] struct MOUSEINPUT { public int dx; public int dy; public uint mouseData; public uint dwFlags; public uint time; public nint dwExtraInfo; }
     [DllImport("user32.dll")] static extern bool GetCursorPos(out POINT point);
+    [DllImport("user32.dll")] static extern bool SetProcessDpiAwarenessContext(IntPtr value);
     [DllImport("user32.dll")] static extern int GetSystemMetrics(int index);
     [DllImport("user32.dll", SetLastError = true)] static extern uint SendInput(uint count, INPUT[] inputs, int size);
 }

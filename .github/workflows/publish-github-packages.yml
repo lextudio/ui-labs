@@ -65,6 +65,13 @@ jobs:
           rm -rf external/cliclick-sharp/dist/win-x64-build
           ls -l external/cliclick-sharp/dist/CliclickSharp.exe
 
+      # Records the runner's display scale: a click tool that is not DPI aware lands off target above 100%.
+      - name: Report the display scale
+        shell: pwsh
+        run: |
+          Add-Type -Namespace Native -Name Dpi -MemberDefinition '[System.Runtime.InteropServices.DllImport("user32.dll")] public static extern uint GetDpiForSystem(); [System.Runtime.InteropServices.DllImport("user32.dll")] public static extern int GetSystemMetrics(int i);'
+          "system DPI = $([Native.Dpi]::GetDpiForSystem()) (96 = 100%), primary screen (as this process sees it) = $([Native.Dpi]::GetSystemMetrics(0)) x $([Native.Dpi]::GetSystemMetrics(1)), arch = $env:PROCESSOR_ARCHITECTURE"
+
       # The regression this build exists for: options before commands must be parsed, not run as commands.
       - name: Smoke-test CliclickSharp options
         run: |
