@@ -8,7 +8,7 @@ name: Publish DevFlow GitHub Packages
 # LibreWPF packages, which also reuse the nuget.org version number).
 on:
   push:
-    branches: [ master, ci/linux-input-github-packages ]
+    branches: [ master ]
     paths:
       - 'src/DevFlow/**'
       - 'external/cliclick-sharp/**'
