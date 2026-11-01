@@ -1,0 +1,13 @@
+<Project>
+  <!--
+    xunit.v3 needs an app host and sets UseAppHost in its buildTransitive props, but NuGet excludes package
+    props while restoring (ExcludeRestorePackageImports), and restore does not import Directory.Build.targets
+    either. The SDK therefore never adds the app host pack (Microsoft.NETCore.App.Host.<rid>) to the restore
+    graph: the build skips _CreateAppHost and fails copying obj/Release/net10.0/apphost(.exe) with
+    "MSB3030: Could not copy the file ... because it was not found", silently, and only on a machine where
+    the pack is not already in the NuGet cache. Declaring it here keeps the pack in the restore graph.
+  -->
+  <PropertyGroup Condition="$(MSBuildProjectName.EndsWith('.Tests'))">
+    <UseAppHost>true</UseAppHost>
+  </PropertyGroup>
+</Project>
