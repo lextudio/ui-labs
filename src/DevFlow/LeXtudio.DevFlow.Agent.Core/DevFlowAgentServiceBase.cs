@@ -151,6 +151,8 @@ public abstract class DevFlowAgentServiceBase : DevFlowAgentService
         _server.MapPost("/api/v1/ui/actions/release", HandleReleaseAsync);
         _server.MapPost("/api/v1/ui/actions/keydown", HandleKeyDownAsync);
         _server.MapPost("/api/v1/ui/actions/keyup", HandleKeyUpAsync);
+        _server.MapGet("/api/v1/ui/input-source", HandleInputSourceAsync);
+        _server.MapPost("/api/v1/ui/input-source", HandleSelectInputSourceAsync);
         _server.MapGet("/api/v1/device/app/theme", HandleThemeGetAsync);
         _server.MapPut("/api/v1/device/app/theme", HandleThemeSetAsync);
         _server.MapGet("/api/v1/invoke/actions", HandleListInvokeActionsAsync);
@@ -864,6 +866,43 @@ public abstract class DevFlowAgentServiceBase : DevFlowAgentService
     protected virtual Task<object?> TryKeyUpResponseAsync(string key)
         => Task.FromResult<object?>(null);
 
+    /// <summary>
+    /// GET /api/v1/ui/input-source — the application's current keyboard input source id (a layout
+    /// such as com.apple.keylayout.ABC or an input method). A Pinyin/IME source composes real key
+    /// events into its characters before the app sees them, so a driver that types must check or
+    /// select a plain layout first.
+    /// </summary>
+    private async Task<HttpResponse> HandleInputSourceAsync(HttpRequest request)
+    {
+        var result = await TryInputSourceResponseAsync().ConfigureAwait(false);
+        return result != null
+            ? DevFlowJson.Json(result)
+            : HttpResponse.Error("Input source information is not supported by this agent", 501);
+    }
+
+    /// <summary>
+    /// POST /api/v1/ui/input-source — select an enabled input source. Body: { "id": "..." }. Runs
+    /// in the application process because TISSelectInputSource from another process only changes
+    /// the source of whichever app is frontmost at that moment.
+    /// </summary>
+    private async Task<HttpResponse> HandleSelectInputSourceAsync(HttpRequest request)
+    {
+        var payload = request.BodyAs<InputSourceRequest>();
+        if (payload == null || string.IsNullOrWhiteSpace(payload.Id))
+            return HttpResponse.Error("id is required", 400);
+
+        var result = await TrySelectInputSourceResponseAsync(payload.Id).ConfigureAwait(false);
+        return result != null
+            ? DevFlowJson.Json(result)
+            : HttpResponse.Error("Selecting an input source is not supported by this agent", 501);
+    }
+
+    protected virtual Task<object?> TryInputSourceResponseAsync()
+        => Task.FromResult<object?>(null);
+
+    protected virtual Task<object?> TrySelectInputSourceResponseAsync(string id)
+        => Task.FromResult<object?>(null);
+
     protected sealed class ClickRequest
     {
         public double? X { get; set; }
@@ -1069,6 +1108,11 @@ public abstract class DevFlowAgentServiceBase : DevFlowAgentService
         public string? ElementId { get; set; }
         public string? Key { get; set; }
         public string? Text { get; set; }
+    }
+
+    private sealed class InputSourceRequest
+    {
+        public string? Id { get; set; }
     }
 
     private sealed class WebViewCdpRequest

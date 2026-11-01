@@ -57,3 +57,26 @@ across a native press and release. It now waits for `od.pointer-events` to recor
 releasing Ctrl: the in-process key-up no longer has the helper process's latency and could
 otherwise overtake the queued press, while the canvas snapshots modifiers when the press is
 processed.
+
+## Input sources
+
+Real key events are composed by the active macOS input method before the application sees them, so
+a typing driver on a Pinyin (or other IME) source gets Chinese characters: `echo ` arrives as two
+characters. The agent exposes the source so a driver can select a plain layout first:
+
+```
+GET  /api/v1/ui/input-source          → { "ok": true, "current": "com.apple.keylayout.ABC" }
+POST /api/v1/ui/input-source          { "id": "com.apple.keylayout.ABC" }
+                                      → { "ok": true, "current": "...", "error": null }
+```
+
+`MacOSInputSource` reads and selects through the Text Input Sources API. The selection runs on the
+application dispatcher (`TISSelectInputSource` blocks on an HTTP worker thread, because the window
+server switches the source through the main run loop) and must run in this process: the same call
+from a test host only changes the source of whichever application is frontmost at that moment, and
+macOS restores a per-application remembered source when the app is activated. Other platforms
+answer 501.
+
+A driver should select the layout, then verify the **system** source too (the test host's own
+`TISCopyCurrentKeyboardInputSource`), and verify both stay unchanged while typing - the app's input
+context and the system's current source can disagree.

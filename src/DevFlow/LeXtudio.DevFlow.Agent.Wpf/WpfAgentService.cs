@@ -710,6 +710,30 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
         return new { ok, mode = "cliclick", key };
     }
 
+    // Input sources must be read and selected on the application dispatcher: TISSelectInputSource
+    // blocks when called from an HTTP worker thread (the window server switches the source through
+    // the main run loop), and the agent request would time out.
+    protected override async Task<object?> TryInputSourceResponseAsync()
+    {
+        if (!MacOSInputSource.IsAvailable)
+            return null;
+        var current = await DispatchToApplicationAsync(() => MacOSInputSource.Current()).ConfigureAwait(false);
+        return new { ok = true, current };
+    }
+
+    protected override async Task<object?> TrySelectInputSourceResponseAsync(string id)
+    {
+        if (!MacOSInputSource.IsAvailable)
+            return null;
+        var selected = await DispatchToApplicationAsync(() => MacOSInputSource.Select(id)).ConfigureAwait(false);
+        var current = await DispatchToApplicationAsync(() => MacOSInputSource.Current()).ConfigureAwait(false);
+        return new {
+            ok = selected,
+            current,
+            error = selected ? null : "The input source '" + id + "' is not enabled or could not be selected."
+        };
+    }
+
     protected override async Task<object?> TryMoveResponseAsync(MoveRequest request)
     {
         if (CliclickInput.IsAvailable)
