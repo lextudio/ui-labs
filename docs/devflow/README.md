@@ -25,6 +25,7 @@ Each guide covers:
 Deeper notes for DevFlow maintainers (not needed for adoption):
 
 - **[Synthesized Drag on Uno-Skia-macOS](technote-uno-macos-drag.md)** — why injecting a real drag/drop gesture is subtle on macOS, and the fixes required to deliver a full `PointerPressed → PointerMoved → PointerReleased` sequence.
+- **[macOS Key Injection](technote-macos-key-injection.md)** — why `keydown`/`keyup` post to the app's own process (`CGEventPostToPid`) instead of the session event tap, and how held keys and chords are released safely.
 
 ## FAQ
 

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Threading;
 
 namespace LeXtudio.DevFlow.Agent.Core;
 
@@ -13,6 +14,7 @@ public static class CliclickInput
     private static Process? _dragHoldProcess;
     private static readonly object _keyLock = new();
     private static Process? _keyHoldProcess;
+    private static readonly HashSet<string> _heldKeys = new(StringComparer.Ordinal);
 
     public static bool IsAvailable => _path.Value != null;
 
@@ -247,48 +249,95 @@ public static class CliclickInput
     }
 
     /// <summary>
-    /// Presses AND HOLDS a key (letter/digit/modifier/named special key - anything
-    /// KeyBaseAction.SupportedKeycodes or ModifierKeycodes in the bundled CliclickSharp knows),
-    /// mirroring TryPressDown's mouse-button-hold trick: the CGEvent-level key-down state persists
-    /// system-wide once posted, independent of the process that posted it, so a long-lived "holder"
-    /// process is only a safety net (auto-release after 10 minutes if TryKeyUp is never called) -
-    /// not the actual holding mechanism.
+    /// Presses AND HOLDS a key (letter/digit/modifier/named special key, or a comma-separated
+    /// chord such as "shift,tab"). On macOS the down is posted straight to this process
+    /// (<see cref="MacOSKeyInput"/>), because the session-tap route routes by the frontmost
+    /// application and drops presses when automation has just activated the window. Elsewhere the
+    /// bundled CliclickSharp posts it: the CGEvent-level key-down state persists system-wide once
+    /// posted, independent of the process that posted it, so a long-lived "holder" process is only
+    /// a safety net (auto-release after 10 minutes if TryKeyUp is never called) - not the actual
+    /// holding mechanism.
     /// </summary>
     public static bool TryKeyDown(string key)
     {
         lock (_keyLock)
         {
             StopKeyHoldProcess();
+            if (string.IsNullOrWhiteSpace(key))
+                return false;
+
+            // macOS: post straight to this process. The session-tap route used by cliclick
+            // depends on the frontmost application and drops presses (and the matching up)
+            // when automation has just activated the window.
+            if (MacOSKeyInput.TryPost(key, keyDown: true))
+            {
+                _heldKeys.Add(key);
+                StartMacOSKeyReleaseTimer(key);
+                return true;
+            }
+
             var exe = _path.Value;
-            if (exe == null || string.IsNullOrWhiteSpace(key))
+            if (exe == null)
                 return false;
 
-            try
-            {
-                var psi = new ProcessStartInfo
-                {
-                    FileName = exe,
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                    WindowStyle = ProcessWindowStyle.Hidden,
-                };
-                psi.ArgumentList.Add($"kd:{key}");
-                psi.ArgumentList.Add("w:600000");
-                // Safety release if this holder process outlives the caller, so a stuck key cannot
-                // be left down system-wide.
-                psi.ArgumentList.Add($"ku:{key}");
-                _keyHoldProcess = Process.Start(psi);
-                if (_keyHoldProcess == null)
-                    return false;
-
-                System.Threading.Thread.Sleep(50);
-                return !_keyHoldProcess.HasExited;
-            }
-            catch
-            {
-                StopKeyHoldProcess();
+            // Post the down from a short-lived process. The session keeps the key down after that
+            // process exits, so no process has to stay alive to hold it; a separate safety holder
+            // releases it after 10 minutes if TryKeyUp is never called.
+            var posted = Run($"kd:{key}");
+            if (!posted)
                 return false;
+            _heldKeys.Add(key);
+            StartKeyReleaseTimer(key);
+            return true;
+        }
+    }
+
+    private static readonly Dictionary<string, Timer> _macReleaseTimers = new(StringComparer.Ordinal);
+
+    /// <summary>Safety net for the macOS in-process path: release a key whose TryKeyUp never
+    /// arrived, so a failed test cannot leave the machine's keyboard stuck.</summary>
+    private static void StartMacOSKeyReleaseTimer(string key)
+    {
+        if (!MacOSKeyInput.IsAvailable)
+            return;
+        var timer = new Timer(_ =>
+        {
+            lock (_keyLock)
+            {
+                _macReleaseTimers.Remove(key);
+                if (_heldKeys.Remove(key))
+                    MacOSKeyInput.TryPost(key, keyDown: false);
             }
+        }, null, TimeSpan.FromMinutes(10), Timeout.InfiniteTimeSpan);
+        if (_macReleaseTimers.Remove(key, out var previous))
+            previous.Dispose();
+        _macReleaseTimers[key] = timer;
+    }
+
+    private static void StopMacOSKeyReleaseTimer(string key)
+    {
+        if (_macReleaseTimers.Remove(key, out var timer))
+            timer.Dispose();
+    }
+
+    private static void StartKeyReleaseTimer(string key)
+    {
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = _path.Value!,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden,
+            };
+            psi.ArgumentList.Add("w:600000");
+            psi.ArgumentList.Add($"ku:{key}");
+            _keyHoldProcess = Process.Start(psi);
+        }
+        catch
+        {
+            StopKeyHoldProcess();
         }
     }
 
@@ -297,9 +346,18 @@ public static class CliclickInput
     {
         lock (_keyLock)
         {
-            if (_keyHoldProcess == null || _keyHoldProcess.HasExited)
+            if (!_heldKeys.Contains(key))
                 return false;
 
+            if (MacOSKeyInput.TryPost(key, keyDown: false))
+            {
+                _heldKeys.Remove(key);
+                StopMacOSKeyReleaseTimer(key);
+                StopKeyHoldProcess();
+                return true;
+            }
+
+            _heldKeys.Remove(key);
             var released = Run($"ku:{key}");
             StopKeyHoldProcess();
             return released;
