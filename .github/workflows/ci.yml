@@ -11,14 +11,6 @@ jobs:
     name: Windows tests
     runs-on: windows-latest
 
-    env:
-      # A `dotnet restore` leaves the MSBuild server running, and the next `dotnet` invocation inherits
-      # its file state: the following `--no-restore` build then skips _CreateAppHost and fails with
-      # "MSB3030: Could not copy the file ...obj\Release\net10.0\apphost.exe because it was not found".
-      # That is the failure on 2026-10-29 and 2026-11-01 (2026-10-12 was green), and this is the
-      # documented workaround for it on hosted runners.
-      DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER: '1'
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -41,11 +33,34 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nuget-
 
+      # _CreateAppHost writes apphost.exe into obj/ and a later copy target moves it to bin/. Defender's
+      # real-time protection on the hosted runner can remove that freshly written executable, and the copy
+      # then reports "MSB3030: Could not copy the file ...obj\Release\net10.0\apphost.exe because it was
+      # not found" with no other error in the log - the failure on 2026-10-29 and 2026-11-01, while
+      # 2026-10-12 was green. Keep the workspace out of scanning so the build can finish.
+      - name: Exclude the workspace from Defender
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          Add-MpPreference -ExclusionPath $env:GITHUB_WORKSPACE
+          (Get-MpPreference).ExclusionPath
+
       - name: Restore Core contract tests
         run: dotnet restore src/DevFlow/LeXtudio.DevFlow.Agent.Core.Tests/LeXtudio.DevFlow.Agent.Core.Tests.csproj
 
       - name: Run Core contract tests
         run: dotnet test src/DevFlow/LeXtudio.DevFlow.Agent.Core.Tests/LeXtudio.DevFlow.Agent.Core.Tests.csproj --configuration Release --no-restore
+
+      # Temporary: the apphost failure above leaves no trace in the normal log, so record what the runner
+      # did with the file.
+      - name: Report the apphost state
+        if: always()
+        shell: pwsh
+        run: |
+          Get-MpComputerStatus | Select-Object RealTimeProtectionEnabled, AntivirusEnabled | Format-List
+          Get-MpThreatDetection -ErrorAction SilentlyContinue | Select-Object -First 5 InitialDetectionTime, Resources | Format-List
+          Get-ChildItem src/DevFlow/LeXtudio.DevFlow.Agent.Core.Tests/obj/Release/net10.0/ -Filter apphost* | Format-Table Name, Length
+          Get-ChildItem ~/.nuget/packages -Filter 'microsoft.netcore.app.host.*' | Format-Table Name
 
       - name: Restore CLI unit tests
         # bash -e aborts on the first failing command. The Windows default shell is
