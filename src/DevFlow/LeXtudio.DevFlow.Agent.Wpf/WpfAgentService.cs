@@ -281,12 +281,15 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
                 return toggleResult;
         }
 
+#if LIBREWPF
         // macOS has no in-process native tap (WindowsNativeActions is Windows-only and
         // MacOSNativeInput is disabled), so a tap there was always the semantic fallback: a raised
         // Click event that toggles no CheckBox, runs no Command and "clicks" disabled buttons.
         // Click the element's centre for real instead. Only the point is resolved on the UI thread;
         // the click runs off it, because the app has to keep pumping to receive the native events
-        // the click produces.
+        // the click produces. This is inside LIBREWPF because only that build runs on macOS: the
+        // plain WPF package targets Windows, where the branch is dead code, and the portable
+        // in-process pointer helpers live in the LIBREWPF-only region below.
         if (OperatingSystem.IsMacOS() && (CliclickInput.IsAvailable || PreferInProcessPointer))
         {
             var point = await DispatchToApplicationAsync<WindowsScreenPoint?>(() =>
@@ -299,6 +302,7 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
                 return CreateSuccessResult(SimulationModes.Native, elementId);
             }
         }
+#endif
 
         var dispatcher = Application.Current?.Dispatcher;
         if (dispatcher is null)

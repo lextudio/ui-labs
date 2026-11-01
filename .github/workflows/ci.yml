@@ -11,6 +11,14 @@ jobs:
     name: Windows tests
     runs-on: windows-latest
 
+    env:
+      # A `dotnet restore` leaves the MSBuild server running, and the next `dotnet` invocation inherits
+      # its file state: the following `--no-restore` build then skips _CreateAppHost and fails with
+      # "MSB3030: Could not copy the file ...obj\Release\net10.0\apphost.exe because it was not found".
+      # That is the failure on 2026-10-29 and 2026-11-01 (2026-10-12 was green), and this is the
+      # documented workaround for it on hosted runners.
+      DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER: '1'
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

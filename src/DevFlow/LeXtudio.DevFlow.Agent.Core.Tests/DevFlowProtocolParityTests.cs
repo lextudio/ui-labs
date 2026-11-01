@@ -34,7 +34,8 @@ public class DevFlowProtocolParityTests
     /// </summary>
     private static readonly string[] DesktopAdditionsOutsideContract =
     [
-"get /api/v1/alert/detect",
+        "get /api/v1/alert/detect",
+        "get /api/v1/ui/input-source",
         "get /api/v1/ui/query-selector",
         "post /api/v1/alert/dismiss",
         "post /api/v1/ui/actions/click",
@@ -47,6 +48,7 @@ public class DevFlowProtocolParityTests
         "post /api/v1/ui/actions/release",
         "post /api/v1/ui/actions/right-tap",
         "post /api/v1/ui/assert",
+        "post /api/v1/ui/input-source",
         "post /api/v1/webview/cdp",
         // Upstream registers these with different placeholder names than the contract declares
         // ({permission} and {sensor} here, {name} in openapi.yaml). The paths match once the
