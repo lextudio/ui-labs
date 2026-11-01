@@ -287,12 +287,14 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
         // Click the element's centre for real instead. Only the point is resolved on the UI thread;
         // the click runs off it, because the app has to keep pumping to receive the native events
         // the click produces.
-        if (OperatingSystem.IsMacOS() && CliclickInput.IsAvailable)
+        if (OperatingSystem.IsMacOS() && (CliclickInput.IsAvailable || PreferInProcessPointer))
         {
             var point = await DispatchToApplicationAsync<WindowsScreenPoint?>(() =>
                 ResolveElementObject(elementId) is FrameworkElement fe ? TryGetScreenPoint(fe) : null).ConfigureAwait(false);
             if (point is WindowsScreenPoint p
-                && await Task.Run(() => CliclickInput.TryClick(p.X, p.Y, 1)).ConfigureAwait(false))
+                && (PreferInProcessPointer
+                    ? await TryPortableWpfMouseClickAsync(p.X, p.Y, 1).ConfigureAwait(false)
+                    : await Task.Run(() => CliclickInput.TryClick(p.X, p.Y, 1)).ConfigureAwait(false)))
             {
                 return CreateSuccessResult(SimulationModes.Native, elementId);
             }
@@ -513,7 +515,7 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
         if (resolved.Error != null)
             return new { ok = false, reason = resolved.Error };
 
-        if (CliclickInput.IsAvailable)
+        if (CliclickInput.IsAvailable && !PreferInProcessPointer)
         {
             var clickDragOk = await Task.Run(() =>
                 CliclickInput.TryDrag(resolved.FromX, resolved.FromY, resolved.ToX, resolved.ToY, resolved.Steps)).ConfigureAwait(false);
@@ -530,7 +532,7 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
             }
         }
 
-        if (OperatingSystem.IsMacOS() && !request.Global)
+        if (OperatingSystem.IsMacOS() && (!request.Global || PreferInProcessPointer))
         {
             var portableSuccess = await TryPortableWpfMouseDragAsync(resolved.FromX, resolved.FromY, resolved.ToX, resolved.ToY, resolved.Steps).ConfigureAwait(false);
             if (portableSuccess)
@@ -585,6 +587,12 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
         if (resolved.Error != null)
             return new { ok = false, reason = resolved.Error };
 
+        if (PreferInProcessPointer)
+        {
+            var inProcessOk = await TryPortableWpfMouseClickAsync(resolved.X, resolved.Y, resolved.ClickCount).ConfigureAwait(false);
+            return new { ok = inProcessOk, mode = "portable-wpf", x = resolved.X, y = resolved.Y };
+        }
+
         if (CliclickInput.IsAvailable)
         {
             var clickOk = await Task.Run(() => CliclickInput.TryClick(resolved.X, resolved.Y, resolved.ClickCount)).ConfigureAwait(false);
@@ -621,6 +629,14 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
             return new { ok = windowsOk, mode = "sendinput", x, y, button = button.ToString().ToLowerInvariant() };
         }
 
+        if (PreferInProcessPointer)
+        {
+            if (button != CliclickInput.MouseButton.Left)
+                return new { ok = false, reason = "only the left button is supported by in-process pointer input" };
+            var inProcessOk = await TryPortableWpfMouseStepAsync(4, x, y).ConfigureAwait(false);
+            return new { ok = inProcessOk, mode = "portable-wpf", x, y, button = "left" };
+        }
+
         if (!CliclickInput.IsAvailable)
             return new { ok = false, reason = "decomposed press/drag-move/release needs cliclick on macOS, or an X display (X11/XWayland) on Linux" };
 
@@ -653,6 +669,14 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
             return new { ok = windowsOk, mode = "sendinput", x, y, button = button.ToString().ToLowerInvariant() };
         }
 
+        if (PreferInProcessPointer)
+        {
+            if (button != CliclickInput.MouseButton.Left)
+                return new { ok = false, reason = "only the left button is supported by in-process pointer input" };
+            var inProcessOk = await TryPortableWpfMouseStepAsync(3, x, y).ConfigureAwait(false);
+            return new { ok = inProcessOk, mode = "portable-wpf", x, y, button = "left" };
+        }
+
         if (!CliclickInput.IsAvailable)
             return new { ok = false, reason = "decomposed press/drag-move/release needs cliclick on macOS, or an X display (X11/XWayland) on Linux" };
 
@@ -683,6 +707,14 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
             var windowsOk = await Task.Run(() => WindowsNativeInput.TryMouseRelease(
                 (int)Math.Round(x), (int)Math.Round(y), button == CliclickInput.MouseButton.Left)).ConfigureAwait(false);
             return new { ok = windowsOk, mode = "sendinput", x, y, button = button.ToString().ToLowerInvariant() };
+        }
+
+        if (PreferInProcessPointer)
+        {
+            if (button != CliclickInput.MouseButton.Left)
+                return new { ok = false, reason = "only the left button is supported by in-process pointer input" };
+            var inProcessOk = await TryPortableWpfMouseStepAsync(5, x, y).ConfigureAwait(false);
+            return new { ok = inProcessOk, mode = "portable-wpf", x, y, button = "left" };
         }
 
         if (!CliclickInput.IsAvailable)
@@ -821,6 +853,43 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
 
     private sealed record ResolvedDrag(double FromX, double FromY, double ToX, double ToY, int Steps, string Mode, string? Error);
     private sealed record ResolvedClick(double X, double Y, string Mode, int ClickCount, string? Error);
+
+    /// <summary>
+    /// Opt-in in-process pointer input on macOS: DEVFLOW_POINTER_MODE=in-process routes tap, click,
+    /// drag and press/drag-move/release through the portable WPF input pipeline instead of
+    /// CliclickSharp/cliclick. Those post OS-level CGEvents, which macOS silently discards unless the
+    /// process is trusted for Accessibility - the helper still exits successfully, so a test sees
+    /// "ok" while nothing happened. In-process input needs no trust and does not move the real cursor.
+    /// </summary>
+    internal static bool PreferInProcessPointer =>
+        OperatingSystem.IsMacOS()
+        && string.Equals(Environment.GetEnvironmentVariable("DEVFLOW_POINTER_MODE"), "in-process", StringComparison.OrdinalIgnoreCase);
+
+    private async Task<bool> TryPortableWpfMouseClickAsync(double x, double y, int clickCount)
+    {
+        var window = await ResolvePortableWpfInputWindowAsync(x, y).ConfigureAwait(false);
+        if (window == null)
+            return false;
+        if (!await TryProcessPortableWpfMouseInputAsync(window, 3, x, y, 0).ConfigureAwait(false))
+            return false;
+        for (var i = 0; i < Math.Max(1, clickCount); i++)
+        {
+            await Task.Delay(16).ConfigureAwait(false);
+            if (!await TryProcessPortableWpfMouseInputAsync(window, 4, x, y, 1).ConfigureAwait(false))
+                return false;
+            await Task.Delay(16).ConfigureAwait(false);
+            if (!await TryProcessPortableWpfMouseInputAsync(window, 5, x, y, 1).ConfigureAwait(false))
+                return false;
+        }
+        return true;
+    }
+
+    /// <summary>One step of a decomposed in-process gesture: 3 move, 4 down, 5 up (left button).</summary>
+    private async Task<bool> TryPortableWpfMouseStepAsync(int kind, double x, double y)
+    {
+        var window = await ResolvePortableWpfInputWindowAsync(x, y).ConfigureAwait(false);
+        return window != null && await TryProcessPortableWpfMouseInputAsync(window, kind, x, y, kind == 3 ? 0 : 1).ConfigureAwait(false);
+    }
 
     private async Task<bool> TryPortableWpfMouseDragAsync(double fromX, double fromY, double toX, double toY, int steps)
     {

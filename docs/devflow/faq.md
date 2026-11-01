@@ -45,6 +45,23 @@ using LeXtudio.DevFlow.Agent.Jalium;
 app.AddJaliumDevFlowAgent(new AgentOptions { Port = 9500 });
 ```
 
+### Q: macOS drag, click and press actions report success but nothing happens. Why?
+
+On macOS the WPF agents post OS-level mouse events through CliclickSharp (or Homebrew `cliclick`). macOS
+silently discards those events unless the process that runs them is trusted for Accessibility (System
+Settings > Privacy & Security > Accessibility); the helper still exits successfully, so the action reports
+`ok`. Either grant Accessibility to the terminal/IDE running the tests, or run the app with
+
+```bash
+DEVFLOW_POINTER_MODE=in-process dotnet run ...
+```
+
+which routes `click`, `drag` and the decomposed `press`/`drag-move`/`release` actions through the app's own
+portable WPF input pipeline (responses report `"mode": "portable-wpf"`). That needs no Accessibility
+permission and does not move the real cursor, but it only reaches the app's own windows, supports the left
+button only, and `tap` on a button is unchanged (it already invokes buttons semantically). Linux and
+Windows are unaffected.
+
 ### Q: How do I override the port with an environment variable?
 
 If your app reads `DEVFLOW_AGENT_PORT` at startup and passes it to the agent, you can override the port:

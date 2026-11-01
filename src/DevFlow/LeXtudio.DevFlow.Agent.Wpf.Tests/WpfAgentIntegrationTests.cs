@@ -66,6 +66,44 @@ public class WpfAgentIntegrationTests
         Assert.Contains("Button clicked at", text, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// macOS only: with DEVFLOW_POINTER_MODE=in-process a drag is delivered through the app's own input
+    /// pipeline (press, moves, release), so it needs no Accessibility permission - CliclickSharp's
+    /// OS-level events are silently discarded without it while still reporting success. The response
+    /// must say "portable-wpf", and the app must have really received the release over the button.
+    /// </summary>
+    [Fact]
+    public async Task Drag_InProcessPointerMode_DeliversRealInputWithoutAccessibility()
+    {
+        if (!OperatingSystem.IsMacOS())
+            return;
+
+        var port = GetFreePort();
+        await using var host = await StartWpfAgentHostAsync(port, ("DEVFLOW_POINTER_MODE", "in-process"));
+
+        using var client = new HttpClient { BaseAddress = new Uri($"http://localhost:{port}") };
+        await PollAgentStatusAsync(client, TimeSpan.FromSeconds(30));
+
+        using var before = await client.GetAsync("/api/v1/ui/elements/ResponseText");
+        using var beforeDoc = JsonDocument.Parse(await before.Content.ReadAsStreamAsync());
+        Assert.DoesNotContain("Button clicked at", beforeDoc.RootElement.GetProperty("text").GetString() ?? "", StringComparison.Ordinal);
+
+        using var dragResponse = await LeXtudio.DevFlow.Driver.DevFlowMutation.SendAsync(
+            client,
+            HttpMethod.Post,
+            "/api/v1/ui/actions/drag",
+            new StringContent("{ \"fromId\": \"ActionButton\", \"dx\": 2, \"dy\": 0 }", System.Text.Encoding.UTF8, "application/json"),
+            TestContext.Current.CancellationToken);
+        dragResponse.EnsureSuccessStatusCode();
+        using var dragDoc = JsonDocument.Parse(await dragResponse.Content.ReadAsStreamAsync());
+        Assert.True(dragDoc.RootElement.GetProperty("ok").GetBoolean());
+        Assert.Equal("portable-wpf", dragDoc.RootElement.GetProperty("mode").GetString());
+
+        using var after = await client.GetAsync("/api/v1/ui/elements/ResponseText");
+        using var afterDoc = JsonDocument.Parse(await after.Content.ReadAsStreamAsync());
+        Assert.Contains("Button clicked at", afterDoc.RootElement.GetProperty("text").GetString(), StringComparison.Ordinal);
+    }
+
     private static async Task<JsonElement> PollAgentStatusAsync(HttpClient client, TimeSpan timeout)
     {
         var deadline = DateTime.UtcNow + timeout;
@@ -110,7 +148,7 @@ public class WpfAgentIntegrationTests
         }
     }
 
-    private static async Task<IAsyncDisposable> StartWpfAgentHostAsync(int port)
+    private static async Task<IAsyncDisposable> StartWpfAgentHostAsync(int port, params (string Name, string Value)[] environment)
     {
         var projectDir = Path.GetFullPath(Path.Combine(
             AppContext.BaseDirectory, "..", "..", "..", "..", "..",
@@ -127,6 +165,8 @@ public class WpfAgentIntegrationTests
             CreateNoWindow = true
         };
         psi.Environment["DEVFLOW_AGENT_PORT"] = port.ToString();
+        foreach (var (name, value) in environment)
+            psi.Environment[name] = value;
 
         var process = new Process { StartInfo = psi };
         process.Start();
