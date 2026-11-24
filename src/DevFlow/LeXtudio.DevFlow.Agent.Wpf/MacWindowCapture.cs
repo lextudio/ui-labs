@@ -133,19 +133,10 @@ internal static class MacWindowCapture
         if (image == IntPtr.Zero)
             return null;
 
-        if (crop is { } c && windowSize is { Width: > 0, Height: > 0 } w)
+        if (crop is { } c && windowSize is { } w
+            && CropGeometry.ToPixels(c, w, CGImageGetWidth(image), CGImageGetHeight(image)) is { } r)
         {
-            var scaleX = CGImageGetWidth(image) / w.Width;
-            var scaleY = CGImageGetHeight(image) / w.Height;
-            var x = Math.Max(0, c.X * scaleX);
-            var y = Math.Max(0, c.Y * scaleY);
-            var cropped = CGImageCreateWithImageInRect(image, new CGRect
-            {
-                X = x,
-                Y = y,
-                Width = Math.Min(c.Width * scaleX, CGImageGetWidth(image) - x),
-                Height = Math.Min(c.Height * scaleY, CGImageGetHeight(image) - y)
-            });
+            var cropped = CGImageCreateWithImageInRect(image, new CGRect { X = r.X, Y = r.Y, Width = r.Width, Height = r.Height });
             if (cropped != IntPtr.Zero)
             {
                 CGImageRelease(image);

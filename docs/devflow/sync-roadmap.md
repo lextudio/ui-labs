@@ -122,3 +122,10 @@ Simplification, measured, no code deleted yet:
 - Still reflection by design (publish warnings remain, same as upstream): `[DevFlowAction]` discovery and invocation (`Assembly.GetTypes`, `GetMethod`) and `Exception.TargetSite` in `DescribeException`;
   `invoke/actions/{name}` responses carry an arbitrary return value. The WPF/LibreWPF agents (anonymous capabilities, visual-tree walker property reflection) are not published as AOT here;
   a LibreWPF AOT host (openavalon `XsgNativeAot`) is the next target.
+
+## Phase 4c: macOS screenshot tests (2026-11-24)
+
+- The crop maths moved to `Agent.Wpf/CropGeometry.cs` (pure, no platform types) and is linked into `Agent.Core.Tests`, where `CropGeometryTests` (13 cases) runs on macOS: the measured OpenDevelop
+  button (2x, 28 pt title bar) lands on (624, 748) 146x36 px, clamping at the image edge, empty/outside regions, unknown window size. Core.Tests is now 35/35. A live run after the refactor
+  returned a crop byte-identical to the one checked by eye before it.
+- Still no automated end-to-end capture test: it needs a host with an on-screen window, so it belongs in the OpenDevelop integration suite (skip on a locked session), a separate repository.

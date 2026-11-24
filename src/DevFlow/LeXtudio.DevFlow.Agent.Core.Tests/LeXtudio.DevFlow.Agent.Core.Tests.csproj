@@ -23,6 +23,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Pure crop geometry of the macOS screenshot path: no WPF or platform types, so it is tested here (the Wpf
+         test project cannot run on macOS). -->
+    <Compile Include="..\LeXtudio.DevFlow.Agent.Wpf\CropGeometry.cs" Link="CropGeometry.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- The DevFlow protocol contract lives in the pinned maui-labs submodule. Copying it to the
          test output keeps the parity tests lock-step with the submodule pointer: bumping the
          submodule changes the contract these tests enforce, with no edits here. -->

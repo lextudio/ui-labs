@@ -1389,7 +1389,7 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
         var origin = element.TransformToAncestor(window).Transform(new Point(0, 0));
 
         // The captured image includes the native title bar, but element coordinates start at the content area.
-        var titleBar = window.Content is FrameworkElement content ? Math.Max(0, window.ActualHeight - content.ActualHeight) : 0;
+        var titleBar = window.Content is FrameworkElement content ? CropGeometry.TitleBarHeight(window.ActualHeight, content.ActualHeight) : 0;
         return MacWindowCapture.CapturePng(window.Title,
             (origin.X, origin.Y + titleBar, element.ActualWidth, element.ActualHeight),
             (window.ActualWidth, window.ActualHeight));
