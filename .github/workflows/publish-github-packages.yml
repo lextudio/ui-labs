@@ -43,7 +43,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '11.0.100-rc.1.26425.128'
+          dotnet-version: '11.0.100'
       - name: Publish (Native AOT)
         run: |
           dotnet publish external/cliclick-sharp/src/CliclickSharp/CliclickSharp.csproj \
@@ -75,7 +75,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '11.0.100-rc.1.26425.128'
+          dotnet-version: '11.0.100'
 
       # The CliclickSharp binary the Core package carries is built here from the checked-in source, not taken
       # from the committed dist/: that copy had no Windows option handling (`-w` was taken as a command, so

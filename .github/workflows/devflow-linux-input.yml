@@ -39,7 +39,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '11.0.100-rc.1.26425.128'
+          dotnet-version: '11.0.100'
 
       - name: Install Linux GUI dependencies
         run: |
