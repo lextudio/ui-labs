@@ -15,10 +15,10 @@ namespace LeXtudio.DevFlow.Agent.Core;
 /// docking layout fails <c>GET /api/v1/ui/tree</c> with "a possible object cycle was detected".
 /// </para>
 /// <para>
-/// This restores the LeXtudio behavior that the linked upstream sources no longer carry. The cost is that
-/// responses produced here use reflection-based serialization, which is fine because these packages are not
-/// published as trimmed or NativeAOT artifacts. Endpoints that should stay on the generated-metadata path —
-/// and therefore keep working under trimming — should call <c>HttpResponse.Json</c> directly.
+/// This restores the LeXtudio behavior that the linked upstream sources no longer carry by passing our options
+/// (depth 256, cycles ignored) to <c>AgentJson.Serialize</c>. Metadata still comes from the generated contexts,
+/// so a host with JSON reflection disabled (NativeAOT) can serialize what those contexts and the built-in
+/// dictionary/primitive contracts cover; anonymous objects need reflection and are only available where it is on.
 /// </para>
 /// <para>
 /// Measured effect versus the System.Text.Json defaults: a UI tree nests 127 levels instead of 32, and a
@@ -36,12 +36,12 @@ internal static class DevFlowJson
 
     internal static HttpResponse Json(object data) => new()
     {
-        Body = JsonSerializer.Serialize(data, Options),
+        Body = AgentJson.Serialize(data, Options),
     };
 
     internal static HttpResponse Json(object data, int statusCode) => new()
     {
         StatusCode = statusCode,
-        Body = JsonSerializer.Serialize(data, Options),
+        Body = AgentJson.Serialize(data, Options),
     };
 }

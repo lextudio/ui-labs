@@ -108,3 +108,13 @@ Simplification, measured, no code deleted yet:
 - The Inspector/Broker shims adapt upstream CLI types to our assemblies; they are not duplicates and have nothing to delete.
 - Net result of this sync on size: `src/DevFlow` own code *grew* (macOS screenshot +185 lines in `Agent.Wpf`); the acceptance line "smaller than before" is not met and is not reachable
   without the wire-contract changes listed under Core above.
+
+## Phase 4b result: NativeAOT smoke (macOS arm64, 2026-11-24)
+
+- New `src/DevFlow/LeXtudio.DevFlow.Agent.Core.AotSmoke`: a stub agent over `DevFlowAgentServiceBase`, `JsonSerializerIsReflectionEnabledByDefault=false`, `PublishAot` with `-p:AotSmoke=true`
+  (`dotnet publish -c Release -p:AotSmoke=true`). The published arm64 Mach-O answers `agent/status` and `ui/tree` (nested children) and exits 0.
+- Needed in Core: `DevFlowJson` now serializes through upstream `AgentJson.Serialize(data, Options)` (keeps depth 256 / cycle ignoring, adds generated metadata); the default capabilities and the
+  status body are string-keyed dictionaries instead of anonymous objects. Reflection-enabled hosts behave as before (Core.Tests 22/22; live OpenDevelop status/tree/screenshot 200).
+- Not AOT-ready yet (publish warns IL2026/IL3050, none reached by the smoke): `ui/actions/batch` (serializes private request types), `invoke/actions` discovery (`Assembly.GetTypes`), `DescribeException`,
+  and the 11 remaining anonymous responses in `DevFlowAgentServiceBase` (alerts, query-selector, hit-test, assert, network, invoke). The WPF/LibreWPF agents (anonymous capabilities, visual-tree walker
+  property reflection) are not published as AOT here; a LibreWPF AOT host (openavalon `XsgNativeAot`) is the next target.

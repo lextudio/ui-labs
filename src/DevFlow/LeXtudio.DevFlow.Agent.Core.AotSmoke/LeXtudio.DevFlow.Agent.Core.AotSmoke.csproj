@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Publishes the shared agent core as a NativeAOT exe with System.Text.Json reflection disabled, then
+       answers status and ui/tree over HTTP. Run: dotnet publish -c Release -p:AotSmoke=true, then run the exe. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <GitVersion_NoFetchEnabled>true</GitVersion_NoFetchEnabled>
+    <GitVersionTargetFramework>net10.0</GitVersionTargetFramework>
+    <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+    <PublishAot Condition="'$(AotSmoke)' == 'true'">true</PublishAot>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\LeXtudio.DevFlow.Agent.Core\LeXtudio.DevFlow.Agent.Core.csproj" />
+  </ItemGroup>
+</Project>

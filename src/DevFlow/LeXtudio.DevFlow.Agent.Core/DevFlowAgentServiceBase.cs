@@ -93,17 +93,17 @@ public abstract class DevFlowAgentServiceBase : DevFlowAgentService
     // Drag is opt-in per agent (needs OS-level pointer injection). Default: unsupported.
     protected virtual Task<object?> TryDragResponseAsync(DragRequest request)
         => Task.FromResult<object?>(null);
-    protected virtual object GetCapabilities() => new
+    protected virtual object GetCapabilities() => new Dictionary<string, object?>
     {
-        screenshots = true,
-        elementScreenshots = true,
-        selectorScreenshots = true,
-        tap = true,
-        scroll = true,
-        structuredErrors = true,
-        webview = false,
-        webviewCdp = false,
-        multiWindow = false
+        ["screenshots"] = true,
+        ["elementScreenshots"] = true,
+        ["selectorScreenshots"] = true,
+        ["tap"] = true,
+        ["scroll"] = true,
+        ["structuredErrors"] = true,
+        ["webview"] = false,
+        ["webviewCdp"] = false,
+        ["multiWindow"] = false,
     };
 
     protected static ActionSimulationResult CreateSuccessResult(
@@ -345,16 +345,16 @@ public abstract class DevFlowAgentServiceBase : DevFlowAgentService
 
     private async Task<HttpResponse> HandleStatusAsync(HttpRequest request)
     {
-        var status = new
+        var status = new Dictionary<string, object?>
         {
-            name = AgentName,
-            id = AgentId,
-            framework = FrameworkName,
-            version = GetType().Assembly.GetName().Version?.ToString() ?? "0.0.0",
-            running = true,
-            port = Port,
-            application = await GetApplicationNameAsync().ConfigureAwait(false),
-            capabilities = GetCapabilities()
+            ["name"] = AgentName,
+            ["id"] = AgentId,
+            ["framework"] = FrameworkName,
+            ["version"] = GetType().Assembly.GetName().Version?.ToString() ?? "0.0.0",
+            ["running"] = true,
+            ["port"] = Port,
+            ["application"] = await GetApplicationNameAsync().ConfigureAwait(false),
+            ["capabilities"] = GetCapabilities(),
         };
         return DevFlowJson.Json(status);
     }
