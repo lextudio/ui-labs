@@ -1378,6 +1378,24 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
     }
 #endif
 
+#if LIBREWPF
+    /// <summary>Crops the element's bounds out of the window capture; null when it has no size or is not in a window.</summary>
+    private static byte[]? CaptureElementOnMac(FrameworkElement element)
+    {
+        var window = Window.GetWindow(element);
+        if (window == null || element.ActualWidth <= 0 || element.ActualHeight <= 0)
+            return null;
+
+        var origin = element.TransformToAncestor(window).Transform(new Point(0, 0));
+
+        // The captured image includes the native title bar, but element coordinates start at the content area.
+        var titleBar = window.Content is FrameworkElement content ? Math.Max(0, window.ActualHeight - content.ActualHeight) : 0;
+        return MacWindowCapture.CapturePng(window.Title,
+            (origin.X, origin.Y + titleBar, element.ActualWidth, element.ActualHeight),
+            (window.ActualWidth, window.ActualHeight));
+    }
+#endif
+
     private byte[]? CaptureScreenshotOnUiThread(string? elementId, string? selector)
     {
         if (string.IsNullOrWhiteSpace(elementId) && !string.IsNullOrWhiteSpace(selector))
@@ -1395,6 +1413,13 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
 
 #if LIBREWPF
             // RenderTargetBitmap needs the Windows-only wpfgfx; off Windows an element request falls back to the window.
+            if (target is FrameworkElement macFe && OperatingSystem.IsMacOS())
+            {
+                var macBytes = CaptureElementOnMac(macFe);
+                if (macBytes != null)
+                    return macBytes;
+            }
+
             if (target is FrameworkElement fe && OperatingSystem.IsWindows())
 #else
             if (target is FrameworkElement fe)

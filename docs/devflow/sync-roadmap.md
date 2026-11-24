@@ -81,7 +81,7 @@ needs it to drive a modal dialog). Commit it to the fork first (branch `lextudio
   `ProGpuWpfScreenshot.TryCapturePng` that `TryCaptureViaProGpu` reflects on does not exist in any openavalon source (only a test names it), so it always returned null.
 - Fix: `Agent.Wpf/MacWindowCapture.cs` (compiled only under `LIBREWPF`) captures the process's own window with CoreGraphics + ImageIO. `CapturePrimaryWindowScreenshot` uses it
   on macOS and returns null (HTTP 500 "capture failed", not an exception) on other non-Windows hosts.
-- Verified: with the rebuilt `LeXtudio.DevFlow.Agent.LibreWpf.dll` in the app bundle, the screenshot is a 2048x1536 non-blank PNG of the OpenDevelop window. Element/selector screenshots on macOS return the whole window (no element crop yet). Not yet done: an automated
+- Verified: with the rebuilt `LeXtudio.DevFlow.Agent.LibreWpf.dll` in the app bundle, the screenshot is a 2048x1536 non-blank PNG of the OpenDevelop window. Element/selector screenshots on macOS are cropped from the window capture (`CGImageCreateWithImageInRect`, with the native title-bar offset); checked on the OpenDevelop start page "開啟方案" button (146x36 px, correct). Not yet done: an automated
   test (needs a host with a window, so it belongs in the OpenDevelop integration suite and must skip on a locked session), and the ProGPU agent still reports `screenshots = false`.
 
 ## Phase 3 findings and macOS baseline (2026-11-24)

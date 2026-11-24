@@ -22,6 +22,9 @@ internal static class MacWindowCapture
     [DllImport(CoreGraphics)] private static extern IntPtr CGWindowListCopyWindowInfo(uint option, uint relativeToWindow);
     [DllImport(CoreGraphics)] private static extern IntPtr CGWindowListCreateImage(CGRect bounds, uint listOption, uint windowId, uint imageOption);
     [DllImport(CoreGraphics)] private static extern void CGImageRelease(IntPtr image);
+    [DllImport(CoreGraphics)] private static extern nuint CGImageGetWidth(IntPtr image);
+    [DllImport(CoreGraphics)] private static extern nuint CGImageGetHeight(IntPtr image);
+    [DllImport(CoreGraphics)] private static extern IntPtr CGImageCreateWithImageInRect(IntPtr image, CGRect rect);
     [DllImport(CoreFoundation)] private static extern nint CFArrayGetCount(IntPtr array);
     [DllImport(CoreFoundation)] private static extern IntPtr CFArrayGetValueAtIndex(IntPtr array, nint index);
     [DllImport(CoreFoundation)] private static extern IntPtr CFDictionaryGetValue(IntPtr dictionary, IntPtr key);
@@ -115,7 +118,11 @@ internal static class MacWindowCapture
     }
 
     /// <summary>PNG bytes of this process's window, or null when not on macOS, no window is on screen, or capture is refused.</summary>
-    public static byte[]? CapturePng(string? title)
+    /// <param name="title">Title of the window to capture.</param>
+    /// <param name="crop">Optional region in window points (x, y, width, height, origin top-left); scaled to the image's pixels.</param>
+    /// <param name="windowSize">Window size in points; required to scale <paramref name="crop"/>.</param>
+    public static byte[]? CapturePng(string? title, (double X, double Y, double Width, double Height)? crop = null,
+        (double Width, double Height)? windowSize = null)
     {
         if (!OperatingSystem.IsMacOS() || OwnWindow(title) is not { } window)
             return null;
@@ -125,6 +132,26 @@ internal static class MacWindowCapture
             1 << 3 /* IncludingWindow */, window, 1 << 0 | 1 << 3 /* BoundsIgnoreFraming | BestResolution */);
         if (image == IntPtr.Zero)
             return null;
+
+        if (crop is { } c && windowSize is { Width: > 0, Height: > 0 } w)
+        {
+            var scaleX = CGImageGetWidth(image) / w.Width;
+            var scaleY = CGImageGetHeight(image) / w.Height;
+            var x = Math.Max(0, c.X * scaleX);
+            var y = Math.Max(0, c.Y * scaleY);
+            var cropped = CGImageCreateWithImageInRect(image, new CGRect
+            {
+                X = x,
+                Y = y,
+                Width = Math.Min(c.Width * scaleX, CGImageGetWidth(image) - x),
+                Height = Math.Min(c.Height * scaleY, CGImageGetHeight(image) - y)
+            });
+            if (cropped != IntPtr.Zero)
+            {
+                CGImageRelease(image);
+                image = cropped;
+            }
+        }
 
         var png = CFStringCreateWithCString(IntPtr.Zero, "public.png", Utf8);
         var data = CFDataCreateMutable(IntPtr.Zero, 0);
