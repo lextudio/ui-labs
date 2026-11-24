@@ -1336,6 +1336,13 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
         var progpuPng = TryCaptureViaProGpu(window);
         if (progpuPng != null)
             return progpuPng;
+
+        // RenderTargetBitmap needs the Windows-only wpfgfx: on macOS capture the app's own window instead, and
+        // report "no screenshot" (not a DllNotFoundException) when nothing could be captured.
+        if (OperatingSystem.IsMacOS())
+            return MacWindowCapture.CapturePng(window.Title);
+        if (!OperatingSystem.IsWindows())
+            return null;
 #endif
 
         var source = PresentationSource.FromVisual(window);
@@ -1386,7 +1393,12 @@ public sealed class WpfAgentService : DevFlowAgentServiceBase
             if (webViewBytes != null)
                 return webViewBytes;
 
+#if LIBREWPF
+            // RenderTargetBitmap needs the Windows-only wpfgfx; off Windows an element request falls back to the window.
+            if (target is FrameworkElement fe && OperatingSystem.IsWindows())
+#else
             if (target is FrameworkElement fe)
+#endif
             {
                 var bytes = CaptureElementScreenshot(fe);
                 if (bytes != null)

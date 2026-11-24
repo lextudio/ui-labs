@@ -73,3 +73,28 @@ needs it to drive a modal dialog). Commit it to the fork first (branch `lextudio
 - Uno.Tests 22/23: one global-`cliclick` input test fails per run and the failing test changed between two runs (environment dependent). **No pre-bump baseline was taken**, so
   it is not proven that it also failed before the bump.
 - Jalium.Tests: 5 skipped (Windows only). Wpf.Tests, LibreWpf.Tests, WinForms.Tests: compile, but **cannot run on macOS** (no `Microsoft.WindowsDesktop.App`): unverified until a Windows run.
+
+## Phase 4a result: macOS screenshot (2026-11-24)
+
+- Reproduced on the real OpenDevelop host (`OD_TEST_MODE=1`, port 9299): `/api/v1/ui/screenshot` failed with `DllNotFoundException: wpfgfx_cor3.dll`. Two roadmap assumptions were wrong:
+  upstream's `AppKitScreenshotCapture` (Abstractions) is only a ScreenCaptureKit-vs-composite *policy* helper (22 lines) and has no capture of its own, and the
+  `ProGpuWpfScreenshot.TryCapturePng` that `TryCaptureViaProGpu` reflects on does not exist in any openavalon source (only a test names it), so it always returned null.
+- Fix: `Agent.Wpf/MacWindowCapture.cs` (compiled only under `LIBREWPF`) captures the process's own window with CoreGraphics + ImageIO. `CapturePrimaryWindowScreenshot` uses it
+  on macOS and returns null (HTTP 500 "capture failed", not an exception) on other non-Windows hosts.
+- Verified: with the rebuilt `LeXtudio.DevFlow.Agent.LibreWpf.dll` in the app bundle, the screenshot is a 2048x1536 non-blank PNG of the OpenDevelop window. Element/selector screenshots on macOS return the whole window (no element crop yet). Not yet done: an automated
+  test (needs a host with a window, so it belongs in the OpenDevelop integration suite and must skip on a locked session), and the ProGPU agent still reports `screenshots = false`.
+
+## Phase 3 findings and macOS baseline (2026-11-24)
+
+macOS is the verification platform; other platforms are re-verified later. Baseline on the real OpenDevelop host (macOS arm64, rebuilt LibreWpf agent), all HTTP 200 with
+sensible bodies: `agent/status`, `ui/tree`, `ui/elements`, `ui/query-selector`, `ui/hit-test`, `invoke/actions`, `ui/input-source`, `alert/detect`, `device/app/theme`,
+`network/requests`, `webview/contexts`, `ui/screenshot` (window; `selector=` returned 200 only because it fell back to the window), `actions/{click,move,press,release,drag,key,tap}` (cliclick/semantic). Scroll on a non-scrollable
+button correctly reports failure. Use this list as the regression check after each simplification.
+
+Simplification, measured, no code deleted yet:
+- **Agent.Wpf cannot be replaced by upstream `Agent.WPF`.** Upstream's derives `MauiDevFlowAgentService` and needs `Microsoft.Maui.Controls` + `platforms/Windows.WPF`
+  (MAUI-on-WPF); ours derives the plain native `DevFlowAgentServiceBase`. Nothing is "identical": the decision rule keeps all of it.
+- **Core**: our base already derives upstream's `DevFlowAgentService` (so the 39 links are real reuse). The remaining overlap is 19 route names that we re-register with our own
+  handlers (`private new RegisterRoutes`). They are not pure duplicates: wire shapes differ (e.g. `network/requests` is `{requests,total}` with `count=` here, a bare array with
+  `limit=` upstream), and Driver/Mcp/tests depend on ours. Collapsing them is a wire-contract change, not a deletion. Do it only per route, with the Driver/Mcp change in the same commit and a macOS check.
+- Not yet looked at: Driver (12 links), Inspector (15), Broker (7); these are small (340/198/84 own lines).
