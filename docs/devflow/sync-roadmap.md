@@ -56,7 +56,7 @@ needs it to drive a modal dialog). Commit it to the fork first (branch `lextudio
 2. **Bump**: fork rebased on `a29273ad`, tag `lextudio-sync-2026-11-24`, submodule pointer moved; fix the link lists until everything builds (net10).
 3. **Simplify**: Agent.Wpf / Core / Driver / Inspector / Broker as above, one commit per project.
 4. **Fix**: macOS screenshot; NativeAOT contexts + smoke test.
-5. **Docs and release**: `plan.md`, `howto-wpf.md`; the publish workflow (`publish-github-packages.yml`) runs on a push of `master` that touches `src/DevFlow/**`; the version is forced to the newest stable `LeXtudio.DevFlow.Agent.Core` on nuget.org, so a *new* number needs a nuget.org release first (`dist.publish2nugetdotorg.bat`), which is a separate, explicit step.
+5. **Docs and release**: `plan.md`, `howto-wpf.md`; the publish workflow (`publish-github-packages.yml`) runs on a push of `master` that touches `src/DevFlow/**` and publishes to the lextudio GitHub Packages feed only. Each run publishes a new prerelease version `<next patch after the newest stable Agent.Core on nuget.org>-<label>.<run number>` (label = the `prerelease` input, default `preview`; e.g. `0.3.2-preview.57`). A nuget.org release is a separate, explicit step (`dist.publish2nugetdotorg.bat`).
 
 ## Acceptance
 

@@ -1,11 +1,13 @@
 name: Publish DevFlow GitHub Packages
 
-# Packs the DevFlow agent packages and replaces them in the lextudio GitHub Packages feed, so
-# consumers (AvalonDock, OpenDevelop) can pin a build of this tree instead of the nuget.org release.
-# The version is FORCED to the one on nuget.org (the newest stable LeXtudio.DevFlow.Agent.Core there, or the
-# `version` input): consumers keep one version number, NuGet package source mapping decides which feed
-# serves it, and the GitHub copy is replaced in place on every run (the same approach as the OpenAvalon
-# LibreWPF packages, which also reuse the nuget.org version number).
+# Packs the DevFlow agent packages and publishes them to the lextudio GitHub Packages feed ONLY (nothing here
+# touches nuget.org; that release is the separate dist.publish2nugetdotorg.bat step), so consumers
+# (AvalonDock, OpenDevelop) can pin a build of this tree.
+# Every run publishes a NEW, increasing prerelease version: <next patch after the newest stable
+# LeXtudio.DevFlow.Agent.Core on nuget.org>-<label>.<run number>, e.g. 0.3.2-preview.57. SemVer orders it
+# above the stable release it follows and below the stable release that eventually ships, and the run number
+# only grows, so a consumer that pins a range picks up the latest build. The label (preview, rc, ...) is the
+# `prerelease` input; a push uses `preview`. The `version` input overrides the whole number.
 on:
   push:
     branches: [ master ]
@@ -15,8 +17,11 @@ on:
       - '.github/workflows/publish-github-packages.yml'
   workflow_dispatch:
     inputs:
+      prerelease:
+        description: 'Prerelease label of the version (preview, rc, ...); the version is <next patch>-<label>.<run number>'
+        default: 'preview'
       version:
-        description: 'Package version to publish (default: the newest stable LeXtudio.DevFlow.Agent.Core on nuget.org)'
+        description: 'Exact version to publish (overrides the computed one; use a prerelease version such as 0.3.2-preview.7)'
         default: ''
 
 # Two runs pushing the same versions would race on upload; queue them.
@@ -111,20 +116,32 @@ jobs:
       - name: Place the arm64 helper
         run: cp arm64-helper/CliclickSharp.exe external/cliclick-sharp/dist/CliclickSharp.arm64.exe
 
-      - name: Resolve the version (nuget.org)
+      - name: Resolve the version
         env:
           INPUT_VERSION: ${{ inputs.version }}
+          INPUT_PRERELEASE: ${{ inputs.prerelease }}
         run: |
           version="${INPUT_VERSION}"
-          if [ -z "${version}" ]; then
-            version="$(curl -fsSL https://api.nuget.org/v3-flatcontainer/lextudio.devflow.agent.core/index.json \
-              | python -c "import json,sys; v=[x for x in json.load(sys.stdin)['versions'] if '-' not in x]; print(sorted(v,key=lambda s:[int(p) for p in s.split('.')])[-1])")"
-          fi
-          if ! echo "${version}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "Cannot resolve a stable version: '${version}'" >&2
+          label="${INPUT_PRERELEASE:-preview}"
+          if ! echo "${label}" | grep -Eq '^[0-9A-Za-z]+$'; then
+            echo "Invalid prerelease label: '${label}'" >&2
             exit 1
           fi
-          echo "Forcing package version ${version}"
+          if [ -z "${version}" ]; then
+            stable="$(curl -fsSL https://api.nuget.org/v3-flatcontainer/lextudio.devflow.agent.core/index.json \
+              | python -c "import json,sys; v=[x for x in json.load(sys.stdin)['versions'] if '-' not in x]; print(sorted(v,key=lambda s:[int(p) for p in s.split('.')])[-1])")"
+            if ! echo "${stable}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+              echo "Cannot resolve the newest stable version: '${stable}'" >&2
+              exit 1
+            fi
+            IFS=. read -r major minor patch <<< "${stable}"
+            version="${major}.${minor}.$((patch + 1))-${label}.${GITHUB_RUN_NUMBER}"
+          fi
+          if ! echo "${version}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+-[0-9A-Za-z]+\.[0-9]+$'; then
+            echo "Not a prerelease version of the form X.Y.Z-label.N: '${version}'" >&2
+            exit 1
+          fi
+          echo "Publishing package version ${version}"
           echo "FORCED_VERSION=${version}" >> "$GITHUB_ENV"
 
       - name: Pack
@@ -139,7 +156,7 @@ jobs:
             src/DevFlow/LeXtudio.DevFlow.Driver/LeXtudio.DevFlow.Driver.csproj
           )
           for project in "${projects[@]}"; do
-            # GitVersion would derive a prerelease from the tree; the version is forced instead.
+            # GitVersion would derive its own version from the tree; the computed prerelease version is forced instead.
             dotnet pack "${project}" -c Release -o dist \
               -p:GitVersionTaskEnabled=false -p:UpdateVersionProperties=false \
               -p:Version="${FORCED_VERSION}" -p:PackageVersion="${FORCED_VERSION}" -p:InformationalVersion="${FORCED_VERSION}"
@@ -173,7 +190,8 @@ jobs:
           trap failed ERR
           # Git Bash on Windows rewrites a leading slash in an argument into a filesystem path, so the
           # API endpoints below have none.
-          # GitHub Packages versions are immutable: delete this version of each package, then push.
+          # GitHub Packages versions are immutable and each run has a new version; the delete only matters when a run is
+          # re-run (same run number), so the same version can be pushed again.
           for package in dist/*.nupkg; do
             name="$(basename "${package}" ".${PACKAGE_VERSION}.nupkg")"
             err="$(mktemp)"
