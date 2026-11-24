@@ -49,8 +49,20 @@
     <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Driver\AlertInfo.cs">
       <Link>Upstream\AlertInfo.cs</Link>
     </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Driver\HostProcess.cs">
+      <Link>Upstream\HostProcess.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Driver\ScreenshotImage.cs">
+      <Link>Upstream\ScreenshotImage.cs</Link>
+    </Compile>
     <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Client\RecordingState.cs">
       <Link>Upstream\RecordingState.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Client\PointerSessions.cs">
+      <Link>Upstream\PointerSessions.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Client\ScreenshotResolutionOptions.cs">
+      <Link>Upstream\ScreenshotResolutionOptions.cs</Link>
     </Compile>
   </ItemGroup>
 </Project>

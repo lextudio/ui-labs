@@ -37,6 +37,9 @@
     <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Abstractions\AgentOptions.cs">
       <Link>Upstream\AgentOptions.cs</Link>
     </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Abstractions\AppKitScreenshotCapture.cs">
+      <Link>Upstream\AppKitScreenshotCapture.cs</Link>
+    </Compile>
     <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Abstractions\BrokerRegistration.cs">
       <Link>Upstream\BrokerRegistration.cs</Link>
     </Compile>
@@ -63,6 +66,12 @@
     </Compile>
     <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Abstractions\DevFlowAgentService.MutationLease.cs">
       <Link>Upstream\DevFlowAgentService.MutationLease.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Abstractions\DevFlowAgentService.PointerSessions.cs">
+      <Link>Upstream\DevFlowAgentService.PointerSessions.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Abstractions\DevFlowAgentService.UiActionEvents.cs">
+      <Link>Upstream\DevFlowAgentService.UiActionEvents.cs</Link>
     </Compile>
     <Compile Include="..\..\..\external\maui-labs\src\DevFlow\Microsoft.Maui.DevFlow.Agent.Abstractions\DevFlowAgentService.cs">
       <Link>Upstream\DevFlowAgentService.cs</Link>

@@ -63,6 +63,9 @@
     <Compile Include="..\..\..\external\maui-labs\src\Cli\Microsoft.Maui.Cli\DevFlow\Inspector\XamlSourcePropertyEditor.cs">
       <Link>Upstream\XamlSourcePropertyEditor.cs</Link>
     </Compile>
+    <Compile Include="..\..\..\external\maui-labs\src\Cli\Microsoft.Maui.Cli\DevFlow\Inspector\XamlSourceWorkspace.cs">
+      <Link>Upstream\XamlSourceWorkspace.cs</Link>
+    </Compile>
   </ItemGroup>
 
   <ItemGroup>

@@ -33,6 +33,12 @@ internal sealed class DevFlowCliJsonContext
     public JsonTypeInfo<Microsoft.Maui.Cli.DevFlow.Inspector.InspectorServer.InspectorDiagnosticRequest> InspectorDiagnosticRequest
         => Info<Microsoft.Maui.Cli.DevFlow.Inspector.InspectorServer.InspectorDiagnosticRequest>();
 
+    public JsonTypeInfo<Microsoft.Maui.Cli.DevFlow.Inspector.InspectorServer.InspectorLayoutScanRequest> InspectorLayoutScanRequest
+        => Info<Microsoft.Maui.Cli.DevFlow.Inspector.InspectorServer.InspectorLayoutScanRequest>();
+
+    public JsonTypeInfo<Microsoft.Maui.Cli.DevFlow.Inspector.InspectorServer.InspectorLayoutScanResponse> InspectorLayoutScanResponse
+        => Info<Microsoft.Maui.Cli.DevFlow.Inspector.InspectorServer.InspectorLayoutScanResponse>();
+
     public JsonTypeInfo<Microsoft.Maui.Cli.DevFlow.Inspector.LayoutDiagnosticsDelta> LayoutDiagnosticsDelta
         => Info<Microsoft.Maui.Cli.DevFlow.Inspector.LayoutDiagnosticsDelta>();
 
