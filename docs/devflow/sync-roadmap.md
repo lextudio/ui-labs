@@ -98,3 +98,13 @@ Simplification, measured, no code deleted yet:
   handlers (`private new RegisterRoutes`). They are not pure duplicates: wire shapes differ (e.g. `network/requests` is `{requests,total}` with `count=` here, a bare array with
   `limit=` upstream), and Driver/Mcp/tests depend on ours. Collapsing them is a wire-contract change, not a deletion. Do it only per route, with the Driver/Mcp change in the same commit and a macOS check.
 - Not yet looked at: Driver (12 links), Inspector (15), Broker (7); these are small (340/198/84 own lines).
+
+### Driver / Inspector / Broker (measured)
+
+- Own code is small: Driver 340 lines (`AgentClient` 117, `DevFlowMutation` 189, `AgentStatus` 27), Inspector 198 (two shims), Broker 84 (two shims). The upstream files they link all still exist and build.
+- The Driver has *two* `AgentClient` classes: ours (`LeXtudio.DevFlow.Driver`, 9 methods) and the linked upstream one (`Microsoft.Maui.DevFlow.Driver`, 117 methods). Dropping ours means
+  migrating the call sites in six `src/Cli/**/CommandHandlers.cs` and six test projects (`AgentClient`, `DevFlowMutation.Post/Delete`, `AgentStatus`). Saves roughly 140 lines.
+  Of these, only the LibreWpf and Uno CLIs/tests can be checked on macOS; the other four need Windows. Left alone until a Windows run is available.
+- The Inspector/Broker shims adapt upstream CLI types to our assemblies; they are not duplicates and have nothing to delete.
+- Net result of this sync on size: `src/DevFlow` own code *grew* (macOS screenshot +185 lines in `Agent.Wpf`); the acceptance line "smaller than before" is not met and is not reachable
+  without the wire-contract changes listed under Core above.
