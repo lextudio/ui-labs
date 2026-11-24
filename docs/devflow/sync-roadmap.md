@@ -129,3 +129,14 @@ Simplification, measured, no code deleted yet:
   button (2x, 28 pt title bar) lands on (624, 748) 146x36 px, clamping at the image edge, empty/outside regions, unknown window size. Core.Tests is now 35/35. A live run after the refactor
   returned a crop byte-identical to the one checked by eye before it.
 - Still no automated end-to-end capture test: it needs a host with an on-screen window, so it belongs in the OpenDevelop integration suite (skip on a locked session), a separate repository.
+
+## Phase 4d: LibreWPF agent under NativeAOT, measured (2026-11-24)
+
+- `dotnet build src/DevFlow/LeXtudio.DevFlow.Agent.LibreWpf -p:IsAotCompatible=true` (the AOT/trim analyzers, runnable on macOS) reports **41** warnings outside upstream's files: 28 in `WpfAgentService.cs`,
+  8 in `WpfMenuPopupDiagnostics.cs`, 5 in Core (`[DevFlowAction]` discovery/invoke, `TargetSite`, the ones listed under Phase 4b).
+- Every WPF-side warning is reflection by *name* to members the agent cannot reference at compile time: `Assembly.GetType("...")`/`GetMethod`/`GetProperty` into WPF internals and ProGPU
+  (`ProGpuWpfScreenshot` lookup, popup/menu internals, WebView2 types, `TypeDescriptor.GetConverter` for property values), plus one `JsonSerializer.Serialize` of an anonymous payload in
+  `WpfMenuPopupDiagnostics`. They are not mechanical: each needs either a direct typed reference (impossible for internal members), a `DynamicDependency`/rd.xml root in the host, or removal of the feature.
+- The only existing LibreWPF NativeAOT host is openavalon's `samples/XsgNativeAot` (a prototype with a 2 GB private package tree and patched LibreWPF assemblies; its repo has uncommitted changes). Putting
+  the agent into it is not verifiable from this repository, so **no code was changed for it**. Order of work when it is wanted: (1) replace the anonymous `GetCapabilities` and the menu-diagnostics payload,
+  (2) root the name-based lookups in the host's `rd.xml` and add a `status`/`ui/tree` check to that sample's `check` run, (3) only then fix individual warnings.
