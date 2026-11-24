@@ -1,14 +1,40 @@
 using System.Reflection;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Maui.DevFlow.Agent.Core;
 using Microsoft.Maui.DevFlow.Agent.Core.Css;
 using Microsoft.Maui.DevFlow.Agent.Core.Network;
 
 namespace LeXtudio.DevFlow.Agent.Core;
 
-public abstract class DevFlowAgentServiceBase : DevFlowAgentService
+public abstract partial class DevFlowAgentServiceBase : DevFlowAgentService
 {
     private bool _started;
+
+    static DevFlowAgentServiceBase()
+    {
+        // Request bodies are private nested types, so no other assembly can generate metadata for them. Registering
+        // the context lets BodyAs<T> work with JSON reflection disabled (NativeAOT, trimming).
+        AgentJson.RegisterContext(new RequestJsonContext(new JsonSerializerOptions { PropertyNameCaseInsensitive = true }));
+    }
+
+    [JsonSerializable(typeof(AlertDismissRequest))]
+    [JsonSerializable(typeof(AssertRequest))]
+    [JsonSerializable(typeof(MoveRequest))]
+    [JsonSerializable(typeof(ClickRequest))]
+    [JsonSerializable(typeof(TapRequest))]
+    [JsonSerializable(typeof(ScrollRequest))]
+    [JsonSerializable(typeof(FillRequest))]
+    [JsonSerializable(typeof(DragRequest))]
+    [JsonSerializable(typeof(ActionRequest))]
+    [JsonSerializable(typeof(KeyRequest))]
+    [JsonSerializable(typeof(InputSourceRequest))]
+    [JsonSerializable(typeof(WebViewCdpRequest))]
+    [JsonSerializable(typeof(BatchRequest))]
+    [JsonSerializable(typeof(ThemeSetRequest))]
+    [JsonSerializable(typeof(InvokeActionRequest))]
+    [JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
+    private sealed partial class RequestJsonContext : JsonSerializerContext;
 
     // Actions are discovered by reflecting over AppDomain.CurrentDomain.GetAssemblies(), but many
     // hosts (e.g. SharpDevelop's addin tree) load assemblies lazily well after startup - the first
@@ -65,7 +91,7 @@ public abstract class DevFlowAgentServiceBase : DevFlowAgentService
     protected abstract Task<ElementInfo?> FindElementAsync(string id);
     protected abstract Task<List<ElementInfo>> QueryElementsAsync(string? type = null, string? automationId = null, string? text = null, int maxResults = 50, int maxDepth = 24);
     protected abstract Task<byte[]?> CaptureScreenshotAsync(string? elementId = null, string? selector = null);
-    protected virtual Task<object?> GetWebViewContextsAsync() => Task.FromResult<object?>(new { contexts = Array.Empty<object>() });
+    protected virtual Task<object?> GetWebViewContextsAsync() => Task.FromResult<object?>(new Dictionary<string, object?> { ["contexts"] = new List<object>() });
     protected virtual Task<byte[]?> CaptureWebViewScreenshotAsync(string? contextId = null) => Task.FromResult<byte[]?>(null);
     protected virtual Task<object?> SendWebViewCdpCommandAsync(string? contextId, string method, JsonElement? @params) => Task.FromResult<object?>(null);
     protected abstract Task<bool> TryTapAsync(string elementId);
@@ -171,8 +197,8 @@ public abstract class DevFlowAgentServiceBase : DevFlowAgentService
     {
         var alert = WindowsAlertDetector.Detect();
         return Task.FromResult(alert != null
-            ? DevFlowJson.Json(new { present = true, message = alert.Message, buttons = alert.Buttons.Select(b => b.Text) })
-            : DevFlowJson.Json(new { present = false }));
+            ? DevFlowJson.Json(new Dictionary<string, object?> { ["present"] = true, ["message"] = alert.Message, ["buttons"] = alert.Buttons.Select(b => b.Text).ToList() })
+            : DevFlowJson.Json(new Dictionary<string, object?> { ["present"] = false }));
     }
 
     private Task<HttpResponse> HandleAlertDismissAsync(HttpRequest request)
@@ -180,7 +206,7 @@ public abstract class DevFlowAgentServiceBase : DevFlowAgentService
         var body = request.BodyAs<AlertDismissRequest>();
         var dismissed = WindowsAlertDetector.Dismiss(body?.ButtonLabel);
         return Task.FromResult(dismissed
-            ? DevFlowJson.Json(new { success = true })
+            ? DevFlowJson.Json(new Dictionary<string, object?> { ["success"] = true })
             : HttpResponse.Error("No alert dialog detected to dismiss.", 404));
     }
 
@@ -198,7 +224,7 @@ public abstract class DevFlowAgentServiceBase : DevFlowAgentService
         try
         {
             var results = CssSelectorEngine.Query(tree, selector);
-            return DevFlowJson.Json(new { elements = results, count = results.Count });
+            return DevFlowJson.Json(new Dictionary<string, object?> { ["elements"] = results, ["count"] = results.Count });
         }
         catch (Exception ex)
         {
@@ -219,7 +245,7 @@ public abstract class DevFlowAgentServiceBase : DevFlowAgentService
 
         // Deepest match last; report topmost-most-specific first.
         hits.Reverse();
-        return DevFlowJson.Json(new { elements = hits, topmost = hits.FirstOrDefault() });
+        return DevFlowJson.Json(new Dictionary<string, object?> { ["elements"] = hits, ["topmost"] = hits.FirstOrDefault() });
     }
 
     private static void CollectHits(ElementInfo element, double x, double y, List<ElementInfo> hits)
@@ -291,12 +317,12 @@ public abstract class DevFlowAgentServiceBase : DevFlowAgentService
         if (body.TextContains != null && !matches.Any(m => m.Text != null && m.Text.Contains(body.TextContains, StringComparison.Ordinal)))
             failures.Add($"expected an element with text containing '{body.TextContains}'");
 
-        return DevFlowJson.Json(new
+        return DevFlowJson.Json(new Dictionary<string, object?>
         {
-            success = failures.Count == 0,
-            selector = body.Selector,
-            matchCount = matches.Count,
-            failures
+            ["success"] = failures.Count == 0,
+            ["selector"] = body.Selector,
+            ["matchCount"] = matches.Count,
+            ["failures"] = failures,
         });
     }
 
@@ -322,7 +348,7 @@ public abstract class DevFlowAgentServiceBase : DevFlowAgentService
             : null;
 
         var entries = NetworkStore.GetRecent(count, host, method, status).Select(e => e.ToSummary());
-        return Task.FromResult(DevFlowJson.Json(new { requests = entries, total = NetworkStore.Count }));
+        return Task.FromResult(DevFlowJson.Json(new Dictionary<string, object?> { ["requests"] = entries.ToList(), ["total"] = NetworkStore.Count }));
     }
 
     private Task<HttpResponse> HandleNetworkDetailAsync(HttpRequest request)
@@ -340,7 +366,7 @@ public abstract class DevFlowAgentServiceBase : DevFlowAgentService
     private Task<HttpResponse> HandleNetworkClearAsync(HttpRequest request)
     {
         NetworkStore.Clear();
-        return Task.FromResult(DevFlowJson.Json(new { success = true }));
+        return Task.FromResult(DevFlowJson.Json(new Dictionary<string, object?> { ["success"] = true }));
     }
 
     private async Task<HttpResponse> HandleStatusAsync(HttpRequest request)
@@ -643,7 +669,7 @@ public abstract class DevFlowAgentServiceBase : DevFlowAgentService
     private async Task<HttpResponse> HandleWebViewContextsAsync(HttpRequest request)
     {
         var contexts = await GetWebViewContextsAsync().ConfigureAwait(false);
-        return DevFlowJson.Json(contexts ?? new { contexts = Array.Empty<object>() });
+        return DevFlowJson.Json(contexts ?? new Dictionary<string, object?> { ["contexts"] = new List<object>() });
     }
 
     private async Task<HttpResponse> HandleWebViewScreenshotAsync(HttpRequest request)
@@ -981,28 +1007,28 @@ public abstract class DevFlowAgentServiceBase : DevFlowAgentService
             switch (actionName)
             {
                 case "tap":
-                    response = await HandleTapAsync(new HttpRequest { Method = "POST", Body = JsonSerializer.Serialize(new TapRequest { Id = action.ElementId }) }).ConfigureAwait(false);
+                    response = await HandleTapAsync(new HttpRequest { Method = "POST", Body = AgentJson.Serialize(new TapRequest { Id = action.ElementId }) }).ConfigureAwait(false);
                     break;
                 case "right-tap":
-                    response = await HandleRightTapAsync(new HttpRequest { Method = "POST", Body = JsonSerializer.Serialize(new TapRequest { Id = action.ElementId }) }).ConfigureAwait(false);
+                    response = await HandleRightTapAsync(new HttpRequest { Method = "POST", Body = AgentJson.Serialize(new TapRequest { Id = action.ElementId }) }).ConfigureAwait(false);
                     break;
                 case "fill":
-                    response = await HandleFillAsync(new HttpRequest { Method = "POST", Body = JsonSerializer.Serialize(new FillRequest { ElementId = action.ElementId, Text = action.Text ?? string.Empty }) }).ConfigureAwait(false);
+                    response = await HandleFillAsync(new HttpRequest { Method = "POST", Body = AgentJson.Serialize(new FillRequest { ElementId = action.ElementId, Text = action.Text ?? string.Empty }) }).ConfigureAwait(false);
                     break;
                 case "clear":
-                    response = await HandleClearAsync(new HttpRequest { Method = "POST", Body = JsonSerializer.Serialize(new ActionRequest { ElementId = action.ElementId }) }).ConfigureAwait(false);
+                    response = await HandleClearAsync(new HttpRequest { Method = "POST", Body = AgentJson.Serialize(new ActionRequest { ElementId = action.ElementId }) }).ConfigureAwait(false);
                     break;
                 case "focus":
-                    response = await HandleFocusAsync(new HttpRequest { Method = "POST", Body = JsonSerializer.Serialize(new ActionRequest { ElementId = action.ElementId }) }).ConfigureAwait(false);
+                    response = await HandleFocusAsync(new HttpRequest { Method = "POST", Body = AgentJson.Serialize(new ActionRequest { ElementId = action.ElementId }) }).ConfigureAwait(false);
                     break;
                 case "scroll":
-                    response = await HandleScrollAsync(new HttpRequest { Method = "POST", Body = JsonSerializer.Serialize(new ScrollRequest { Id = action.ElementId, DeltaX = action.DeltaX, DeltaY = action.DeltaY }) }).ConfigureAwait(false);
+                    response = await HandleScrollAsync(new HttpRequest { Method = "POST", Body = AgentJson.Serialize(new ScrollRequest { Id = action.ElementId, DeltaX = action.DeltaX, DeltaY = action.DeltaY }) }).ConfigureAwait(false);
                     break;
                 case "back":
                     response = await HandleBackAsync(new HttpRequest { Method = "POST" }).ConfigureAwait(false);
                     break;
                 case "key":
-                    response = await HandleKeyAsync(new HttpRequest { Method = "POST", Body = JsonSerializer.Serialize(new KeyRequest { ElementId = action.ElementId, Key = action.Key, Text = action.Text }) }).ConfigureAwait(false);
+                    response = await HandleKeyAsync(new HttpRequest { Method = "POST", Body = AgentJson.Serialize(new KeyRequest { ElementId = action.ElementId, Key = action.Key, Text = action.Text }) }).ConfigureAwait(false);
                     break;
                 default:
                     response = HttpResponse.Error($"Unsupported batch action '{actionName}'", 400);
@@ -1011,12 +1037,12 @@ public abstract class DevFlowAgentServiceBase : DevFlowAgentService
 
             var succeeded = response.StatusCode < 400;
             allSucceeded &= succeeded;
-            results.Add(new { action = actionName, success = succeeded, statusCode = response.StatusCode, response = response.Body });
+            results.Add(new Dictionary<string, object?> { ["action"] = actionName, ["success"] = succeeded, ["statusCode"] = response.StatusCode, ["response"] = response.Body });
             if (!succeeded && !payload.ContinueOnError)
                 break;
         }
 
-        return DevFlowJson.Json(new { success = allSucceeded, results });
+        return DevFlowJson.Json(new Dictionary<string, object?> { ["success"] = allSucceeded, ["results"] = results });
     }
 
     private async Task<HttpResponse> HandleThemeGetAsync(HttpRequest request)
@@ -1357,20 +1383,20 @@ public abstract class DevFlowAgentServiceBase : DevFlowAgentService
     private async Task<HttpResponse> HandleListInvokeActionsAsync(HttpRequest request)
     {
         var actions = DiscoverActions();
-        var result = actions.Select(a => new
+        var result = actions.Select(a => new Dictionary<string, object?>
         {
-            name = a.Name,
-            description = a.Description,
-            declaringType = a.DeclaringType,
-            parameters = a.Method.GetParameters().Select(p => new
+            ["name"] = a.Name,
+            ["description"] = a.Description,
+            ["declaringType"] = a.DeclaringType,
+            ["parameters"] = a.Method.GetParameters().Select(p => new Dictionary<string, object?>
             {
-                name = p.Name,
-                type = p.ParameterType.Name,
-                isRequired = !p.HasDefaultValue
-            })
-        });
+                ["name"] = p.Name,
+                ["type"] = p.ParameterType.Name,
+                ["isRequired"] = !p.HasDefaultValue,
+            }).ToList(),
+        }).ToList();
 
-        return DevFlowJson.Json(new { actions = result });
+        return DevFlowJson.Json(new Dictionary<string, object?> { ["actions"] = result });
     }
 
     private async Task<HttpResponse> HandleInvokeActionAsync(HttpRequest request)

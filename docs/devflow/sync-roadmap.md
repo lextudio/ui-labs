@@ -115,6 +115,10 @@ Simplification, measured, no code deleted yet:
   (`dotnet publish -c Release -p:AotSmoke=true`). The published arm64 Mach-O answers `agent/status` and `ui/tree` (nested children) and exits 0.
 - Needed in Core: `DevFlowJson` now serializes through upstream `AgentJson.Serialize(data, Options)` (keeps depth 256 / cycle ignoring, adds generated metadata); the default capabilities and the
   status body are string-keyed dictionaries instead of anonymous objects. Reflection-enabled hosts behave as before (Core.Tests 22/22; live OpenDevelop status/tree/screenshot 200).
-- Not AOT-ready yet (publish warns IL2026/IL3050, none reached by the smoke): `ui/actions/batch` (serializes private request types), `invoke/actions` discovery (`Assembly.GetTypes`), `DescribeException`,
-  and the 11 remaining anonymous responses in `DevFlowAgentServiceBase` (alerts, query-selector, hit-test, assert, network, invoke). The WPF/LibreWPF agents (anonymous capabilities, visual-tree walker
-  property reflection) are not published as AOT here; a LibreWPF AOT host (openavalon `XsgNativeAot`) is the next target.
+- Follow-up (same day): the other anonymous responses in `DevFlowAgentServiceBase` (alerts, query-selector, hit-test, assert, network, webview contexts, batch, invoke list) are dictionaries too, and the private
+  request bodies are covered by a nested source-generated `RequestJsonContext` registered with `AgentJson.RegisterContext` (so `BodyAs<T>` and the batch endpoint work with reflection off). The smoke now
+  also covers `ui/query-selector`, `ui/hit-test`, `network/requests`, `webview/contexts`, `invoke/actions`, `ui/assert` and `ui/actions/batch` (POSTs need `RequireMutationLease = false`); the published
+  NativeAOT binary passes all nine. Core's JSON publish warnings are gone.
+- Still reflection by design (publish warnings remain, same as upstream): `[DevFlowAction]` discovery and invocation (`Assembly.GetTypes`, `GetMethod`) and `Exception.TargetSite` in `DescribeException`;
+  `invoke/actions/{name}` responses carry an arbitrary return value. The WPF/LibreWPF agents (anonymous capabilities, visual-tree walker property reflection) are not published as AOT here;
+  a LibreWPF AOT host (openavalon `XsgNativeAot`) is the next target.

@@ -1,4 +1,5 @@
 using System.Net.Http;
+using System.Text;
 using System.Text.Json;
 using LeXtudio.DevFlow.Agent.Core;
 using Microsoft.Maui.DevFlow.Agent.Core;
@@ -7,17 +8,20 @@ if (JsonSerializer.IsReflectionEnabledByDefault)
     throw new InvalidOperationException("This smoke must run with JSON reflection disabled.");
 
 var port = 19223;
-using var agent = new SmokeAgent(new AgentOptions { Port = port });
+using var agent = new SmokeAgent(new AgentOptions { Port = port, RequireMutationLease = false });
 agent.Start();
 
 using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
 var failures = new List<string>();
 
-async Task Check(string path, Func<JsonElement, bool> ok)
+async Task Check(string path, Func<JsonElement, bool> ok, string? postBody = null)
 {
     try
     {
-        var text = await http.GetStringAsync($"http://localhost:{port}{path}");
+        var url = $"http://localhost:{port}{path}";
+        var text = postBody == null
+            ? await http.GetStringAsync(url)
+            : await (await http.PostAsync(url, new StringContent(postBody, Encoding.UTF8, "application/json"))).Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(text);
         if (!ok(doc.RootElement))
             failures.Add($"{path}: unexpected body {text}");
@@ -32,6 +36,14 @@ async Task Check(string path, Func<JsonElement, bool> ok)
 
 await Check("/api/v1/agent/status", r => r.GetProperty("framework").GetString() == "aot-smoke" && r.GetProperty("capabilities").GetProperty("tap").GetBoolean());
 await Check("/api/v1/ui/tree", r => r.ValueKind == JsonValueKind.Array && r[0].GetProperty("type").GetString() == "Root" && r[0].GetProperty("children")[0].GetProperty("type").GetString() == "Leaf");
+
+await Check("/api/v1/ui/query-selector?selector=Leaf", r => r.GetProperty("count").GetInt32() == 1 && r.GetProperty("elements")[0].GetProperty("id").GetString() == "leaf");
+await Check("/api/v1/ui/hit-test?x=1&y=1", r => r.TryGetProperty("elements", out _));
+await Check("/api/v1/network/requests", r => r.GetProperty("total").GetInt32() == 0);
+await Check("/api/v1/webview/contexts", r => r.GetProperty("contexts").GetArrayLength() == 0);
+await Check("/api/v1/invoke/actions", r => r.GetProperty("actions").ValueKind == JsonValueKind.Array);
+await Check("/api/v1/ui/assert", r => r.GetProperty("success").GetBoolean() && r.GetProperty("matchCount").GetInt32() == 1, """{"selector":"Leaf","exists":true}""");
+await Check("/api/v1/ui/actions/batch", r => r.GetProperty("results").GetArrayLength() == 1 && !r.GetProperty("success").GetBoolean(), """{"actions":[{"action":"tap","elementId":"leaf"}]}""");
 
 if (failures.Count > 0)
 {
